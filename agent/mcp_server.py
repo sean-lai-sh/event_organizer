@@ -18,23 +18,28 @@ Inspect:
 """
 from __future__ import annotations
 
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Allow running from repo root without installing packages
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from hubspot import HubSpot
+from hubspot.crm.contacts.models import (
+    SimplePublicObjectInput,
+    SimplePublicObjectInputForCreate,
+    PublicObjectSearchRequest,
+)
 
 load_dotenv(Path(__file__).parents[1] / "backend" / ".env")
 
-from backend.hubspot.client import HubSpotClient  # noqa: E402 (after dotenv load)
+_hs = HubSpot(access_token=os.environ["HUBSPOT_PAT"])
 
 mcp = FastMCP("hubspot-crm")
 
-# All club_contact custom properties + standard fields to return on reads
 _CONTACT_PROPS = [
     "firstname",
     "lastname",
@@ -55,7 +60,7 @@ _CONTACT_PROPS = [
 
 
 @mcp.tool()
-async def search_contacts(
+def search_contacts(
     outreach_status: str | None = None,
     contact_source: str | None = None,
     limit: int = 20,
@@ -72,22 +77,23 @@ async def search_contacts(
     Returns:
         List of contact objects with all club_contact properties.
     """
-    filters: list[dict] = []
+    filters = []
     if outreach_status:
-        filters.append(
-            {"propertyName": "outreach_status", "operator": "EQ", "value": outreach_status}
-        )
+        filters.append({"propertyName": "outreach_status", "operator": "EQ", "value": outreach_status})
     if contact_source:
-        filters.append(
-            {"propertyName": "contact_source", "operator": "EQ", "value": contact_source}
-        )
+        filters.append({"propertyName": "contact_source", "operator": "EQ", "value": contact_source})
 
-    async with HubSpotClient() as hs:
-        return await hs.search_contacts(filters, properties=_CONTACT_PROPS, limit=limit)
+    request = PublicObjectSearchRequest(
+        filter_groups=[{"filters": filters}],
+        properties=_CONTACT_PROPS,
+        limit=limit,
+    )
+    result = _hs.crm.contacts.search_api.do_search(public_object_search_request=request)
+    return [c.to_dict() for c in result.results]
 
 
 @mcp.tool()
-async def get_contact(contact_id: str) -> dict:
+def get_contact(contact_id: str) -> dict:
     """
     Retrieve a HubSpot contact by ID with all club_contact properties.
 
@@ -97,12 +103,14 @@ async def get_contact(contact_id: str) -> dict:
     Returns:
         Contact object with id, properties, and createdAt/updatedAt timestamps.
     """
-    async with HubSpotClient() as hs:
-        return await hs.get_contact(contact_id, properties=_CONTACT_PROPS)
+    result = _hs.crm.contacts.basic_api.get_by_id(
+        contact_id, properties=_CONTACT_PROPS
+    )
+    return result.to_dict()
 
 
 @mcp.tool()
-async def create_contact(
+def create_contact(
     firstname: str,
     lastname: str,
     email: str,
@@ -148,12 +156,14 @@ async def create_contact(
     if assigned_members is not None:
         props["assigned_members"] = assigned_members
 
-    async with HubSpotClient() as hs:
-        return await hs.create_contact(props)
+    result = _hs.crm.contacts.basic_api.create(
+        simple_public_object_input_for_create=SimplePublicObjectInputForCreate(properties=props)
+    )
+    return result.to_dict()
 
 
 @mcp.tool()
-async def update_contact(
+def update_contact(
     contact_id: str,
     outreach_status: str | None = None,
     relationship_stage: str | None = None,
@@ -186,23 +196,22 @@ async def update_contact(
         props["relationship_stage"] = relationship_stage
 
     if agent_notes:
-        # Fetch current notes and append
-        async with HubSpotClient() as hs:
-            current = await hs.get_contact(contact_id, properties=["agent_notes"])
-        existing = (current.get("properties") or {}).get("agent_notes") or ""
+        current = _hs.crm.contacts.basic_api.get_by_id(
+            contact_id, properties=["agent_notes"]
+        )
+        existing = (current.properties or {}).get("agent_notes") or ""
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         separator = "\n\n" if existing else ""
         props["agent_notes"] = f"{existing}{separator}[{timestamp}] {agent_notes}"
-
-        # Default last_agent_action_at to now
-        props["last_agent_action_at"] = last_agent_action_at or datetime.now(
-            timezone.utc
-        ).isoformat()
+        props["last_agent_action_at"] = last_agent_action_at or datetime.now(timezone.utc).isoformat()
     elif last_agent_action_at:
         props["last_agent_action_at"] = last_agent_action_at
 
-    async with HubSpotClient() as hs:
-        return await hs.update_contact(contact_id, props)
+    result = _hs.crm.contacts.basic_api.update(
+        contact_id,
+        simple_public_object_input=SimplePublicObjectInput(properties=props),
+    )
+    return result.to_dict()
 
 
 if __name__ == "__main__":
