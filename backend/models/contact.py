@@ -44,16 +44,16 @@ OutreachStatus = Literal[
 EnrichmentStatus = Literal["pending", "enriched", "stale", "failed"]
 
 
-class HubSpotContact(BaseModel):
-    """Represents a HubSpot contact with club-specific custom properties."""
+class AttioContact(BaseModel):
+    """Represents an Attio people record with club-specific custom attributes."""
 
-    # Standard HubSpot fields
+    # Standard Attio people fields
     firstname: str
     lastname: str
     email: EmailStr
     phone: str | None = None
 
-    # Custom fields
+    # Custom club attributes
     career_profile: CareerProfile | None = None
     relationship_stage: RelationshipStage = "cold"
     contact_source: ContactSource = "agent_outreach"
@@ -61,7 +61,5 @@ class HubSpotContact(BaseModel):
     assigned_members: list[str] = []  # list of eboard member emails
     contact_type: ContactType = "prospect"
     outreach_status: OutreachStatus = "pending"
-    human_notes: str | None = None
-    agent_notes: str | None = None
     last_agent_action_at: datetime | None = None
     enrichment_status: EnrichmentStatus = "pending"

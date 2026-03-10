@@ -11,8 +11,8 @@ import json
 import modal
 
 from .tools import (
-    SupabaseClient,
-    append_hubspot_notes,
+    ConvexClient,
+    append_attio_note,
     get_agentmail_client,
     llm_call,
 )
@@ -66,13 +66,13 @@ async def handle_reply(payload: dict) -> dict:
         return {"status": "ignored", "reason": "No thread_id"}
 
     # 1. Look up outreach record by thread
-    async with SupabaseClient() as sb:
+    async with ConvexClient() as sb:
         outreach = await sb.find_outreach_by_thread(thread_id)
     if not outreach:
         return {"status": "ignored", "reason": f"No outreach for thread {thread_id}"}
 
     event_id = outreach["event_id"]
-    contact_id = outreach["hubspot_contact_id"]
+    record_id = outreach["attio_record_id"]
 
     # 2. Get thread history for LLM context
     agentmail = get_agentmail_client()
@@ -83,7 +83,7 @@ async def handle_reply(payload: dict) -> dict:
     ]
 
     # 3. Get event details for context
-    async with SupabaseClient() as sb:
+    async with ConvexClient() as sb:
         event = await sb.get_event(event_id)
     event_context = json.dumps({
         "title": event.get("title") if event else "Unknown",
@@ -113,21 +113,16 @@ async def handle_reply(payload: dict) -> dict:
 
     # 5. Act on classification
     if classification == "ACCEPTED":
-        async with SupabaseClient() as sb:
-            await sb.update_outreach(event_id, contact_id, {"response": "accepted"})
-        await append_hubspot_notes(
-            contact_id, f"ACCEPTED invitation to event {event_id}"
-        )
+        async with ConvexClient() as sb:
+            await sb.update_outreach(event_id, record_id, {"response": "accepted"})
+        await append_attio_note(record_id, f"ACCEPTED invitation to event {event_id}")
 
     elif classification == "DECLINED":
-        async with SupabaseClient() as sb:
-            await sb.update_outreach(event_id, contact_id, {"response": "declined"})
-        await append_hubspot_notes(
-            contact_id, f"DECLINED invitation to event {event_id}"
-        )
+        async with ConvexClient() as sb:
+            await sb.update_outreach(event_id, record_id, {"response": "declined"})
+        await append_attio_note(record_id, f"DECLINED invitation to event {event_id}")
 
     elif classification == "QUESTION":
-        # Auto-reply with more event details
         suggested_reply = decision.get("suggested_reply")
         if suggested_reply and inbox_id and message_id:
             agentmail.inboxes.messages.reply(
@@ -136,13 +131,9 @@ async def handle_reply(payload: dict) -> dict:
                 to=[sender_email],
                 text=suggested_reply,
             )
-            await append_hubspot_notes(
-                contact_id,
-                f"Auto-replied to question about event {event_id}",
-            )
+            await append_attio_note(record_id, f"Auto-replied to question about event {event_id}")
 
     elif classification == "NEEDS_HUMAN":
-        # Forward to assigned eboard member
         if inbox_id and message_id and event:
             created_by = event.get("created_by")
             if created_by:
@@ -152,15 +143,15 @@ async def handle_reply(payload: dict) -> dict:
                     to=[created_by],
                     text=f"This reply needs your attention. Classification: {decision.get('reasoning', 'N/A')}",
                 )
-        await append_hubspot_notes(
-            contact_id,
+        await append_attio_note(
+            record_id,
             f"Reply escalated to human for event {event_id}: {decision.get('reasoning', '')}",
         )
 
     return {
         "status": "processed",
         "event_id": event_id,
-        "contact_id": contact_id,
+        "record_id": record_id,
         "classification": classification,
         "reasoning": decision.get("reasoning", ""),
     }

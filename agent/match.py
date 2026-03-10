@@ -11,7 +11,7 @@ import json
 import modal
 
 from .tools import (
-    SupabaseClient,
+    ConvexClient,
     fetch_enriched_contacts,
     llm_call,
 )
@@ -29,7 +29,7 @@ for relevance to this event. Consider their career_profile (skills, interests,
 experience), contact_type, and the event description/target_profile.
 
 Return valid JSON — an array of objects with these fields:
-- hubspot_contact_id: string
+- attio_record_id: string
 - score: integer 1-10
 - reasoning: string (1-2 sentences explaining the fit)
 
@@ -37,10 +37,10 @@ Sort by score descending. Only include contacts scoring 5 or above."""
 
 
 def _build_contact_summary(contact: dict) -> dict:
-    """Extract a concise summary from a HubSpot contact for LLM context."""
+    """Extract a concise summary from an Attio people record for LLM context."""
     props = contact.get("properties", {})
     return {
-        "hubspot_contact_id": contact["id"],
+        "attio_record_id": contact["id"],
         "name": f"{props.get('firstname', '')} {props.get('lastname', '')}".strip(),
         "email": props.get("email", ""),
         "contact_type": props.get("contact_type", ""),
@@ -75,8 +75,8 @@ async def match_contacts_for_event(event_id: str) -> dict:
     Returns:
         { "event_id": str, "suggestions": [...], "count": int }
     """
-    # 1. Read event from Supabase
-    async with SupabaseClient() as sb:
+    # 1. Read event from Convex
+    async with ConvexClient() as sb:
         event = await sb.get_event(event_id)
     if not event:
         return {"error": f"Event {event_id} not found"}
@@ -84,7 +84,7 @@ async def match_contacts_for_event(event_id: str) -> dict:
         return {"event_id": event_id, "suggestions": [], "count": 0,
                 "note": "Inbound event — no outreach needed"}
 
-    # 2. Fetch enriched contacts from HubSpot
+    # 2. Fetch enriched contacts from Attio
     contacts = await fetch_enriched_contacts()
     if not contacts:
         return {"event_id": event_id, "suggestions": [], "count": 0,
@@ -116,7 +116,7 @@ async def match_contacts_for_event(event_id: str) -> dict:
     outreach_rows = [
         {
             "event_id": event_id,
-            "hubspot_contact_id": s["hubspot_contact_id"],
+            "attio_record_id": s["attio_record_id"],
             "suggested": True,
             "approved": False,
             "response": "pending",
@@ -125,7 +125,7 @@ async def match_contacts_for_event(event_id: str) -> dict:
     ]
 
     if outreach_rows:
-        async with SupabaseClient() as sb:
+        async with ConvexClient() as sb:
             await sb.insert_outreach_rows(outreach_rows)
             # 5. Update event status
             await sb.update_event_status(event_id, "matching")

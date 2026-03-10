@@ -11,9 +11,8 @@ import json
 import modal
 
 from .tools import (
-    CONTACT_PROPS,
-    SupabaseClient,
-    append_hubspot_notes,
+    ConvexClient,
+    append_attio_note,
     get_agentmail_client,
     llm_call,
 )
@@ -45,7 +44,6 @@ async def _get_inbox_id() -> str:
     inbox_id = os.environ.get("AGENTMAIL_INBOX_ID")
     if inbox_id:
         return inbox_id
-    # Create one if not configured
     client = get_agentmail_client()
     inbox = client.inboxes.create()
     return inbox.id
@@ -56,19 +54,19 @@ async def _get_inbox_id() -> str:
     secrets=[modal.Secret.from_name("event-outreach-secrets")],
     timeout=300,
 )
-async def send_outreach_for_event(event_id: str, contact_ids: list[str]) -> dict:
+async def send_outreach_for_event(event_id: str, record_ids: list[str]) -> dict:
     """
     For each approved contact: compose a personalized email via LLM,
-    send via AgentMail, update Supabase and HubSpot.
+    send via AgentMail, update Convex and Attio.
 
     Returns:
         { "event_id": str, "sent": [...], "errors": [...] }
     """
-    from backend.hubspot.client import HubSpotClient
+    from backend.attio.client import AttioClient, flatten_record
 
-    # 0. Approve contacts in Supabase & update event status
-    async with SupabaseClient() as sb:
-        await sb.approve_contacts(event_id, contact_ids)
+    # 0. Approve contacts in Convex & update event status
+    async with ConvexClient() as sb:
+        await sb.approve_contacts(event_id, record_ids)
         event = await sb.get_event(event_id)
         await sb.update_event_status(event_id, "outreach")
 
@@ -89,16 +87,16 @@ async def send_outreach_for_event(event_id: str, contact_ids: list[str]) -> dict
     sent = []
     errors = []
 
-    for contact_id in contact_ids:
+    for record_id in record_ids:
         try:
-            # a. Get full contact from HubSpot
-            async with HubSpotClient() as hs:
-                contact = await hs.get_contact(contact_id, properties=CONTACT_PROPS)
-            props = contact.get("properties", {})
+            # a. Get full contact from Attio
+            async with AttioClient() as attio:
+                record = await attio.get_contact(record_id)
+            props = flatten_record(record)
             name = f"{props.get('firstname', '')} {props.get('lastname', '')}".strip()
             email = props.get("email")
             if not email:
-                errors.append({"contact_id": contact_id, "error": "No email"})
+                errors.append({"record_id": record_id, "error": "No email"})
                 continue
 
             # b. LLM composes personalized email
@@ -121,27 +119,27 @@ async def send_outreach_for_event(event_id: str, contact_ids: list[str]) -> dict
                 labels=["outreach", event_id],
             )
 
-            # d. Update Supabase
-            async with SupabaseClient() as sb:
-                await sb.update_outreach(event_id, contact_id, {
+            # d. Update Convex
+            async with ConvexClient() as sb:
+                await sb.update_outreach(event_id, record_id, {
                     "outreach_sent": True,
                     "agentmail_thread_id": message.thread_id,
                 })
 
-            # e. Update HubSpot
-            await append_hubspot_notes(
-                contact_id,
+            # e. Update Attio
+            await append_attio_note(
+                record_id,
                 f"Invited to {event['title']}. thread_id={message.thread_id}",
                 outreach_status="agent_active",
             )
 
             sent.append({
-                "contact_id": contact_id,
+                "record_id": record_id,
                 "name": name,
                 "thread_id": message.thread_id,
             })
 
         except Exception as e:
-            errors.append({"contact_id": contact_id, "error": str(e)})
+            errors.append({"record_id": record_id, "error": str(e)})
 
     return {"event_id": event_id, "sent": sent, "errors": errors}

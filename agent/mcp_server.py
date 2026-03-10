@@ -1,5 +1,5 @@
 """
-FastMCP server exposing HubSpot CRM tools for agent use.
+FastMCP server exposing Attio CRM tools for agent use.
 
 Lives in /agent — runs as a standalone process (stdio transport), separate from the
 backend API service. Can be deployed as a serverless worker or long-running process.
@@ -18,55 +18,38 @@ Inspect:
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
-from hubspot import HubSpot
-from hubspot.crm.contacts.models import (
-    SimplePublicObjectInput,
-    SimplePublicObjectInputForCreate,
-    PublicObjectSearchRequest,
-)
 
 load_dotenv(Path(__file__).parents[1] / "backend" / ".env")
 
-_hs = HubSpot(access_token=os.environ["HUBSPOT_PAT"])
+from backend.attio.client import AttioClient, flatten_record  # noqa: E402
 
-mcp = FastMCP("hubspot-crm")
+mcp = FastMCP("attio-crm")
 
-_CONTACT_PROPS = [
-    "firstname",
-    "lastname",
-    "email",
-    "phone",
-    "career_profile",
-    "relationship_stage",
-    "contact_source",
-    "warm_intro_by",
-    "assigned_members",
-    "contact_type",
-    "outreach_status",
-    "human_notes",
-    "agent_notes",
-    "last_agent_action_at",
-    "enrichment_status",
-]
+
+def _attio_value(v: Any) -> list[dict]:
+    """Wrap a scalar into Attio's attribute value list format."""
+    return [{"value": v}]
 
 
 @mcp.tool()
-def search_contacts(
+async def search_contacts(
     outreach_status: str | None = None,
     contact_source: str | None = None,
     limit: int = 20,
 ) -> list[dict]:
     """
-    Search HubSpot contacts by outreach status and/or contact source.
+    Search Attio people records by outreach status and/or contact source.
 
     Args:
         outreach_status: Filter by status — pending | agent_active | human_assigned |
@@ -75,42 +58,48 @@ def search_contacts(
         limit:           Max results to return (default 20)
 
     Returns:
-        List of contact objects with all club_contact properties.
+        List of flattened contact dicts with all club attributes.
     """
-    filters = []
+    conditions = []
     if outreach_status:
-        filters.append({"propertyName": "outreach_status", "operator": "EQ", "value": outreach_status})
+        conditions.append({
+            "attribute": {"slug": "outreach_status"},
+            "condition": "equals",
+            "value": outreach_status,
+        })
     if contact_source:
-        filters.append({"propertyName": "contact_source", "operator": "EQ", "value": contact_source})
+        conditions.append({
+            "attribute": {"slug": "contact_source"},
+            "condition": "equals",
+            "value": contact_source,
+        })
 
-    request = PublicObjectSearchRequest(
-        filter_groups=[{"filters": filters}],
-        properties=_CONTACT_PROPS,
-        limit=limit,
-    )
-    result = _hs.crm.contacts.search_api.do_search(public_object_search_request=request)
-    return [c.to_dict() for c in result.results]
+    filter_: dict = {"$and": conditions} if conditions else {}
+
+    async with AttioClient() as attio:
+        records = await attio.search_contacts(filter_, limit=limit)
+
+    return [flatten_record(r) for r in records]
 
 
 @mcp.tool()
-def get_contact(contact_id: str) -> dict:
+async def get_contact(record_id: str) -> dict:
     """
-    Retrieve a HubSpot contact by ID with all club_contact properties.
+    Retrieve an Attio people record by ID with all club attributes.
 
     Args:
-        contact_id: HubSpot contact ID (from search_contacts results)
+        record_id: Attio record ID (from search_contacts results)
 
     Returns:
-        Contact object with id, properties, and createdAt/updatedAt timestamps.
+        Flattened contact dict with id and all attribute values.
     """
-    result = _hs.crm.contacts.basic_api.get_by_id(
-        contact_id, properties=_CONTACT_PROPS
-    )
-    return result.to_dict()
+    async with AttioClient() as attio:
+        record = await attio.get_contact(record_id)
+    return flatten_record(record)
 
 
 @mcp.tool()
-def create_contact(
+async def create_contact(
     firstname: str,
     lastname: str,
     email: str,
@@ -121,15 +110,15 @@ def create_contact(
     assigned_members: str | None = None,
 ) -> dict:
     """
-    Create a new HubSpot contact. Entry point for discovery workflows
+    Create a new Attio people record. Entry point for discovery workflows
     (e.g. LinkedIn browser agent passes serialized CareerProfile JSON here).
 
-    Contact is created with outreach_status=pending and enrichment_status=pending by default.
+    Record is created with outreach_status=pending and enrichment_status=pending by default.
 
     Args:
         firstname:        First name
         lastname:         Last name
-        email:            Email address (must be unique in HubSpot)
+        email:            Email address (must be unique in Attio)
         contact_source:   warm_intro | agent_outreach | inbound | event
         contact_type:     prospect | alumni | speaker | mentor | partner
         career_profile:   JSON string matching CareerProfile schema (optional)
@@ -137,34 +126,32 @@ def create_contact(
         assigned_members: JSON array of eboard member emails (optional)
 
     Returns:
-        Created contact object with HubSpot ID.
+        Created record as a flattened dict with Attio record ID.
     """
-    props: dict = {
-        "firstname": firstname,
-        "lastname": lastname,
-        "email": email,
-        "contact_source": contact_source,
-        "contact_type": contact_type,
-        "outreach_status": "pending",
-        "enrichment_status": "pending",
-        "relationship_stage": "cold",
+    values: dict[str, Any] = {
+        "name": [{"first_name": firstname, "last_name": lastname}],
+        "email_addresses": [{"email_address": email}],
+        "contact_source": _attio_value(contact_source),
+        "contact_type": _attio_value(contact_type),
+        "outreach_status": _attio_value("pending"),
+        "enrichment_status": _attio_value("pending"),
+        "relationship_stage": _attio_value("cold"),
     }
     if career_profile is not None:
-        props["career_profile"] = career_profile
+        values["career_profile"] = _attio_value(career_profile)
     if warm_intro_by is not None:
-        props["warm_intro_by"] = warm_intro_by
+        values["warm_intro_by"] = _attio_value(warm_intro_by)
     if assigned_members is not None:
-        props["assigned_members"] = assigned_members
+        values["assigned_members"] = _attio_value(assigned_members)
 
-    result = _hs.crm.contacts.basic_api.create(
-        simple_public_object_input_for_create=SimplePublicObjectInputForCreate(properties=props)
-    )
-    return result.to_dict()
+    async with AttioClient() as attio:
+        record = await attio.create_contact(values)
+    return flatten_record(record)
 
 
 @mcp.tool()
-def update_contact(
-    contact_id: str,
+async def update_contact(
+    record_id: str,
     outreach_status: str | None = None,
     relationship_stage: str | None = None,
     agent_notes: str | None = None,
@@ -173,45 +160,46 @@ def update_contact(
     """
     Update a contact's outreach state and/or append agent notes.
 
-    agent_notes are APPENDED to existing notes (not overwritten), prefixed with
-    a UTC timestamp so history is preserved.
+    agent_notes are posted as a new timestamped Attio Note (history is preserved
+    across multiple note entries).
 
     last_agent_action_at defaults to now() if not provided (and agent_notes is set).
 
     Args:
-        contact_id:           HubSpot contact ID
+        record_id:            Attio people record ID
         outreach_status:      New status (optional)
         relationship_stage:   New stage — cold | active | spoken | persistent (optional)
-        agent_notes:          Note to append (optional)
+        agent_notes:          Note to post (optional)
         last_agent_action_at: ISO 8601 timestamp override (optional)
 
     Returns:
-        Updated contact object.
+        Updated record as a flattened dict.
     """
-    props: dict = {}
+    values: dict[str, Any] = {}
 
     if outreach_status:
-        props["outreach_status"] = outreach_status
+        values["outreach_status"] = _attio_value(outreach_status)
     if relationship_stage:
-        props["relationship_stage"] = relationship_stage
+        values["relationship_stage"] = _attio_value(relationship_stage)
 
     if agent_notes:
-        current = _hs.crm.contacts.basic_api.get_by_id(
-            contact_id, properties=["agent_notes"]
-        )
-        existing = (current.properties or {}).get("agent_notes") or ""
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        separator = "\n\n" if existing else ""
-        props["agent_notes"] = f"{existing}{separator}[{timestamp}] {agent_notes}"
-        props["last_agent_action_at"] = last_agent_action_at or datetime.now(timezone.utc).isoformat()
-    elif last_agent_action_at:
-        props["last_agent_action_at"] = last_agent_action_at
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        content = f"[{ts}] {agent_notes}"
+        action_ts = last_agent_action_at or datetime.now(timezone.utc).isoformat()
+        values["last_agent_action_at"] = _attio_value(action_ts)
 
-    result = _hs.crm.contacts.basic_api.update(
-        contact_id,
-        simple_public_object_input=SimplePublicObjectInput(properties=props),
-    )
-    return result.to_dict()
+        async with AttioClient() as attio:
+            await attio.create_note(record_id, title="Agent Note", content=content)
+            record = await attio.update_contact(record_id, values) if values else await attio.get_contact(record_id)
+    elif last_agent_action_at:
+        values["last_agent_action_at"] = _attio_value(last_agent_action_at)
+        async with AttioClient() as attio:
+            record = await attio.update_contact(record_id, values)
+    else:
+        async with AttioClient() as attio:
+            record = await attio.update_contact(record_id, values) if values else await attio.get_contact(record_id)
+
+    return flatten_record(record)
 
 
 if __name__ == "__main__":
