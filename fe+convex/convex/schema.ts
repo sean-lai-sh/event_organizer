@@ -32,18 +32,17 @@ export default defineSchema({
     .index("by_event_attio", ["event_id", "attio_record_id"]),
 
   eboard_members: defineTable({
-    email: v.string(),
-    name: v.string(),
+    userId: v.string(),             // Better Auth user._id (opaque string)
     role: v.optional(v.string()),
     active: v.boolean(),
     created_at: v.number(),
-  }).index("by_email", ["email"]),
+  }).index("by_userId", ["userId"]),
 
   contact_assignments: defineTable({
     attio_record_id: v.string(),
-    member_email: v.string(),
+    memberId: v.id("eboard_members"),  // typed Convex ref
     assigned_at: v.number(),
   })
-    .index("by_member_email", ["member_email"])
+    .index("by_member_id", ["memberId"])
     .index("by_record_id", ["attio_record_id"]),
 });

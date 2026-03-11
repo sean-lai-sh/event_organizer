@@ -57,9 +57,9 @@ class AttioClient:
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> AttioClient:
-        token = os.environ.get("ATTIO_API_KEY")
+        token = os.environ.get("ATTIO_KEY")
         if not token:
-            raise RuntimeError("ATTIO_API_KEY must be set")
+            raise RuntimeError("ATTIO_KEY must be set")
         self._client = httpx.AsyncClient(
             base_url=BASE_URL,
             headers={
@@ -103,9 +103,10 @@ class AttioClient:
         """Query people records.
 
         filter_ uses Attio's filter syntax, e.g.:
-          {"$and": [
-              {"attribute": {"slug": "enrichment_status"}, "condition": "equals", "value": "enriched"},
-          ]}
+          Shorthand:  {"enrichment_status": "enriched"}
+          Verbose:    {"$and": [{"enrichment_status": {"$eq": "enriched"}}]}
+          Operators:  $eq, $in, $not_empty, $contains, $starts_with, $ends_with,
+                      $lt, $lte, $gt, $gte, $and, $or, $not
         """
         payload: dict[str, Any] = {"filter": filter_, "limit": limit, "offset": offset}
         resp = await self._client.post(
@@ -125,7 +126,8 @@ class AttioClient:
                 "parent_object": "people",
                 "parent_record_id": record_id,
                 "title": title,
-                "content_plaintext": content,
+                "format": "plaintext",
+                "content": content,
             }
         }
         resp = await self._client.post("/notes", json=payload)

@@ -6,7 +6,23 @@ import type { DataModel } from "./_generated/dataModel";
 import type { GenericCtx } from "@convex-dev/better-auth/utils";
 import authConfig from "./auth.config";
 
-const authComponent = createClient<DataModel>(components.betterAuth);
+const authComponent = createClient<DataModel>(components.betterAuth, {
+  triggers: {
+    user: {
+      onCreate: async (ctx, userDoc) => {
+        await ctx.db.insert("eboard_members", {
+          userId: userDoc._id,
+          active: true,
+          created_at: Date.now(),
+        });
+      },
+    },
+  },
+  // authFunctions fields are all optional; triggers handles lifecycle transactionally
+  authFunctions: {},
+});
+
+export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi();
 
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
   betterAuth({
@@ -22,3 +38,4 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 
 export const { getAuthUser, safeGetAuthUser, clientApi } = authComponent;
 export const { getAuthUser: getAuthUserQuery } = authComponent.clientApi();
+export { authComponent };
