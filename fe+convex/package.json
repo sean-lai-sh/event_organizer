@@ -12,6 +12,7 @@
     "@convex-dev/better-auth": "^0.10.13",
     "better-auth": "1.4.9",
     "convex": "^1.32.0",
+    "my-app": ".",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"
