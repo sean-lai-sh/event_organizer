@@ -5,7 +5,7 @@ export default defineSchema({
   events: defineTable({
     title: v.string(),
     description: v.optional(v.string()),
-    event_date: v.string(),        // "YYYY-MM-DD"
+    event_date: v.optional(v.string()), // "YYYY-MM-DD"
     event_time: v.optional(v.string()),
     event_end_time: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -14,6 +14,9 @@ export default defineSchema({
     needs_outreach: v.boolean(),
     status: v.string(),            // draft | matching | outreach | completed
     created_by: v.optional(v.string()),  // eboard member email
+    // Sticky milestone flags (set true by inbound processing, manual reset if needed)
+    speaker_confirmed: v.optional(v.boolean()),
+    room_confirmed: v.optional(v.boolean()),
     created_at: v.number(),
   }),
 
@@ -25,10 +28,16 @@ export default defineSchema({
     outreach_sent: v.boolean(),
     response: v.optional(v.string()),   // accepted | declined | no_reply | pending
     agentmail_thread_id: v.optional(v.string()),
+    inbound_state: v.optional(v.string()), // needs_review | awaiting_member_reply | resolved
+    inbound_count: v.optional(v.number()),
+    last_inbound_at: v.optional(v.number()),
+    last_inbound_from: v.optional(v.string()),
+    last_classification: v.optional(v.string()),
     created_at: v.number(),
   })
     .index("by_event_id", ["event_id"])
     .index("by_thread_id", ["agentmail_thread_id"])
+    .index("by_attio_record_id", ["attio_record_id"])
     .index("by_event_attio", ["event_id", "attio_record_id"]),
 
   eboard_members: defineTable({
@@ -44,5 +53,12 @@ export default defineSchema({
     assigned_at: v.number(),
   })
     .index("by_member_id", ["memberId"])
-    .index("by_record_id", ["attio_record_id"]),
+    .index("by_record_id", ["attio_record_id"])
+    .index("by_record_member", ["attio_record_id", "memberId"]),
+
+  inbound_receipts: defineTable({
+    message_id: v.string(),
+    thread_id: v.optional(v.string()),
+    received_at: v.number(),
+  }).index("by_message_id", ["message_id"]),
 });

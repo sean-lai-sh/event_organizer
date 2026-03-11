@@ -6,10 +6,10 @@ so that match.py, outreach.py, and reply_handler.py stay focused on logic.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from datetime import datetime, timezone
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
 
@@ -52,10 +52,21 @@ class ConvexClient:
         if self._http:
             await self._http.aclose()
 
+    def _strip_nones(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: self._strip_nones(val)
+                for key, val in value.items()
+                if val is not None
+            }
+        if isinstance(value, list):
+            return [self._strip_nones(item) for item in value]
+        return value
+
     async def _call(self, kind: str, path: str, args: dict) -> Any:
         resp = await self._http.post(
             f"{self._url}/api/{kind}",
-            json={"path": path, "args": args, "format": "json"},
+            json={"path": path, "args": self._strip_nones(args), "format": "json"},
         )
         resp.raise_for_status()
         body = resp.json()
@@ -76,6 +87,25 @@ class ConvexClient:
 
     async def update_event_status(self, event_id: str, status: str) -> None:
         await self.mutation("events:updateEventStatus", {"event_id": event_id, "status": status})
+
+    async def create_event(self, event: dict) -> str:
+        return await self.mutation("events:createEvent", event)
+
+    async def apply_inbound_milestones(
+        self,
+        event_id: str,
+        *,
+        speaker_confirmed: bool | None = None,
+        room_confirmed: bool | None = None,
+    ) -> None:
+        await self.mutation(
+            "events:applyInboundMilestones",
+            {
+                "event_id": event_id,
+                "speaker_confirmed": speaker_confirmed,
+                "room_confirmed": room_confirmed,
+            },
+        )
 
     # ── Event Outreach ──
 
@@ -104,6 +134,66 @@ class ConvexClient:
 
     async def find_outreach_by_thread(self, thread_id: str) -> dict | None:
         return await self.query("outreach:findByThread", {"thread_id": thread_id})
+
+    async def apply_inbound_update(
+        self,
+        event_id: str,
+        attio_record_id: str,
+        *,
+        classification: str,
+        inbound_state: str,
+        response: str | None = None,
+        sender_email: str | None = None,
+        received_at: int | None = None,
+    ) -> None:
+        await self.mutation(
+            "outreach:applyInboundUpdate",
+            {
+                "event_id": event_id,
+                "attio_record_id": attio_record_id,
+                "classification": classification,
+                "inbound_state": inbound_state,
+                "response": response,
+                "sender_email": sender_email,
+                "received_at": received_at,
+            },
+        )
+
+    async def upsert_outreach_link(
+        self, event_id: str, attio_record_id: str, thread_id: str | None = None
+    ) -> str:
+        return await self.mutation(
+            "outreach:upsertOutreachLink",
+            {
+                "event_id": event_id,
+                "attio_record_id": attio_record_id,
+                "thread_id": thread_id,
+            },
+        )
+
+    async def record_inbound_receipt(self, message_id: str, thread_id: str | None = None) -> bool:
+        res = await self.mutation(
+            "outreach:recordInboundReceipt",
+            {"message_id": message_id, "thread_id": thread_id},
+        )
+        return bool(res.get("is_duplicate"))
+
+    # ── Assignments / Eboard ──
+
+    async def get_active_eboard_members(self) -> list[dict]:
+        return await self.query("eboard:listActive", {})
+
+    async def resolve_assignees_by_record(self, attio_record_id: str) -> list[dict]:
+        return await self.query(
+            "contactAssignments:resolveAssigneesByRecord",
+            {"attio_record_id": attio_record_id},
+        )
+
+    async def upsert_assignments_by_emails(self, attio_record_id: str, emails: list[str]) -> dict:
+        return await self.mutation(
+            "contactAssignments:upsertAssignmentsByEmails",
+            {"attio_record_id": attio_record_id, "emails": emails},
+        )
 
 
 # ── Attio helpers ─────────────────────────────────────────────────────────────
@@ -148,6 +238,76 @@ async def append_attio_note(
         await attio.create_note(record_id, title="Agent Note", content=content)
         if updates:
             await attio.update_contact(record_id, updates)
+
+
+def _split_name(name: str | None) -> tuple[str, str]:
+    raw = (name or "").strip()
+    if not raw:
+        return "Inbound", "Contact"
+    parts = raw.split()
+    if len(parts) == 1:
+        return parts[0], "Contact"
+    return parts[0], " ".join(parts[1:])
+
+
+async def upsert_inbound_contact(email: str, sender_name: str | None = None) -> dict:
+    """Find or create an inbound Attio contact, using email as the stable key."""
+    email = email.strip().lower()
+    if not email:
+        raise ValueError("email is required")
+
+    existing_record: dict | None = None
+    async with AttioClient() as attio:
+        # Primary lookup path.
+        filters = [
+            {
+                "$and": [
+                    {
+                        "attribute": {"slug": "email_addresses"},
+                        "condition": "contains",
+                        "value": email,
+                    }
+                ]
+            },
+            {
+                "$and": [
+                    {
+                        "attribute": {"slug": "email_addresses"},
+                        "condition": "equals",
+                        "value": email,
+                    }
+                ]
+            },
+            {"email_addresses": {"$contains": email}},
+        ]
+
+        for filter_ in filters:
+            try:
+                rows = await attio.search_contacts(filter_, limit=1)
+            except Exception:
+                continue
+            if rows:
+                existing_record = rows[0]
+                break
+
+        if existing_record:
+            return flatten_record(existing_record)
+
+        parsed_name, parsed_email = parseaddr(sender_name or "")
+        inferred_name = parsed_name or sender_name or parsed_email or email
+        firstname, lastname = _split_name(inferred_name)
+        created = await attio.create_contact(
+            {
+                "name": [{"first_name": firstname, "last_name": lastname}],
+                "email_addresses": [{"email_address": email}],
+                "contact_source": [{"value": "inbound"}],
+                "contact_type": [{"value": "prospect"}],
+                "outreach_status": [{"value": "pending"}],
+                "enrichment_status": [{"value": "pending"}],
+                "relationship_stage": [{"value": "cold"}],
+            }
+        )
+        return flatten_record(created)
 
 
 # ── Anthropic LLM ─────────────────────────────────────────────────────────────

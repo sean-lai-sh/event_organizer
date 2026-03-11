@@ -12,7 +12,7 @@ export const createEvent = mutation({
   args: {
     title: v.string(),
     description: v.optional(v.string()),
-    event_date: v.string(),
+    event_date: v.optional(v.string()),
     event_time: v.optional(v.string()),
     event_end_time: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -23,7 +23,12 @@ export const createEvent = mutation({
     created_by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("events", { ...args, created_at: Date.now() });
+    return await ctx.db.insert("events", {
+      ...args,
+      speaker_confirmed: false,
+      room_confirmed: false,
+      created_at: Date.now(),
+    });
   },
 });
 
@@ -39,5 +44,30 @@ export const listEvents = query({
   handler: async (ctx, { status }) => {
     const all = await ctx.db.query("events").order("desc").collect();
     return status ? all.filter((e) => e.status === status) : all;
+  },
+});
+
+export const applyInboundMilestones = mutation({
+  args: {
+    event_id: v.id("events"),
+    speaker_confirmed: v.optional(v.boolean()),
+    room_confirmed: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { event_id, speaker_confirmed, room_confirmed }) => {
+    const event = await ctx.db.get(event_id);
+    if (!event) throw new Error(`Event not found: ${event_id}`);
+
+    const patch: Record<string, unknown> = {};
+    // Sticky true semantics: never auto-revert to false.
+    if (speaker_confirmed === true && event.speaker_confirmed !== true) {
+      patch.speaker_confirmed = true;
+    }
+    if (room_confirmed === true && event.room_confirmed !== true) {
+      patch.room_confirmed = true;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(event_id, patch);
+    }
   },
 });

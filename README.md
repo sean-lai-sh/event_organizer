@@ -5,7 +5,7 @@ This repo has three main parts:
 | Directory | What it is |
 |---|---|
 | `fe+convex/` | Next.js 16 frontend + Convex real-time backend (TypeScript) |
-| `backend/` | Python services — HubSpot, Attio CRM clients, FastMCP server |
+| `backend/` | Python services — Attio CRM clients and FastMCP server |
 | `agent/` | AI agent / MCP server (Attio CRM tools for outreach automation) |
 
 Secrets are managed via **Doppler** — you will never manually create `.env` files.
@@ -46,7 +46,7 @@ Verify it's working:
 doppler secrets
 ```
 
-You should see all the project secrets listed (e.g. `ATTIO_API_KEY`, `HUBSPOT_PAT`, `BETTER_AUTH_SECRET`, etc.).
+You should see all the project secrets listed (e.g. `ATTIO_API_KEY`, `BETTER_AUTH_SECRET`, etc.).
 
 > **Note:** If you don't have access to the Doppler project, ask the team lead to invite you at **app.doppler.com** → Project → Access.
 
@@ -108,23 +108,6 @@ doppler run -- uv run python agent/mcp_server.py
 doppler run -- npx @modelcontextprotocol/inspector uv run python agent/mcp_server.py
 ```
 
-### One-time HubSpot bootstrap (only run once to create custom CRM properties)
-
-```bash
-cd <repo-root>
-doppler run -- uv run python backend/scripts/bootstrap_hubspot.py
-```
-
-### Apply Supabase migration (only run once)
-
-```bash
-# Paste contents of backend/supabase/migrations/001_eboard.sql
-# into the Supabase SQL editor, or run via Supabase CLI:
-supabase db push
-```
-
----
-
 ## Environment Variables Reference
 
 These live in Doppler — do **not** add them to any `.env` file.
@@ -132,7 +115,6 @@ These live in Doppler — do **not** add them to any `.env` file.
 | Variable | Used by | Description |
 |---|---|---|
 | `ATTIO_API_KEY` | `backend/`, `agent/` | Attio CRM API token |
-| `HUBSPOT_PAT` | `backend/` | HubSpot Private App token (scope: `crm.schemas.contacts.write`) |
 | `BETTER_AUTH_URL` | `fe+convex/` | Base URL for the auth server (e.g. `http://localhost:3000`) |
 | `BETTER_AUTH_SECRET` | `fe+convex/` | Secret key for better-auth session signing |
 | `CONVEX_DEPLOYMENT` | `fe+convex/` | Convex deployment URL (auto-set by `convex dev`) |
@@ -170,11 +152,7 @@ event-organizer/
 │   └── package.json
 ├── backend/
 │   ├── attio/client.py    # Attio CRM API wrapper
-│   ├── hubspot/client.py  # HubSpot CRM API wrapper
 │   ├── models/contact.py  # Pydantic data models
-│   ├── supabase/          # SQL migrations
-│   ├── scripts/
-│   │   └── bootstrap_hubspot.py  # One-time HubSpot property setup
 │   └── pyproject.toml
 ├── agent/
 │   ├── mcp_server.py      # FastMCP server (Attio CRM tools)
@@ -189,7 +167,7 @@ event-organizer/
 
 **`doppler: command not found`** — Make sure Doppler CLI is installed and your shell has been restarted after install.
 
-**`ATTIO_API_KEY must be set` / `HUBSPOT_PAT must be set`** — You ran the process without `doppler run --`. Prefix your command with `doppler run --`.
+**`ATTIO_API_KEY must be set`** — You ran the process without `doppler run --`. Prefix your command with `doppler run --`.
 
 **Convex type errors after pulling** — Run `npx convex dev --once` to regenerate `_generated/` types.
 
