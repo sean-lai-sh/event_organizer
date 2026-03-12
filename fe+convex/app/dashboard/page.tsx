@@ -1,9 +1,7 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@convex-dev/generated/api";
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 
 // Mock API calls - replace with real Convex queries
 const useEvents = () => {
@@ -122,7 +120,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-900">Dashboard</h1>
           <p className="text-zinc-600 mt-1">
-            Welcome back! Here's your event organization overview.
+            Welcome back! Here&apos;s your event organization overview.
           </p>
         </div>
         <Link

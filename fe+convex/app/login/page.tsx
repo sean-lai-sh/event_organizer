@@ -37,7 +37,7 @@ export default function LoginPage() {
       >
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-zinc-900">Eboard Login</h1>
-          <p className="mt-2 text-s¬m text-zinc-600">
+          <p className="mt-2 text-sm text-zinc-600">
             Sign in to manage your events
           </p>
         </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
         </button>
 
         <div className="flex items-center justify-center gap-2 text-sm text-zinc-600">
-          <p>Don't have an account?</p>
+          <p>Don&apos;t have an account?</p>
           <Link
             href="/signup"
             className="font-medium text-blue-600 hover:underline"

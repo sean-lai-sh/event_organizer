@@ -1,19 +1,8 @@
+"use client";
+
 import Link from "next/link";
 
 export default function Home() {
-  const { data: session } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (session) {
-      router.push("/dashboard");
-    }
-  }, [session, router]);
-
-  if (session) {
-    return null;
-  }
-
   return (
     <main style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: "#fafafa", color: "#0a0a0a", minHeight: "100vh" }}>
 
