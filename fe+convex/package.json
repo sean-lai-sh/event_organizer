@@ -12,6 +12,8 @@
     "@convex-dev/better-auth": "^0.10.13",
     "better-auth": "1.4.9",
     "convex": "^1.32.0",
+    "lucide-react": "^0.577.0",
+    "motion": "^12.36.0",
     "my-app": ".",
     "next": "16.1.6",
     "react": "19.2.3",
