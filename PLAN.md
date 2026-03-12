@@ -30,16 +30,16 @@ Live list:
 
 Verified writable list attributes:
 
-| Attribute | Type | Live values / notes |
-|---|---|---|
-| `status` | status | `Prospect`, `Outreach (Cold)`, `Outreach (Warm)`, `Engaged`, `Confirmed`, `Spoke`, `Mentoring`, `Declined` |
-| `speaker_info` | text | summary text |
-| `work_history` | text | JSON stored as text |
-| `previous_events` | text | JSON array of Convex event ids stored as text |
-| `managed_poc` | record-reference | references `people`; live field is currently multiselect |
-| `assigned` | text | intended to hold Convex `eboard_members._id` |
-| `source` | select | `warm`, `alumni`, `in bound`, `event`, `outreach` |
-| `active_event_id` | text | current Convex event id |
+| Attribute         | Type             | Live values / notes                                                                                        |
+| ----------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `status`          | status           | `Prospect`, `Outreach (Cold)`, `Outreach (Warm)`, `Engaged`, `Confirmed`, `Spoke`, `Mentoring`, `Declined` |
+| `speaker_info`    | text             | summary text                                                                                               |
+| `work_history`    | text             | JSON stored as text                                                                                        |
+| `previous_events` | text             | JSON array of Convex event ids stored as text                                                              |
+| `managed_poc`     | record-reference | references `people`; live field is currently multiselect                                                   |
+| `assigned`        | text             | intended to hold Convex `eboard_members._id`                                                               |
+| `source`          | select           | `warm`, `alumni`, `in bound`, `event`, `outreach`                                                          |
+| `active_event_id` | text             | current Convex event id                                                                                    |
 
 ## Compliance Rules
 
@@ -134,23 +134,23 @@ Change behavior, not just schema:
 
 ### Inbound classification -> `speakers.status`
 
-| Agent classification | Required `speakers.status` |
-|---|---|
-| `ACCEPTED` | `Confirmed` |
-| `DECLINED` | `Declined` |
-| `QUESTION` | `Engaged` |
-| `NEEDS_HUMAN` | `Engaged` |
-| net-new inbound with no confirmed event | `Prospect` |
+| Agent classification                    | Required `speakers.status` |
+| --------------------------------------- | -------------------------- |
+| `ACCEPTED`                              | `Confirmed`                |
+| `DECLINED`                              | `Declined`                 |
+| `QUESTION`                              | `Engaged`                  |
+| `NEEDS_HUMAN`                           | `Engaged`                  |
+| net-new inbound with no confirmed event | `Prospect`                 |
 
 ### Workflow-origin -> `speakers.source`
 
-| Workflow origin | Required `speakers.source` |
-|---|---|
-| cold outreach seeded by the agent | `outreach` |
-| warm intro | `warm` |
-| inbound email | `in bound` |
-| sourced from past event activity | `event` |
-| alumni sourcing | `alumni` |
+| Workflow origin                   | Required `speakers.source` |
+| --------------------------------- | -------------------------- |
+| cold outreach seeded by the agent | `outreach`                 |
+| warm intro                        | `warm`                     |
+| inbound email                     | `in bound`                 |
+| sourced from past event activity  | `event`                    |
+| alumni sourcing                   | `alumni`                   |
 
 ### Outbound stage initialization
 
@@ -260,3 +260,9 @@ After the implementation changes land:
    - `Engaged`
    - `Confirmed`
    - `Declined`
+
+Operational Guarantees
+
+1. The Attio + Convex integration must maintain the following guarantees at runtime:
+2. Identity and workflow separation people records remain identity-only.
+3. speakers list entries remain the sole location for workflow state.
