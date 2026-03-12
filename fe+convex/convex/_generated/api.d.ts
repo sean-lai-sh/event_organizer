@@ -9,9 +9,11 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as contactAssignments from "../contactAssignments.js";
 import type * as eboard from "../eboard.js";
 import type * as events from "../events.js";
 import type * as http from "../http.js";
+import type * as inboundDashboard from "../inboundDashboard.js";
 import type * as outreach from "../outreach.js";
 
 import type {
@@ -22,9 +24,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  contactAssignments: typeof contactAssignments;
   eboard: typeof eboard;
   events: typeof events;
   http: typeof http;
+  inboundDashboard: typeof inboundDashboard;
   outreach: typeof outreach;
 }>;
 
