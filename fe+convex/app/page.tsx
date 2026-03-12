@@ -1,10 +1,4 @@
-"use client";
-
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -16,7 +10,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import AnimatedHero from "@/components/AnimatedHero";
-import { useSession } from "@/lib/auth-client";
 
 type CapabilityCard = {
   title: string;
@@ -171,28 +164,7 @@ const proofCards = [
 ];
 
 export default function Home() {
-  const router = useRouter();
-  const router = useRouter();
-  const { data: session } = useSession();
-
-  useEffect(() => {
-    if (session) {
-      router.replace("/dashboard");
-      router.replace("/dashboard");
-    }
-  }, [router, session]);
-  }, [router, session]);
-
-  if (session) {
-    return null;
-  }
-
   return (
-    <main className="landing-page">
-      <header className="landing-nav-shell">
-        <nav className="landing-nav">
-          <Link href="/" className="landing-brand">
-            eventclub
     <main className="landing-page">
       <header className="landing-nav-shell">
         <nav className="landing-nav">
@@ -228,46 +200,7 @@ export default function Home() {
             From the first shortlist to the last inbound question, the workflow
             stays visible, shared, and current.
           </p>
-
-          <div className="landing-nav-links">
-            <Link href="#capabilities">Capabilities</Link>
-            <Link href="#architecture">Architecture</Link>
-            <Link href="#proof">Why teams switch</Link>
-          </div>
-
-          <div className="landing-nav-actions">
-            <Link href="/login" className="landing-link">
-              Sign in
-            </Link>
-            <Link href="/signup" className="landing-button landing-button--dark">
-              <span>Get started</span>
-              <ArrowRight size={16} />
-            </Link>
-          </div>
-        </nav>
-      </header>
-
-      <AnimatedHero />
-
-      <section id="capabilities" className="landing-section">
-        <div className="landing-section-heading">
-          <p className="landing-eyebrow">Capabilities</p>
-          <h2>Everything officers need to pull off a speaker-led event.</h2>
-          <p className="landing-section-copy">
-            From the first shortlist to the last inbound question, the workflow
-            stays visible, shared, and current.
-          </p>
         </div>
-
-        <div className="capability-grid">
-          {capabilityCards.map(({ title, description, icon: Icon }) => (
-            <article key={title} className="capability-card">
-              <div className="capability-icon">
-                <Icon size={20} />
-              </div>
-              <h3 className="capability-title">{title}</h3>
-              <p className="capability-desc">{description}</p>
-            </article>
 
         <div className="capability-grid">
           {capabilityCards.map(({ title, description, icon: Icon }) => (
@@ -283,18 +216,13 @@ export default function Home() {
       </section>
 
       <section id="architecture" className="platform-section">
-      <section id="architecture" className="platform-section">
         <div className="platform-inner">
           <div className="platform-header">
             <p className="platform-eyebrow">Architecture</p>
             <h2 className="platform-heading">
               A stack built to keep clubs operational, not just organized.
-              A stack built to keep clubs operational, not just organized.
             </h2>
             <p className="platform-subheading">
-              The app surfaces one clean experience for officers while the
-              underlying systems keep identity, workflow, and event state in the
-              right places.
               The app surfaces one clean experience for officers while the
               underlying systems keep identity, workflow, and event state in the
               right places.
@@ -309,13 +237,6 @@ export default function Home() {
                   <p className="platform-note-desc">{note.description}</p>
                 </article>
               ))}
-            <div className="platform-col">
-              {platformNotesLeft.map((note) => (
-                <article key={note.title} className="platform-note">
-                  <h3 className="platform-note-title">{note.title}</h3>
-                  <p className="platform-note-desc">{note.description}</p>
-                </article>
-              ))}
             </div>
 
             <div className="platform-stack" aria-hidden>
@@ -342,39 +263,8 @@ export default function Home() {
                   </div>
                 </div>
               ))}
-            <div className="platform-stack" aria-hidden>
-              <div className="platform-stack-glow" />
-              {platformLayers.map((layer) => (
-                <div
-                  key={layer.title}
-                  className={`platform-layer platform-layer--${layer.tone}`}
-                  style={{
-                    top: layer.top,
-                    transform: `translateX(-50%) rotate(${layer.rotate}deg)`,
-                    zIndex: layer.zIndex,
-                  }}
-                >
-                  <p className="platform-layer__eyebrow">{layer.eyebrow}</p>
-                  <h3 className="platform-layer__title">{layer.title}</h3>
-                  <p className="platform-layer__caption">{layer.caption}</p>
-                  <div className="platform-chip-row">
-                    {layer.chips.map((chip) => (
-                      <span key={chip} className="platform-chip">
-                        {chip}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
             </div>
 
-            <div className="platform-col">
-              {platformNotesRight.map((note) => (
-                <article key={note.title} className="platform-note">
-                  <h3 className="platform-note-title">{note.title}</h3>
-                  <p className="platform-note-desc">{note.description}</p>
-                </article>
-              ))}
             <div className="platform-col">
               {platformNotesRight.map((note) => (
                 <article key={note.title} className="platform-note">
@@ -387,24 +277,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="proof" className="proof-section">
-        <div className="landing-section-heading">
-          <p className="landing-eyebrow">Why teams switch</p>
-          <h2>A cleaner way to run outreach-heavy events.</h2>
-          <p className="landing-section-copy">
-            The point is not another pretty dashboard. It is fewer dropped
-            threads, clearer ownership, and less status drift across the tools
-            your team already relies on.
-          </p>
-        </div>
-
-        <div className="proof-grid">
-          {proofCards.map((card) => (
-            <article key={card.value} className="proof-card">
-              <div className="proof-value">{card.value}</div>
-              <div className="proof-label">{card.label}</div>
-              <p className="proof-detail">{card.detail}</p>
-            </article>
       <section id="proof" className="proof-section">
         <div className="landing-section-heading">
           <p className="landing-eyebrow">Why teams switch</p>
@@ -453,54 +325,9 @@ export default function Home() {
               events on repeat.
             </p>
           </div>
-      <section className="cta-section">
-        <div className="cta-card">
-          <div className="cta-copy">
-            <p className="landing-eyebrow">Start the next cycle clean</p>
-            <h2 className="cta-heading">
-              Stop stitching together docs, inboxes, and spreadsheets.
-            </h2>
-            <p className="cta-subheading">
-              Create one board for your next event, invite your officers, and
-              let the system keep outreach and replies aligned.
-            </p>
-          </div>
-
-          <div className="cta-actions">
-            <Link href="/signup" className="landing-button landing-button--dark">
-              <span>Create free account</span>
-              <ArrowRight size={16} />
-            </Link>
-            <Link href="/login" className="landing-link">
-              Already have an account
-            </Link>
-            <p className="cta-note">
-              Designed for club teams that run speakers, workshops, and member
-              events on repeat.
-            </p>
-          </div>
         </div>
       </section>
 
-      <footer className="landing-footer">
-        <div>
-          <div className="landing-brand">eventclub</div>
-          <p className="landing-footer-copy">
-            Event operations for clubs that need more than a calendar page.
-          </p>
-        </div>
-
-        <div className="landing-footer-links">
-          <Link href="/login" className="landing-footer-link">
-            Sign in
-          </Link>
-          <Link href="/signup" className="landing-footer-link">
-            Create account
-          </Link>
-          <Link href="#architecture" className="landing-footer-link">
-            Architecture
-          </Link>
-        </div>
       <footer className="landing-footer">
         <div>
           <div className="landing-brand">eventclub</div>
