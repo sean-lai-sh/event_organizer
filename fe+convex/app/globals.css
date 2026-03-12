@@ -24,3 +24,139 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Platform Section ── */
+
+.platform-section {
+  background: #f8f8f8;
+  border-top: 1px solid #ebebeb;
+  border-bottom: 1px solid #ebebeb;
+  padding: 100px 60px;
+}
+
+.platform-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Header */
+.platform-header {
+  text-align: center;
+  margin-bottom: 80px;
+}
+
+.platform-eyebrow {
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 400;
+  color: #6b6b6b;
+  letter-spacing: -0.5px;
+  margin-bottom: 16px;
+}
+
+.platform-heading {
+  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-size: clamp(36px, 4vw, 48px);
+  font-weight: 300;
+  color: #393939;
+  letter-spacing: -2.4px;
+  line-height: 1.05;
+  max-width: 620px;
+  margin: 0 auto 18px;
+}
+
+.platform-subheading {
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: #6b6b6b;
+  letter-spacing: -0.35px;
+  line-height: 1.6;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* Diagram area — fluid 3-column grid */
+.platform-diagram {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: clamp(20px, 3vw, 40px);
+  align-items: stretch;
+}
+
+.platform-diagram-image {
+  aspect-ratio: 1;
+}
+
+.platform-diagram-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Label columns */
+.platform-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.platform-col--left {
+  padding-top: 4%;
+  padding-bottom: 28%;
+}
+
+.platform-col--right {
+  padding-top: 28%;
+  padding-bottom: 4%;
+}
+
+/* Labels */
+.platform-label-title {
+  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-size: clamp(14px, 1.4vw, 16px);
+  font-weight: 400;
+  color: #000;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.platform-label-desc {
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-size: clamp(12px, 1.2vw, 14px);
+  font-weight: 300;
+  color: #555;
+  line-height: 1.65;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .platform-section {
+    padding: 64px 24px;
+  }
+
+  .platform-heading {
+    font-size: 32px;
+    letter-spacing: -1.6px;
+  }
+
+  .platform-subheading {
+    font-size: 17px;
+  }
+
+  .platform-header {
+    margin-bottom: 48px;
+  }
+
+  .platform-diagram {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .platform-col {
+    gap: 28px;
+    padding: 0 !important;
+    margin-top: 32px;
+  }
+}
