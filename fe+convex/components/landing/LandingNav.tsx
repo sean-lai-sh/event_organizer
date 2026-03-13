@@ -12,7 +12,7 @@ export default function LandingNav() {
         </Link>
         <Link
           href="/signup"
-          className="landing-nav-start landing-solid-cta rounded-md bg-[#0a0a0a] px-5 py-2.5 text-[14px] font-semibold tracking-[-0.01em] no-underline"
+          className="landing-nav-start landing-solid-cta rounded-md bg-[#0a0a0a] px-5 py-2.5 text-[14px] text-white font-semibold tracking-[-0.01em] no-underline"
         >
           Get started
         </Link>
