@@ -1,33 +1,96 @@
+"use client";
+
 import Link from "next/link";
+import { motion, useReducedMotion } from "motion/react";
+
+const boardRows = [
+  { label: "4 speakers confirmed", state: "Live", dot: "dark" },
+  { label: "12 replies triaged", state: "Today", dot: "mid" },
+  { label: "2 items need owner", state: "Action", dot: "light" },
+] as const;
+
+const nextWindowRows = [
+  { label: "Send follow-up batch", time: "Today · 4:00 PM" },
+  { label: "Finalize room setup", time: "Tomorrow · 11:00 AM" },
+  { label: "Review open questions", time: "Friday · 9:30 AM" },
+] as const;
 
 export default function LandingHero() {
+  const reduceMotion = useReducedMotion();
+
   return (
-    <section className="mx-auto max-w-[1440px] px-[60px] pt-[100px] pb-[88px] max-[900px]:px-6 max-[560px]:px-5">
-      <div className="mb-8 inline-block rounded-[100px] bg-[#f0f0f0] px-[14px] py-[6px] text-[11px] font-semibold uppercase tracking-[0.1em] text-[#666]">
-        Built for student clubs
-      </div>
-      <h1 className="m-0 max-w-[860px] text-[clamp(52px,8vw,88px)] font-light leading-[0.95] tracking-[-0.05em] text-[#0a0a0a]">
-        Events your club
-        <br />
-        <em className="italic text-[#aaa]">actually</em> deserves.
-      </h1>
-      <p className="mt-7 mb-11 max-w-[480px] text-[18px] leading-[1.65] font-light text-[#999]">
-        Plan, organize, and execute your club events. Manage speakers, track
-        RSVPs, and keep every thread in one place.
-      </p>
-      <div className="flex items-center gap-4">
-        <Link
-          href="/signup"
-          className="rounded-[8px] bg-[#0a0a0a] px-7 py-[14px] text-[15px] font-semibold tracking-[-0.01em] text-white no-underline"
+    <section className="landing-hero-vc">
+      <div className="landing-hero-vc__inner">
+        <motion.div
+          className="landing-hero-vc__left"
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
         >
-          Start organizing →
-        </Link>
-        <Link
-          href="/login"
-          className="text-[15px] tracking-[-0.01em] text-[#999] no-underline"
+         
+          <h1 className="landing-hero-vc__title">
+            Run standout events
+            <br />
+            without the chaos.
+          </h1>
+          <p className="landing-hero-vc__subtitle">
+            Plan events, manage speaker outreach, and keep every reply in one
+            shared workspace for your team.
+          </p>
+          <Link href="/signup" className="landing-hero-vc__cta landing-solid-cta no-underline">
+            Start organizing →
+          </Link>
+        </motion.div>
+
+        <motion.div
+          className="landing-hero-vc__right"
+          initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.52, delay: 0.08, ease: "easeOut" }}
         >
-          Already have an account
-        </Link>
+          <div className="landing-hero-vc__card">
+            <h2 className="landing-hero-vc__card-title">Spring Speaker Series</h2>
+            <p className="landing-hero-vc__card-subtitle">
+              Live board keeps outreach, replies, and assignments aligned.
+            </p>
+            <div className="landing-hero-vc__list">
+              {boardRows.map((row) => (
+                <div key={row.label} className="landing-hero-vc__list-row">
+                  <div className="landing-hero-vc__list-left">
+                    <span
+                      className={`landing-hero-vc__dot landing-hero-vc__dot--${row.dot}`}
+                    />
+                    <span>{row.label}</span>
+                  </div>
+                  <span className="landing-hero-vc__list-state">{row.state}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="landing-hero-vc__kpi-row">
+            <div className="landing-hero-vc__kpi-card">
+              <div className="landing-hero-vc__kpi-value">82%</div>
+              <div className="landing-hero-vc__kpi-label">weekly reply rate</div>
+            </div>
+            <div className="landing-hero-vc__kpi-card">
+              <div className="landing-hero-vc__kpi-value">6</div>
+              <div className="landing-hero-vc__kpi-label">events in pipeline</div>
+            </div>
+          </div>
+
+          <div className="landing-hero-vc__card landing-hero-vc__card--compact">
+            <h3 className="landing-hero-vc__card-compact-title">Next 72 hours</h3>
+            <div className="landing-hero-vc__list">
+              {nextWindowRows.map((row) => (
+                <div key={row.label} className="landing-hero-vc__list-row">
+                  <span>{row.label}</span>
+                  <span className="landing-hero-vc__list-state">{row.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
       </div>
     </section>
   );

@@ -13,7 +13,7 @@ export default function CtaSection() {
       <div className="flex flex-col items-end gap-3 max-[900px]:items-start">
         <Link
           href="/signup"
-          className="whitespace-nowrap rounded-[8px] bg-[#0a0a0a] px-8 py-4 text-[15px] font-semibold tracking-[-0.01em] text-white no-underline"
+          className="landing-solid-cta whitespace-nowrap rounded-[8px] bg-[#0a0a0a] px-8 py-4 text-[15px] font-semibold tracking-[-0.01em] no-underline"
         >
           Create free account →
         </Link>
