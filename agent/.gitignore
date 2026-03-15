@@ -6,10 +6,11 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# testing files + caches
+pytest_cache/
+*.pytest_cache/
+
 .venv
-
-
 # env files excluding .env.example
 .env.local
 .env.development
