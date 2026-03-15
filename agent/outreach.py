@@ -10,7 +10,7 @@ import json
 
 import modal
 
-from .tools import (
+from helper.tools import (
     ConvexClient,
     append_attio_note,
     get_agentmail_client,
@@ -19,8 +19,10 @@ from .tools import (
 
 app = modal.App("event-outreach-send")
 
-image = modal.Image.debian_slim(python_version="3.11").pip_install(
-    "httpx>=0.27", "anthropic>=0.40", "agentmail", "python-dotenv", "pydantic>=2.0",
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("httpx>=0.27", "anthropic>=0.40", "agentmail", "python-dotenv", "pydantic>=2.0")
+    .add_local_python_source("helper")
 )
 
 COMPOSE_SYSTEM_PROMPT = """\
@@ -62,7 +64,7 @@ async def send_outreach_for_event(event_id: str, record_ids: list[str]) -> dict:
     Returns:
         { "event_id": str, "sent": [...], "errors": [...] }
     """
-    from backend.attio.client import AttioClient, flatten_record
+    from helper.attio import AttioClient, flatten_record
 
     # 0. Approve contacts in Convex & update event status
     async with ConvexClient() as sb:

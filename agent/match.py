@@ -10,7 +10,7 @@ import json
 
 import modal
 
-from .tools import (
+from helper.tools import (
     ConvexClient,
     fetch_enriched_contacts,
     llm_call,
@@ -18,8 +18,10 @@ from .tools import (
 
 app = modal.App("event-outreach-match")
 
-image = modal.Image.debian_slim(python_version="3.11").pip_install(
-    "httpx>=0.27", "anthropic>=0.40", "python-dotenv", "pydantic>=2.0",
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("httpx>=0.27", "anthropic>=0.40", "python-dotenv", "pydantic>=2.0")
+    .add_local_python_source("helper")
 )
 
 

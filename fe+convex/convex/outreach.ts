@@ -165,6 +165,37 @@ export const recordInboundReceipt = mutation({
   },
 });
 
+// ⚠️ Test-only — requires ALLOW_TEST_MUTATIONS=true in Convex env vars (dev only, never prod).
+export const deleteOutreachForEvent = mutation({
+  args: { event_id: v.id("events") },
+  handler: async (ctx, { event_id }) => {
+    if (process.env.ALLOW_TEST_MUTATIONS !== "true") {
+      throw new Error("deleteOutreachForEvent is only callable in test environments");
+    }
+    const rows = await ctx.db
+      .query("event_outreach")
+      .withIndex("by_event_id", (q) => q.eq("event_id", event_id))
+      .collect();
+    await Promise.all(rows.map((r) => ctx.db.delete(r._id)));
+    return rows.length;
+  },
+});
+
+// ⚠️ Test-only — requires ALLOW_TEST_MUTATIONS=true in Convex env vars (dev only, never prod).
+export const deleteInboundReceipt = mutation({
+  args: { message_id: v.string() },
+  handler: async (ctx, { message_id }) => {
+    if (process.env.ALLOW_TEST_MUTATIONS !== "true") {
+      throw new Error("deleteInboundReceipt is only callable in test environments");
+    }
+    const row = await ctx.db
+      .query("inbound_receipts")
+      .withIndex("by_message_id", (q) => q.eq("message_id", message_id))
+      .first();
+    if (row) await ctx.db.delete(row._id);
+  },
+});
+
 export const findByThread = query({
   args: { thread_id: v.string() },
   handler: async (ctx, { thread_id }) => {

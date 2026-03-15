@@ -20097,5 +20097,8 @@
         }
       ]
     }
-  ]
+  ],
+  "imports": {
+    "I": "pencil:shadcn.lib.pen"
+  }
 }

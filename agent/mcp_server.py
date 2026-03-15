@@ -25,14 +25,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 load_dotenv(Path(__file__).parents[1] / "backend" / ".env")
 
-from backend.attio.client import AttioClient, flatten_record  # noqa: E402
+from helper.attio import AttioClient, flatten_record
 
 mcp = FastMCP("attio-crm")
 

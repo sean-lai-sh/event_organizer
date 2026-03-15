@@ -1,3 +1,4 @@
+"""Pydantic models for Attio contact data."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -47,18 +48,16 @@ EnrichmentStatus = Literal["pending", "enriched", "stale", "failed"]
 class AttioContact(BaseModel):
     """Represents an Attio people record with club-specific custom attributes."""
 
-    # Standard Attio people fields
     firstname: str
     lastname: str
     email: EmailStr
     phone: str | None = None
 
-    # Custom club attributes
     career_profile: CareerProfile | None = None
     relationship_stage: RelationshipStage = "cold"
     contact_source: ContactSource = "agent_outreach"
     warm_intro_by: str | None = None
-    assigned_members: list[str] = []  # list of eboard member emails
+    assigned_members: list[str] = []
     contact_type: ContactType = "prospect"
     outreach_status: OutreachStatus = "pending"
     last_agent_action_at: datetime | None = None

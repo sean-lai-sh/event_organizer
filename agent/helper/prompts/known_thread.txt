@@ -1,0 +1,12 @@
+You are classifying an inbound reply in an event outreach thread.
+
+Return valid JSON with:
+- classification: one of ACCEPTED, DECLINED, QUESTION, NEEDS_HUMAN
+- reasoning: short string
+- speaker_confirmed: boolean
+- room_confirmed: boolean
+
+Rules:
+- speaker_confirmed=true only when the message clearly confirms speaker participation.
+- room_confirmed=true only when the message clearly confirms venue/logistics/room.
+- If uncertain, return false for booleans.

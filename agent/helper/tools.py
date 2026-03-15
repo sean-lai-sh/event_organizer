@@ -7,7 +7,6 @@ so that match.py, outreach.py, and reply_handler.py stay focused on logic.
 from __future__ import annotations
 
 import os
-import sys
 from datetime import datetime, timezone
 from email.utils import parseaddr
 from pathlib import Path
@@ -16,11 +15,9 @@ from typing import Any
 import httpx
 from dotenv import load_dotenv
 
-# Allow running from repo root
-sys.path.insert(0, str(Path(__file__).parents[1]))
-load_dotenv(Path(__file__).parents[1] / "backend" / ".env")
+load_dotenv(Path(__file__).parents[2] / "backend" / ".env")
 
-from backend.attio.client import AttioClient, flatten_record  # noqa: E402
+from helper.attio import AttioClient, flatten_record
 
 
 # ── Convex ────────────────────────────────────────────────────────────────────
@@ -68,11 +65,17 @@ class ConvexClient:
             f"{self._url}/api/{kind}",
             json={"path": path, "args": self._strip_nones(args), "format": "json"},
         )
+
+        body = resp.text
+        print("Convex raw response:", body)
+
         resp.raise_for_status()
-        body = resp.json()
-        if body.get("status") == "error":
-            raise RuntimeError(f"Convex {kind} {path!r} failed: {body.get('errorMessage')}")
-        return body.get("value")
+
+        data = resp.json()
+        if data.get("status") == "error":
+            raise RuntimeError(data.get("errorMessage"))
+
+        return data.get("value")
 
     async def query(self, path: str, args: dict | None = None) -> Any:
         return await self._call("query", path, args or {})
@@ -178,6 +181,15 @@ class ConvexClient:
         )
         return bool(res.get("is_duplicate"))
 
+    async def delete_event(self, event_id: str) -> None:
+        await self.mutation("events:deleteEvent", {"event_id": event_id})
+
+    async def delete_outreach_for_event(self, event_id: str) -> None:
+        await self.mutation("outreach:deleteOutreachForEvent", {"event_id": event_id})
+
+    async def delete_inbound_receipt(self, message_id: str) -> None:
+        await self.mutation("outreach:deleteInboundReceipt", {"message_id": message_id})
+
     # ── Assignments / Eboard ──
 
     async def get_active_eboard_members(self) -> list[dict]:
@@ -228,9 +240,7 @@ async def append_attio_note(
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     content = f"[{ts}] {note}"
 
-    updates: dict[str, Any] = {
-        "last_agent_action_at": [{"value": datetime.now(timezone.utc).isoformat()}],
-    }
+    updates: dict[str, Any] = {}
     if outreach_status:
         updates["outreach_status"] = [{"value": outreach_status}]
 
@@ -258,37 +268,11 @@ async def upsert_inbound_contact(email: str, sender_name: str | None = None) -> 
 
     existing_record: dict | None = None
     async with AttioClient() as attio:
-        # Primary lookup path.
-        filters = [
-            {
-                "$and": [
-                    {
-                        "attribute": {"slug": "email_addresses"},
-                        "condition": "contains",
-                        "value": email,
-                    }
-                ]
-            },
-            {
-                "$and": [
-                    {
-                        "attribute": {"slug": "email_addresses"},
-                        "condition": "equals",
-                        "value": email,
-                    }
-                ]
-            },
-            {"email_addresses": {"$contains": email}},
-        ]
-
-        for filter_ in filters:
-            try:
-                rows = await attio.search_contacts(filter_, limit=1)
-            except Exception:
-                continue
-            if rows:
-                existing_record = rows[0]
-                break
+        rows = await attio.search_contacts(
+            {"email_addresses": {"$eq": email}}, limit=1
+        )
+        if rows:
+            existing_record = rows[0]
 
         if existing_record:
             return flatten_record(existing_record)
@@ -308,22 +292,6 @@ async def upsert_inbound_contact(email: str, sender_name: str | None = None) -> 
             }
         )
         return flatten_record(created)
-
-
-# ── Anthropic LLM ─────────────────────────────────────────────────────────────
-
-async def llm_call(system: str, user: str, max_tokens: int = 2048) -> str:
-    """Make a single Anthropic API call and return the text response."""
-    import anthropic
-
-    client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    message = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
-    return message.content[0].text
 
 
 # ── AgentMail ─────────────────────────────────────────────────────────────────

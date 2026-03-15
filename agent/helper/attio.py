@@ -1,6 +1,7 @@
 """Async httpx wrapper for the Attio CRM v2 API."""
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
@@ -74,27 +75,30 @@ class AttioClient:
         if self._client:
             await self._client.aclose()
 
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        for attempt in range(4):
+            resp = await self._client.request(method, path, **kwargs)
+            if resp.status_code != 429:
+                resp.raise_for_status()
+                return resp
+            wait = 2 ** attempt
+            print(f"Attio 429 rate limit — retrying in {wait}s (attempt {attempt + 1})")
+            await asyncio.sleep(wait)
+        resp.raise_for_status()
+        return resp
+
     # ── People (Contacts) ────────────────────────────────────────────────────
 
     async def create_contact(self, values: dict[str, Any]) -> dict:
-        resp = await self._client.post(
-            "/objects/people/records",
-            json={"data": {"values": values}},
-        )
-        resp.raise_for_status()
+        resp = await self._request("POST", "/objects/people/records", json={"data": {"values": values}})
         return resp.json().get("data", {})
 
     async def get_contact(self, record_id: str) -> dict:
-        resp = await self._client.get(f"/objects/people/records/{record_id}")
-        resp.raise_for_status()
+        resp = await self._request("GET", f"/objects/people/records/{record_id}")
         return resp.json().get("data", {})
 
     async def update_contact(self, record_id: str, values: dict[str, Any]) -> dict:
-        resp = await self._client.patch(
-            f"/objects/people/records/{record_id}",
-            json={"data": {"values": values}},
-        )
-        resp.raise_for_status()
+        resp = await self._request("PATCH", f"/objects/people/records/{record_id}", json={"data": {"values": values}})
         return resp.json().get("data", {})
 
     async def search_contacts(
@@ -109,17 +113,12 @@ class AttioClient:
                       $lt, $lte, $gt, $gte, $and, $or, $not
         """
         payload: dict[str, Any] = {"filter": filter_, "limit": limit, "offset": offset}
-        resp = await self._client.post(
-            "/objects/people/records/query", json=payload
-        )
-        resp.raise_for_status()
+        resp = await self._request("POST", "/objects/people/records/query", json=payload)
         return resp.json().get("data", [])
 
     # ── Notes ────────────────────────────────────────────────────────────────
 
-    async def create_note(
-        self, record_id: str, title: str, content: str
-    ) -> dict:
+    async def create_note(self, record_id: str, title: str, content: str) -> dict:
         """Create a note attached to a people record."""
         payload = {
             "data": {
@@ -130,6 +129,17 @@ class AttioClient:
                 "content": content,
             }
         }
-        resp = await self._client.post("/notes", json=payload)
-        resp.raise_for_status()
+        resp = await self._request("POST", "/notes", json=payload)
         return resp.json().get("data", {})
+
+    async def list_notes(self, record_id: str) -> list[dict]:
+        """List all notes attached to a people record."""
+        resp = await self._request(
+            "GET", "/notes",
+            params={"parent_object": "people", "parent_record_id": record_id, "limit": 50},
+        )
+        return resp.json().get("data", [])
+
+    async def delete_note(self, note_id: str) -> None:
+        """Delete a note by its ID."""
+        await self._request("DELETE", f"/notes/{note_id}")

@@ -47,6 +47,17 @@ export const listEvents = query({
   },
 });
 
+// ⚠️ Test-only — requires ALLOW_TEST_MUTATIONS=true in Convex env vars (dev only, never prod).
+export const deleteEvent = mutation({
+  args: { event_id: v.id("events") },
+  handler: async (ctx, { event_id }) => {
+    if (process.env.ALLOW_TEST_MUTATIONS !== "true") {
+      throw new Error("deleteEvent is only callable in test environments");
+    }
+    await ctx.db.delete(event_id);
+  },
+});
+
 export const applyInboundMilestones = mutation({
   args: {
     event_id: v.id("events"),
