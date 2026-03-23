@@ -216,7 +216,7 @@ select {
 
 .landing-hero-vc {
   position: relative;
-  height: 87.5vh;
+  height: 87.5svh;
   border-bottom: 1px solid #e8e8e8;
   background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
 }
@@ -431,15 +431,56 @@ select {
   }
 }
 
+@media (min-width: 1025px) and (max-height: 820px) {
+  .landing-hero-vc {
+    height: auto;
+    min-height: 87.5svh;
+  }
+
+  .landing-hero-vc__inner {
+    height: auto;
+    gap: 22px;
+    padding-top: 56px;
+    padding-bottom: 20px;
+  }
+
+  .landing-hero-vc__title {
+    margin-top: 20px;
+    font-size: clamp(44px, 4.6vw, 62px);
+  }
+
+  .landing-hero-vc__subtitle {
+    margin-top: 12px;
+    font-size: 17px;
+    line-height: 1.45;
+  }
+
+  .landing-hero-vc__cta {
+    margin-top: 30px;
+  }
+
+  .landing-hero-vc__card {
+    padding: 16px;
+  }
+}
+
+@media (min-width: 1025px) and (max-height: 700px) {
+  .landing-hero-vc__card--compact {
+    display: none;
+  }
+}
+
 @media (max-width: 1024px) {
   .landing-hero-vc {
     height: auto;
+    min-height: 0;
   }
 
   .landing-hero-vc__inner {
     grid-template-columns: 1fr;
     gap: 28px;
     height: auto;
+    min-height: 0;
     padding: 64px 20px 28px;
   }
 
