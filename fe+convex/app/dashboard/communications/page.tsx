@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DashboardPageShell } from "@/components/dashboard/PageShell";
 
 const mockThreads = [
   {
@@ -52,30 +53,27 @@ export default function CommunicationsPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <header className="h-14 border-b border-[#EBEBEB] px-1">
-        <h1 className="text-base font-semibold text-[#111111]">Communications</h1>
-        <p className="text-xs text-[#7B7B7B]">Review speaker inbox and thread states</p>
-      </header>
-
-      <section className="rounded-xl border border-[#EBEBEB] bg-[#FFFFFF] p-3">
-        <div className="flex flex-col gap-3 lg:flex-row">
+    <DashboardPageShell
+      title="Communications"
+    >
+      <section className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
+        <div className="flex flex-col gap-3 xl:flex-row">
           <input
             type="text"
-            placeholder="Search threads..."
+            placeholder="Search threads"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-md border border-[#EBEBEB] px-3 py-2 text-sm outline-none focus:border-[#3B3B3B]"
+            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
           />
           <div className="flex flex-wrap gap-2">
             {["all", "needs_review", "awaiting_reply", "resolved"].map((status) => (
               <button
                 key={status}
                 onClick={() => setFilter(status)}
-                className={`rounded-md px-3 py-2 text-xs font-medium transition ${
+                className={`h-10 rounded-[8px] px-3 text-[12px] font-medium uppercase tracking-[0.04em] transition ${
                   filter === status
-                    ? "bg-[#0A0A0A] text-white"
-                    : "border border-[#EBEBEB] text-[#3B3B3B] hover:bg-[#F4F4F4]"
+                    ? "border border-[#111111] bg-[#111111] text-[#FFFFFF]"
+                    : "border border-[#E0E0E0] text-[#555555] hover:bg-[#F4F4F4]"
                 }`}
               >
                 {status === "all" ? "All" : formatStatus(status)}
@@ -85,42 +83,42 @@ export default function CommunicationsPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-[#EBEBEB] bg-[#FFFFFF]">
+      <section className="overflow-hidden rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF]">
         {filteredThreads.length > 0 ? (
           <div className="divide-y divide-[#EBEBEB]">
             {filteredThreads.map((thread) => (
-              <article key={thread.id} className="p-4 hover:bg-[#FAFAFA]">
+              <article key={thread.id} className="px-4 py-3.5 hover:bg-[#FAFAFA]">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <h2 className="text-sm font-semibold text-[#111111]">{thread.subject}</h2>
-                    <p className="text-xs text-[#7B7B7B]">
+                    <h2 className="text-[14px] font-semibold text-[#111111]">{thread.subject}</h2>
+                    <p className="text-[12px] text-[#999999]">
                       {thread.speaker} · {thread.from}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-medium text-[#3B3B3B]">
+                    <p className="text-[12px] font-medium text-[#3B3B3B]">
                       {formatStatus(thread.status)}
                     </p>
-                    <p className="text-xs text-[#7B7B7B]">
+                    <p className="text-[12px] text-[#7B7B7B]">
                       {new Date(thread.lastMessage).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-[#6B6B6B]">
+                <div className="mt-2.5 flex items-center justify-between text-[12px] text-[#6B6B6B]">
                   <span>
                     {thread.messages} message{thread.messages === 1 ? "" : "s"}
                   </span>
-                  <button className="font-medium text-[#3B3B3B] hover:underline">
-                    View thread →
+                  <button className="font-medium text-[#555555] transition hover:text-[#111111]">
+                    View thread
                   </button>
                 </div>
               </article>
             ))}
           </div>
         ) : (
-          <div className="p-8 text-center text-sm text-[#6B6B6B]">No threads found</div>
+          <div className="p-8 text-center text-[14px] text-[#6B6B6B]">No threads found</div>
         )}
       </section>
-    </div>
+    </DashboardPageShell>
   );
 }

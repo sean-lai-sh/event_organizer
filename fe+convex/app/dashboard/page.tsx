@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { DashboardPageShell } from "@/components/dashboard/PageShell";
 
 const useEvents = () => {
   return [
@@ -37,9 +38,9 @@ function MetricCard({
   value: string | number;
 }) {
   return (
-    <div className="rounded-xl border border-[#EBEBEB] bg-[#FFFFFF] px-4 py-3">
-      <p className="text-[11px] font-medium text-[#7B7B7B]">{label}</p>
-      <p className="mt-1 font-mono text-2xl font-bold text-[#111111]">{value}</p>
+    <div className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] px-4 py-4">
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#999999]">{label}</p>
+      <p className="mt-2 font-mono text-[28px] font-semibold leading-none text-[#111111]">{value}</p>
     </div>
   );
 }
@@ -49,35 +50,36 @@ export default function DashboardPage() {
   const eventRows = useMemo(() => events.slice(0, 3), [events]);
 
   return (
-    <div className="space-y-4">
-      <header className="flex h-14 items-center justify-between border-b border-[#EBEBEB] px-1">
-        <h1 className="text-base font-semibold text-[#111111]">Dashboard</h1>
+    <DashboardPageShell
+      title="Dashboard"
+      action={
         <Link
           href="/dashboard/events/new"
-          className="inline-flex items-center rounded-[10px] bg-[#0A0A0A] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-[#1F1F1F]"
+          className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] px-4 text-[13px] font-medium text-[#111111] transition hover:bg-[#F4F4F4]"
         >
-          + New Event
+          <span className="text-[16px] leading-none">+</span>
+          <span>New event</span>
         </Link>
-      </header>
-
-      <section className="grid gap-3 md:grid-cols-4">
+      }
+    >
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Total Events" value={24} />
         <MetricCard label="Active Outreach" value={8} />
         <MetricCard label="Accepted Speakers" value={12} />
         <MetricCard label="Upcoming" value={5} />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="space-y-2">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-[#111111]">Recent Events</h2>
-            <Link href="/dashboard/events" className="text-[13px] font-medium text-[#3B3B3B]">
-              View all →
+            <h2 className="text-[16px] font-semibold text-[#111111]">Recent Events</h2>
+            <Link href="/dashboard/events" className="text-[13px] font-medium text-[#555555] hover:text-[#111111]">
+              View all
             </Link>
           </div>
 
           <div className="overflow-hidden rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF]">
-            <div className="grid h-10 grid-cols-[1.5fr_1fr_1fr_0.9fr] items-center bg-[#F4F4F4] px-4 text-[11px] font-semibold text-[#6B6B6B]">
+            <div className="grid h-10 grid-cols-[1.5fr_1fr_1fr_0.9fr] items-center bg-[#F4F4F4] px-4 text-[11px] font-semibold tracking-[0.04em] text-[#6B6B6B]">
               <span>EVENT</span>
               <span>TYPE</span>
               <span>DATE</span>
@@ -91,7 +93,7 @@ export default function DashboardPage() {
                 }`}
               >
                 <span className="truncate text-[#111111]">{event.title}</span>
-                <span className="text-[#3B3B3B]">{event.type}</span>
+                <span className="text-[#555555]">{event.type}</span>
                 <span className="text-[#6B6B6B]">
                   {new Date(event.event_date).toLocaleDateString()}
                 </span>
@@ -102,25 +104,19 @@ export default function DashboardPage() {
         </div>
 
         <aside className="space-y-3">
-          <div className="rounded-xl border border-[#EBEBEB] bg-[#FFFFFF] p-3">
-            <h3 className="text-xs font-semibold text-[#111111]">Inbox</h3>
-            <p className="mt-2 text-xs text-[#3B3B3B]">• 3 replies waiting triage</p>
-            <p className="mt-1 text-xs text-[#3B3B3B]">• 2 speakers requested call</p>
+          <div className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#999999]">Inbox</h3>
+            <p className="mt-2 text-[13px] text-[#3B3B3B]">3 replies waiting triage</p>
+            <p className="mt-1 text-[13px] text-[#3B3B3B]">2 speakers requested call</p>
           </div>
-          <div className="rounded-xl border border-[#EBEBEB] bg-[#FFFFFF] p-3">
-            <h3 className="text-xs font-semibold text-[#111111]">Next Actions</h3>
-            <p className="mt-2 text-xs text-[#3B3B3B]">
-              1. Approve Spring panel shortlist
-            </p>
-            <p className="mt-1 text-xs text-[#3B3B3B]">
-              2. Follow up with 4 pending speakers
-            </p>
-            <p className="mt-1 text-xs text-[#3B3B3B]">
-              3. Lock venue details by Friday
-            </p>
+          <div className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#999999]">Next actions</h3>
+            <p className="mt-2 text-[13px] text-[#3B3B3B]">1. Approve spring panel shortlist</p>
+            <p className="mt-1 text-[13px] text-[#3B3B3B]">2. Follow up with 4 pending speakers</p>
+            <p className="mt-1 text-[13px] text-[#3B3B3B]">3. Lock venue details by Friday</p>
           </div>
         </aside>
       </section>
-    </div>
+    </DashboardPageShell>
   );
 }

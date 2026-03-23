@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { DashboardPageShell } from "@/components/dashboard/PageShell";
 
 const mockEvents = [
   {
@@ -35,7 +36,7 @@ const mockEvents = [
 
 function StatusText({ status }: { status: string }) {
   return (
-    <span className="text-xs font-medium text-[#3B3B3B]">
+    <span className="text-[12px] font-medium text-[#3B3B3B]">
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
@@ -54,38 +55,36 @@ export default function EventsPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <header className="flex h-14 items-center justify-between border-b border-[#EBEBEB] px-1">
-        <div>
-          <h1 className="text-base font-semibold text-[#111111]">Events</h1>
-          <p className="text-xs text-[#7B7B7B]">Track timelines and readiness</p>
-        </div>
+    <DashboardPageShell
+      title="Events"
+      action={
         <Link
           href="/dashboard/events/new"
-          className="inline-flex items-center rounded-[10px] bg-[#0A0A0A] px-3 py-2 text-[13px] font-medium text-white transition hover:bg-[#1F1F1F]"
+          className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] px-4 text-[13px] font-medium text-[#111111] transition hover:bg-[#F4F4F4]"
         >
-          + New Event
+          <span className="text-[16px] leading-none">+</span>
+          <span>New event</span>
         </Link>
-      </header>
-
-      <section className="rounded-xl border border-[#EBEBEB] bg-[#FFFFFF] p-3">
-        <div className="flex flex-col gap-3 lg:flex-row">
+      }
+    >
+      <section className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
+        <div className="flex flex-col gap-3 xl:flex-row">
           <input
             type="text"
-            placeholder="Search events..."
+            placeholder="Search events"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-md border border-[#EBEBEB] px-3 py-2 text-sm outline-none focus:border-[#3B3B3B]"
+            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
           />
           <div className="flex flex-wrap gap-2">
             {["all", "draft", "matching", "outreach", "completed"].map((status) => (
               <button
                 key={status}
                 onClick={() => setFilter(status)}
-                className={`rounded-md px-3 py-2 text-xs font-medium transition ${
+                className={`h-10 rounded-[8px] px-3 text-[12px] font-medium uppercase tracking-[0.04em] transition ${
                   filter === status
-                    ? "bg-[#0A0A0A] text-white"
-                    : "border border-[#EBEBEB] text-[#3B3B3B] hover:bg-[#F4F4F4]"
+                    ? "border border-[#111111] bg-[#111111] text-[#FFFFFF]"
+                    : "border border-[#E0E0E0] text-[#555555] hover:bg-[#F4F4F4]"
                 }`}
               >
                 {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -95,25 +94,25 @@ export default function EventsPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-[#EBEBEB] bg-[#FFFFFF]">
+      <section className="overflow-hidden rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF]">
         {filteredEvents.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#EBEBEB] bg-[#F4F4F4]">
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#6B6B6B]">
+                  <th className="h-10 px-4 text-left text-[11px] font-semibold tracking-[0.04em] text-[#6B6B6B]">
                     EVENT
                   </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#6B6B6B]">
+                  <th className="h-10 px-4 text-left text-[11px] font-semibold tracking-[0.04em] text-[#6B6B6B]">
                     DATE
                   </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#6B6B6B]">
+                  <th className="h-10 px-4 text-left text-[11px] font-semibold tracking-[0.04em] text-[#6B6B6B]">
                     STATUS
                   </th>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[#6B6B6B]">
+                  <th className="h-10 px-4 text-left text-[11px] font-semibold tracking-[0.04em] text-[#6B6B6B]">
                     READINESS
                   </th>
-                  <th className="px-4 py-3 text-right text-[11px] font-semibold text-[#6B6B6B]">
+                  <th className="h-10 px-4 text-right text-[11px] font-semibold tracking-[0.04em] text-[#6B6B6B]">
                     ACTION
                   </th>
                 </tr>
@@ -121,26 +120,26 @@ export default function EventsPage() {
               <tbody className="divide-y divide-[#EBEBEB]">
                 {filteredEvents.map((event) => (
                   <tr key={event._id} className="hover:bg-[#FAFAFA]">
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-[#111111]">{event.title}</p>
-                      <p className="text-xs text-[#7B7B7B]">{event.description}</p>
+                    <td className="px-4 py-3.5">
+                      <p className="text-[14px] font-medium text-[#111111]">{event.title}</p>
+                      <p className="text-[12px] text-[#999999]">{event.description}</p>
                     </td>
-                    <td className="px-4 py-3 text-sm text-[#6B6B6B]">
+                    <td className="px-4 py-3.5 text-[13px] text-[#6B6B6B]">
                       {new Date(event.event_date).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <StatusText status={event.status} />
                     </td>
-                    <td className="px-4 py-3 text-xs text-[#6B6B6B]">
+                    <td className="px-4 py-3.5 text-[12px] text-[#6B6B6B]">
                       {event.speaker_confirmed ? "Speaker ✓" : "Speaker ○"} ·{" "}
                       {event.room_confirmed ? "Room ✓" : "Room ○"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3.5 text-right">
                       <Link
                         href={`/dashboard/events/${event._id}`}
-                        className="text-xs font-medium text-[#3B3B3B] hover:underline"
+                        className="text-[12px] font-medium text-[#555555] hover:text-[#111111]"
                       >
-                        View →
+                        View
                       </Link>
                     </td>
                   </tr>
@@ -149,9 +148,9 @@ export default function EventsPage() {
             </table>
           </div>
         ) : (
-          <div className="p-8 text-center text-sm text-[#6B6B6B]">No events found</div>
+          <div className="p-8 text-center text-[14px] text-[#6B6B6B]">No events found</div>
         )}
       </section>
-    </div>
+    </DashboardPageShell>
   );
 }
