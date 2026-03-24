@@ -63,7 +63,7 @@ export default function SpeakersPage() {
             placeholder="Search speakers"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
+            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] font-normal tracking-[-0.01em] text-[#111111] placeholder:font-normal placeholder:tracking-normal placeholder:text-[#999999] outline-none transition focus:border-[#111111]"
           />
           <div className="flex flex-wrap gap-2">
             {["all", "Confirmed", "Engaged", "Prospect", "Declined"].map((status) => (

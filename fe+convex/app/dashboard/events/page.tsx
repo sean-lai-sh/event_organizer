@@ -1,58 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "convex/react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
+import { api } from "@/convex/_generated/api";
 
-const mockEvents = [
-  {
-    _id: "1",
-    title: "AI & Society Speaker Panel",
-    description: "Panel with startup founders and AI policy leads",
-    event_date: "2026-03-28",
-    status: "matching",
-    speaker_confirmed: false,
-    room_confirmed: true,
-  },
-  {
-    _id: "2",
-    title: "Web3 & Startups Workshop",
-    description: "Operator workshop with alumni founders",
-    event_date: "2026-04-05",
-    status: "outreach",
-    speaker_confirmed: true,
-    room_confirmed: true,
-  },
-  {
-    _id: "3",
-    title: "Spring Networking Mixer",
-    description: "Cross-club networking and sponsorship session",
-    event_date: "2026-04-18",
-    status: "completed",
-    speaker_confirmed: true,
-    room_confirmed: true,
-  },
-];
+const statusOptions = ["all", "draft", "matching", "outreach", "completed"] as const;
 
-function StatusText({ status }: { status: string }) {
-  return (
-    <span className="text-[12px] font-medium text-[#3B3B3B]">
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
+function formatStatus(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function formatEventDate(eventDate?: string): string {
+  if (!eventDate) return "TBD";
+  const date = new Date(eventDate);
+  if (Number.isNaN(date.getTime())) return eventDate;
+  return date.toLocaleDateString();
 }
 
 export default function EventsPage() {
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<(typeof statusOptions)[number]>("all");
   const [search, setSearch] = useState("");
 
-  const filteredEvents = mockEvents.filter((event) => {
-    const matchesFilter = filter === "all" || event.status === filter;
-    const matchesSearch = event.title
-      .toLowerCase()
-      .includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
+  const events = useQuery(api.events.listEvents, {
+    status: filter === "all" ? undefined : filter,
   });
+
+  const filteredEvents = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const rows = events ?? [];
+    if (!q) return rows;
+
+    return rows.filter((event) => {
+      const title = event.title.toLowerCase();
+      const description = (event.description ?? "").toLowerCase();
+      const location = (event.location ?? "").toLowerCase();
+      return title.includes(q) || description.includes(q) || location.includes(q);
+    });
+  }, [events, search]);
 
   return (
     <DashboardPageShell
@@ -74,10 +60,10 @@ export default function EventsPage() {
             placeholder="Search events"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
+            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] font-normal tracking-[-0.01em] text-[#111111] placeholder:font-normal placeholder:tracking-normal placeholder:text-[#999999] outline-none transition focus:border-[#111111]"
           />
           <div className="flex flex-wrap gap-2">
-            {["all", "draft", "matching", "outreach", "completed"].map((status) => (
+            {statusOptions.map((status) => (
               <button
                 key={status}
                 onClick={() => setFilter(status)}
@@ -87,7 +73,7 @@ export default function EventsPage() {
                     : "border border-[#E0E0E0] text-[#555555] hover:bg-[#F4F4F4]"
                 }`}
               >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+                {formatStatus(status)}
               </button>
             ))}
           </div>
@@ -95,7 +81,9 @@ export default function EventsPage() {
       </section>
 
       <section className="overflow-hidden rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF]">
-        {filteredEvents.length > 0 ? (
+        {events === undefined ? (
+          <div className="p-8 text-center text-[14px] text-[#6B6B6B]">Loading events...</div>
+        ) : filteredEvents.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -122,13 +110,15 @@ export default function EventsPage() {
                   <tr key={event._id} className="hover:bg-[#FAFAFA]">
                     <td className="px-4 py-3.5">
                       <p className="text-[14px] font-medium text-[#111111]">{event.title}</p>
-                      <p className="text-[12px] text-[#999999]">{event.description}</p>
+                      <p className="text-[12px] text-[#999999]">
+                        {event.description?.trim() || "No description yet"}
+                      </p>
                     </td>
                     <td className="px-4 py-3.5 text-[13px] text-[#6B6B6B]">
-                      {new Date(event.event_date).toLocaleDateString()}
+                      {formatEventDate(event.event_date)}
                     </td>
-                    <td className="px-4 py-3.5">
-                      <StatusText status={event.status} />
+                    <td className="px-4 py-3.5 text-[12px] font-medium text-[#3B3B3B]">
+                      {formatStatus(event.status)}
                     </td>
                     <td className="px-4 py-3.5 text-[12px] text-[#6B6B6B]">
                       {event.speaker_confirmed ? "Speaker ✓" : "Speaker ○"} ·{" "}

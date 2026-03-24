@@ -74,13 +74,13 @@ export default function DashboardLayout({
         <div className="flex h-full flex-col">
           <div className="flex h-[72px] items-center gap-3 border-b border-[#EBEBEB] px-5">
             <div className="h-7 w-7 rounded-[12px] bg-[#0A0A0A]" />
-            <div className="text-[14px] font-semibold tracking-[-0.02em] text-[#111111]">
+            <div className="font-[var(--font-geist-sans)] text-[14px] font-semibold tracking-[-0.02em] text-[#111111]">
               event.organizer
             </div>
           </div>
 
           <nav className="flex-1 px-4 py-4">
-            <div className="px-2 pb-3 text-[10px] font-medium tracking-[0.08em] text-[#BBBBBB]">
+            <div className="px-2 pb-3 font-[var(--font-geist-sans)] text-[10px] font-medium tracking-[0.08em] text-[#BBBBBB]">
               NAVIGATION
             </div>
             <div className="space-y-1">
@@ -92,7 +92,7 @@ export default function DashboardLayout({
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`flex h-10 items-center gap-2 rounded-[8px] px-3 text-[13px] leading-none transition ${
+                    className={`flex h-10 items-center gap-2 rounded-[8px] px-3 font-[var(--font-geist-sans)] text-[13px] leading-none transition ${
                       active
                         ? "border border-[#CFCFCF] bg-[#EAEAEA] font-semibold text-[#0A0A0A]"
                         : "text-[#7B7B7B] hover:bg-[#EFEFEF] hover:text-[#1F1F1F]"

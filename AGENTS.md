@@ -6,9 +6,11 @@ This file explains how the repo's live data models and external sources interact
 
 - `PLAN.md` is the source of truth for data contracts and compliance rules.
 - `AGENTS.md` is the operator guide for how systems interact in practice.
+- `DESIGN.md` is the source of truth for frontend layout and visual consistency.
 - `README.md` is setup and local-dev documentation.
 
 If `AGENTS.md` and `PLAN.md` ever disagree, fix `AGENTS.md` to match `PLAN.md` or update both in the same change.
+If frontend styling guidance in `AGENTS.md` and `DESIGN.md` diverge, update both in the same change.
 
 ## System Boundaries
 
@@ -232,6 +234,7 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 ## Frontend Design System
 
 All UI screens live in `.pen` files. The design language is **strictly monochrome** — no color accents.
+For dashboard shell, nav, spacing rhythm, and state contrast rules, follow `DESIGN.md`.
 
 ### Files
 

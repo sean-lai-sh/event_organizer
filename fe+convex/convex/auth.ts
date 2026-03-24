@@ -29,6 +29,13 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
     baseURL: process.env.BETTER_AUTH_URL!,
     secret: process.env.BETTER_AUTH_SECRET!,
     database: authComponent.adapter(ctx),
+    session: {
+      expiresIn: 60 * 60 * 24 * 30,
+      updateAge: 60 * 60 * 24,
+    },
+    advanced: {
+      useSecureCookies: process.env.NODE_ENV === "production",
+    },
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
