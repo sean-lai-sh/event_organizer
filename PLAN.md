@@ -130,6 +130,20 @@ Change behavior, not just schema:
 - write the receipt only after Attio + Convex updates succeed
 - or add processing status so failed attempts are retryable
 
+### `invites`
+
+Keep invite onboarding logic in Convex with explicit email binding support:
+
+- `code` remains the one-time onboarding token
+- `invited_email` optionally binds an invite to a single email address
+- `used_email` records the email that consumed the invite
+- `used_by` is best-effort and may be unset if consume runs before session hydration
+
+Behavioral contract:
+
+- validation and consume must reject mismatched `invited_email`
+- consume must not rely exclusively on an authenticated session immediately after account creation
+
 ## Status and Source Mapping
 
 ### Inbound classification -> `speakers.status`

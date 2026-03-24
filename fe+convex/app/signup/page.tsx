@@ -1,12 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { signUp } from "@/lib/auth-client";
+import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
+import { api } from "@/convex/_generated/api";
+import { signUp } from "@/lib/auth-client";
+import { AuthShell } from "@/components/auth/AuthShell";
+
+type Step = "invite" | "register";
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
 
 export default function SignUpPage() {
   const router = useRouter();
+
+  const [step, setStep] = useState<Step>("invite");
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [lockedInviteEmail, setLockedInviteEmail] = useState<string | null>(null);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,172 +46,328 @@ export default function SignUpPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
-  const validateEmail = (email: string) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-  };
+  const normalizedCode = inviteCode.trim().toUpperCase();
 
-  const validateForm = () => {
+  const validateResult = useQuery(
+    api.invites.validate,
+    normalizedCode.length >= 4 ? { code: normalizedCode } : "skip"
+  );
+
+  const consumeInvite = useMutation(api.invites.consume);
+
+  const inviteIsValid = normalizedCode.length >= 4 && validateResult?.valid === true;
+  const passwordStrong = password.length >= 8;
+  const confirmMatches = confirmPassword.length > 0 && password === confirmPassword;
+
+  const registerEmail = useMemo(
+    () => (lockedInviteEmail ? lockedInviteEmail : email.trim().toLowerCase()),
+    [email, lockedInviteEmail]
+  );
+
+  async function handleInviteSubmit(e: FormEvent) {
+    e.preventDefault();
+    setInviteLoading(true);
+    setInviteError("");
+
+    if (!validateResult?.valid) {
+      setInviteError(validateResult?.reason ?? "Invalid invite code");
+      setInviteLoading(false);
+      return;
+    }
+
+    const inviteEmail = validateResult.invited_email;
+    if (inviteEmail) {
+      setLockedInviteEmail(inviteEmail);
+      setEmail(inviteEmail);
+      setErrors((prev) => ({ ...prev, email: "" }));
+    } else {
+      setLockedInviteEmail(null);
+    }
+
+    setStep("register");
+    setInviteLoading(false);
+  }
+
+  function validateForm() {
     const newErrors: Record<string, string> = {};
 
     if (!name.trim()) newErrors.name = "Name is required";
-    if (!email.trim()) newErrors.email = "Email is required";
-    else if (!validateEmail(email)) newErrors.email = "Invalid email format";
-    if (!password) newErrors.password = "Password is required";
-    else if (password.length < 8)
+
+    if (!registerEmail) {
+      newErrors.email = "Email is required";
+    } else if (!isValidEmail(registerEmail)) {
+      newErrors.email = "Invalid email format";
+    }
+
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (!passwordStrong) {
       newErrors.password = "Password must be at least 8 characters";
-    if (password !== confirmPassword)
+    }
+
+    if (!confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password";
+    } else if (!confirmMatches) {
       newErrors.confirmPassword = "Passwords do not match";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleRegisterSubmit(e: FormEvent) {
     e.preventDefault();
     if (!validateForm()) return;
 
     setLoading(true);
-    const { error } = await signUp.email({ name, email, password });
+
+    const { error } = await signUp.email({ name: name.trim(), email: registerEmail, password });
     if (error) {
       setErrors({ submit: error.message ?? "Sign up failed" });
       setLoading(false);
       return;
     }
-    router.push("/");
+
+    try {
+      await consumeInvite({ code: normalizedCode, email: registerEmail });
+    } catch (consumeError) {
+      console.warn("Failed to consume invite code", consumeError);
+    }
+
+    router.push("/dashboard");
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-zinc-200 bg-white p-8 shadow-lg"
-      >
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-zinc-900">Create Account</h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Join the event organization team
-          </p>
-        </div>
-
-        {errors.submit && (
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700 border border-red-200">
-            {errors.submit}
+    <AuthShell
+      title="Build better events together."
+      subtitle="Invite-only access keeps your organizing team focused and secure."
+      footnote="Invite codes are managed by your eboard admins."
+    >
+      {step === "invite" ? (
+        <form onSubmit={handleInviteSubmit} className="space-y-5">
+          <div className="mb-8">
+            <h1 className="text-[36px] font-semibold tracking-[-1.4px] text-[#0A0A0A]">
+              Join the team
+            </h1>
+            <p className="mt-2 text-[14px] text-[#999999]">
+              Enter your invite code to continue.
+            </p>
           </div>
-        )}
 
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-700">
-            Full Name
-          </label>
-          <input
-            type="text"
-            required
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              setErrors({ ...errors, name: "" });
-            }}
-            className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 ${
-              errors.name
-                ? "border-red-300 focus:ring-red-200"
-                : "border-zinc-300 focus:ring-blue-500"
-            }`}
-            placeholder="Enter your full name"
-          />
-          {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
-        </div>
-
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-700">
-            Email
-          </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setErrors({ ...errors, email: "" });
-            }}
-            className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 ${
-              errors.email
-                ? "border-red-300 focus:ring-red-200"
-                : "border-zinc-300 focus:ring-blue-500"
-            }`}
-            placeholder="you@example.com"
-          />
-          {errors.email && (
-            <p className="text-xs text-red-600">{errors.email}</p>
+          {inviteError && (
+            <div className="rounded-[8px] border border-[#E0E0E0] bg-[#F9F9F9] px-3 py-2.5 text-[13px] text-[#555555]">
+              {inviteError}
+            </div>
           )}
-        </div>
 
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-700">
-            Password
-          </label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setErrors({ ...errors, password: "" });
-            }}
-            className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 ${
-              errors.password
-                ? "border-red-300 focus:ring-red-200"
-                : "border-zinc-300 focus:ring-blue-500"
-            }`}
-            placeholder="At least 8 characters"
-          />
-          {errors.password && (
-            <p className="text-xs text-red-600">{errors.password}</p>
-          )}
-        </div>
+          <div className="space-y-1.5">
+            <label className="block text-[13px] font-medium text-[#555555]">Invite code</label>
+            <div className="relative">
+              <input
+                type="text"
+                required
+                value={inviteCode}
+                onChange={(e) => {
+                  setInviteCode(e.target.value);
+                  setInviteError("");
+                }}
+                className={`h-11 w-full rounded-[8px] border bg-transparent px-[14px] pr-10 text-[14px] uppercase tracking-[0.22em] text-[#111111] outline-none transition ${
+                  inviteIsValid
+                    ? "border-[#22C55E]"
+                    : "border-[#E0E0E0] focus:border-[#111111]"
+                }`}
+                placeholder="XXXXXXXX"
+                autoFocus
+              />
+              {inviteIsValid && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#16A34A]">
+                  <CheckIcon />
+                </span>
+              )}
+            </div>
 
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-zinc-700">
-            Confirm Password
-          </label>
-          <input
-            type="password"
-            required
-            value={confirmPassword}
-            onChange={(e) => {
-              setConfirmPassword(e.target.value);
-              setErrors({ ...errors, confirmPassword: "" });
-            }}
-            className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:ring-2 ${
-              errors.confirmPassword
-                ? "border-red-300 focus:ring-red-200"
-                : "border-zinc-300 focus:ring-blue-500"
-            }`}
-            placeholder="Repeat your password"
-          />
-          {errors.confirmPassword && (
-            <p className="text-xs text-red-600">{errors.confirmPassword}</p>
-          )}
-        </div>
+            {normalizedCode.length >= 4 && validateResult?.valid === false && (
+              <p className="text-[12px] text-[#555555]">{validateResult.reason}</p>
+            )}
+            {inviteIsValid && (
+              <p className="flex items-center gap-1.5 text-[12px] text-[#16A34A]">
+                <CheckIcon />
+                Invite code is valid.
+              </p>
+            )}
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? "Creating account..." : "Create Account"}
-        </button>
-
-        <div className="flex items-center justify-center gap-2 text-sm text-zinc-600">
-          <p>Already have an account?</p>
-          <Link
-            href="/login"
-            className="font-medium text-blue-600 hover:underline"
+          <button
+            type="submit"
+            disabled={
+              inviteLoading ||
+              (normalizedCode.length >= 4 && validateResult?.valid === false)
+            }
+            className="h-11 w-full rounded-[8px] bg-[#0A0A0A] text-[14px] font-semibold text-[#FFFFFF] transition hover:bg-[#111111] disabled:opacity-60"
           >
-            Sign in
-          </Link>
-        </div>
-      </form>
+            {inviteLoading ? "Checking..." : "Continue"}
+          </button>
+
+          <p className="text-center text-[14px] text-[#999999]">
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium text-[#111111] hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </form>
+      ) : (
+        <form onSubmit={handleRegisterSubmit} className="space-y-4">
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => setStep("invite")}
+              className="mb-4 text-[13px] text-[#999999] transition hover:text-[#555555]"
+            >
+              ← Back
+            </button>
+            <h1 className="text-[36px] font-semibold tracking-[-1.4px] text-[#0A0A0A]">
+              Create account
+            </h1>
+            <p className="mt-2 text-[13px] text-[#999999]">
+              Invite code: <span className="font-mono text-[#555555]">{normalizedCode}</span>
+            </p>
+            {lockedInviteEmail && (
+              <p className="mt-1 text-[12px] text-[#999999]">
+                Email is locked to this invite.
+              </p>
+            )}
+          </div>
+
+          {errors.submit && (
+            <div className="rounded-[8px] border border-[#E0E0E0] bg-[#F9F9F9] px-3 py-2.5 text-[13px] text-[#555555]">
+              {errors.submit}
+            </div>
+          )}
+
+          <Field
+            label="Full name"
+            value={name}
+            onChange={(value) => {
+              setName(value);
+              setErrors((prev) => ({ ...prev, name: "" }));
+            }}
+            placeholder="Enter your full name"
+            error={errors.name}
+          />
+
+          <Field
+            label="Email"
+            type="email"
+            value={registerEmail}
+            onChange={(value) => {
+              if (lockedInviteEmail) return;
+              setEmail(value);
+              setErrors((prev) => ({ ...prev, email: "" }));
+            }}
+            placeholder="you@example.com"
+            error={errors.email}
+            readOnly={Boolean(lockedInviteEmail)}
+          />
+
+          <Field
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(value) => {
+              setPassword(value);
+              setErrors((prev) => ({ ...prev, password: "" }));
+            }}
+            placeholder="At least 8 characters"
+            error={errors.password}
+            success={passwordStrong}
+            successText="Password length looks good."
+          />
+
+          <Field
+            label="Confirm password"
+            type="password"
+            value={confirmPassword}
+            onChange={(value) => {
+              setConfirmPassword(value);
+              setErrors((prev) => ({ ...prev, confirmPassword: "" }));
+            }}
+            placeholder="Repeat your password"
+            error={errors.confirmPassword}
+            success={confirmMatches}
+            successText="Passwords match."
+          />
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="h-11 w-full rounded-[8px] bg-[#0A0A0A] text-[14px] font-semibold text-[#FFFFFF] transition hover:bg-[#111111] disabled:opacity-60"
+          >
+            {loading ? "Creating account..." : "Create account"}
+          </button>
+
+          <p className="text-center text-[14px] text-[#999999]">
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium text-[#111111] hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </form>
+      )}
+    </AuthShell>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  error,
+  type = "text",
+  readOnly = false,
+  success = false,
+  successText,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  error?: string;
+  type?: "text" | "email" | "password";
+  readOnly?: boolean;
+  success?: boolean;
+  successText?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-[13px] font-medium text-[#555555]">{label}</label>
+      <div className="relative">
+        <input
+          type={type}
+          required
+          readOnly={readOnly}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`h-11 w-full rounded-[8px] border bg-transparent px-[14px] pr-10 text-[14px] text-[#111111] outline-none transition ${
+            success
+              ? "border-[#22C55E]"
+              : "border-[#E0E0E0] focus:border-[#111111]"
+          } ${readOnly ? "text-[#555555]" : ""}`}
+          placeholder={placeholder}
+        />
+        {success && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#16A34A]">
+            <CheckIcon />
+          </span>
+        )}
+      </div>
+      {error && <p className="text-[12px] text-[#555555]">{error}</p>}
+      {!error && success && successText && (
+        <p className="flex items-center gap-1.5 text-[12px] text-[#16A34A]">
+          <CheckIcon />
+          {successText}
+        </p>
+      )}
     </div>
   );
 }

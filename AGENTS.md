@@ -6,9 +6,11 @@ This file explains how the repo's live data models and external sources interact
 
 - `PLAN.md` is the source of truth for data contracts and compliance rules.
 - `AGENTS.md` is the operator guide for how systems interact in practice.
+- `DESIGN.md` is the source of truth for frontend layout and visual consistency.
 - `README.md` is setup and local-dev documentation.
 
 If `AGENTS.md` and `PLAN.md` ever disagree, fix `AGENTS.md` to match `PLAN.md` or update both in the same change.
+If frontend styling guidance in `AGENTS.md` and `DESIGN.md` diverge, update both in the same change.
 
 ## System Boundaries
 
@@ -31,6 +33,7 @@ Convex is the operational application database.
 - `eboard_members` stores internal club members.
 - `contact_assignments` stores internal ownership history.
 - `inbound_receipts` stores webhook dedupe state.
+- `invites` stores invite-code access control for onboarding.
 
 Convex is not the source of truth for identity or speaker workflow fields that already live in Attio.
 
@@ -137,6 +140,19 @@ Stores message dedupe state.
 
 Write dedupe only after the related Attio and Convex mutations succeed, or make the receipt explicitly retryable.
 
+#### `invites`
+
+Stores invite-code onboarding state.
+
+Current intended meaning:
+
+- `code` = one-time invite token
+- `invited_email` = optional locked email for this invite
+- `used_email` = email used during successful consume
+- `used_by` = Better Auth user id when a session is available at consume time
+
+`invites.consume` must enforce `invited_email` when present and must not fail only because a session cookie is not available immediately after signup.
+
 ## Shared Keys And Mappings
 
 ### Cross-system ids
@@ -214,6 +230,61 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 - Do not write Attio select or status values using guessed labels.
 - Do not update assignment or ownership in Convex without also updating the corresponding Attio speaker entry when that path is implemented.
 - Do not introduce a second document that competes with `PLAN.md` as the data-contract source of truth.
+
+## Frontend Design System
+
+All UI screens live in `.pen` files. The design language is **strictly monochrome** — no color accents.
+For dashboard shell, nav, spacing rhythm, and state contrast rules, follow `DESIGN.md`.
+
+### Files
+
+- `event_organizer.pen` — shared canonical screens (dashboard, events, landing, login). Do not add auth/user screens here to avoid merge conflicts.
+- `event_organizer_user.pen` — auth flow screens (Invite Code, Sign Up, Sign In). Edit this file for onboarding UI changes.
+
+### Design Tokens
+
+| Token | Value | Usage |
+|---|---|---|
+| Text primary | `#0A0A0A` / `#111111` | Headings, labels, active nav |
+| Text secondary | `#555555` | Input labels |
+| Text muted | `#999999` | Subtitles, placeholder copy |
+| Text disabled | `#BBBBBB` | Hints, footer copy, icons |
+| Background page | `#FAFAFA` | Page/sidebar bg |
+| Background panel | `#F4F4F4` | Cards, nav items |
+| Background input | transparent | Inputs have no fill |
+| Border default | `#E0E0E0` | Input strokes |
+| Border divider | `#EBEBEB` | Section dividers |
+| Button primary fill | `#0A0A0A` | All primary CTAs |
+| Button primary text | `#FFFFFF` | |
+
+### Typography
+
+- **Font**: Inter (UI), Geist (dashboard wordmark/nav)
+- **Display headings**: `fontWeight: 300`, tight `letterSpacing` (−2.5 to −4), `lineHeight: 0.97`
+- **Section headings**: `fontSize: 28`, `fontWeight: 600`, `letterSpacing: -1`
+- **Labels**: `fontSize: 13`, `fontWeight: 500`, `fill: #555555`
+- **Body / placeholders**: `fontSize: 14`, `fill: #BBBBBB`
+- **Footnotes / hints**: `fontSize: 12–13`, `fill: #999999`
+
+### Component Patterns
+
+**Input field** (`height: 44`, `cornerRadius: 8`, `padding: [0, 14]`):
+- No background fill
+- `stroke: { align: "inside", fill: "#E0E0E0", thickness: 1 }`
+
+**Primary button** (`height: 44`, `cornerRadius: 8`):
+- `fill: "#0A0A0A"`, label `fill: "#FFFFFF"`, `fontWeight: 600`
+
+**Split-panel auth layout** (1280×900):
+- Left `BrandPanel`: gradient `#FAFAFA→#F0F0F0`, `padding: 60`, `justifyContent: space_between` — logo top, headline+sub middle, footnote bottom
+- Right `FormPanel`: `fill: #FFFFFF`, `width: 480`, `padding: [0, 60]`, `justifyContent: center`
+
+### Rules
+
+- No blue, green, red, or any chromatic color in UI elements. Error states use `#555555` or a muted indicator, not red.
+- No drop shadows on cards or inputs. Shadow only on floating elements (e.g., `new event` button).
+- Desktop-first. Auth screens target 1280×900. No mobile breakpoints in `.pen` files.
+- Auth screens go in `event_organizer_user.pen`, never `event_organizer.pen`.
 
 ## When Updating The Model
 

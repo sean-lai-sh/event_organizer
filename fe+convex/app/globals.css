@@ -35,6 +35,14 @@ body {
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
 }
 
+.auth-root {
+  color-scheme: light;
+}
+
+.auth-root input::placeholder {
+  color: #bbbbbb;
+}
+
 a {
   color: inherit;
 }

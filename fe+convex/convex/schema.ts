@@ -61,4 +61,15 @@ export default defineSchema({
     thread_id: v.optional(v.string()),
     received_at: v.number(),
   }).index("by_message_id", ["message_id"]),
+
+  invites: defineTable({
+    code: v.string(),
+    invited_email: v.optional(v.string()), // optional email lock for this invite
+    created_by: v.optional(v.string()), // userId of the eboard member who created it
+    used_by: v.optional(v.string()),    // userId who consumed it
+    used_email: v.optional(v.string()), // email address used when consuming invite
+    used_at: v.optional(v.number()),
+    expires_at: v.optional(v.number()),
+    created_at: v.number(),
+  }).index("by_code", ["code"]),
 });
