@@ -1,3 +1,4 @@
+import ExplodingImage from "@/components/ExplodingImage";
 import { platformLeft, platformRight } from "@/components/landing/content";
 
 export default function ArchitectureSection() {
@@ -8,7 +9,7 @@ export default function ArchitectureSection() {
           <p className="mt-0 mb-4 text-[17px] font-normal tracking-[-0.5px] text-[#6b6b6b]">
             Architecture
           </p>
-          <h2 className="mx-auto mb-[18px] mt-0 max-w-[620px] [font-family:var(--font-outfit),Outfit,system-ui,sans-serif] text-[clamp(36px,4vw,48px)] font-light leading-[1.05] tracking-[-2.4px] text-[#393939]">
+          <h2 className="mx-auto mb-[18px] mt-0 max-w-[620px] font-outfit-var text-[clamp(36px,4vw,48px)] font-light leading-[1.05] tracking-[-2.4px] text-[#393939]">
             A platform built to connect everything your club needs.
           </h2>
           <p className="mx-auto m-0 max-w-[500px] text-[20px] leading-[1.6] font-normal tracking-[-0.35px] text-[#6b6b6b]">
@@ -31,11 +32,8 @@ export default function ArchitectureSection() {
             ))}
           </div>
 
-          <div
-            className="relative flex h-[85vh] w-[30vw] min-w-[320px] max-w-[420px] items-center justify-center border border-black bg-black text-[13px] font-medium tracking-[0.06em] text-white max-[1240px]:w-[40vw] max-[1024px]:h-[95vh] max-[1024px]:w-full max-[1024px]:max-w-[420px]"
-            aria-hidden
-          >
-            IMAGE HOLDER
+          <div className="flex shrink-0 items-center justify-center max-[1024px]:w-full">
+            <ExplodingImage />
           </div>
 
           <div className="flex w-[240px] flex-col justify-between pt-[157px] pb-0 max-[1024px]:w-full max-[1024px]:max-w-[560px] max-[1024px]:justify-start max-[1024px]:gap-[18px] max-[1024px]:p-0">
