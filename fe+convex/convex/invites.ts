@@ -152,6 +152,21 @@ export const list = query({
   },
 });
 
+/** Revoke (delete) an unused invite code. Requires authentication. */
+export const revoke = mutation({
+  args: { id: v.id("invites") },
+  handler: async (ctx, { id }) => {
+    const user = await getAuthUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    const invite = await ctx.db.get(id);
+    if (!invite) throw new Error("Invite not found");
+    if (invite.used_at) throw new Error("Cannot revoke a used invite");
+
+    await ctx.db.delete(id);
+  },
+});
+
 /**
  * Seed the very first admin invite code. Only succeeds when no invites exist yet.
  * Run once via `npx convex run invites:seedAdminInvite` to bootstrap the first account.

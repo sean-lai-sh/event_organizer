@@ -10,6 +10,7 @@ import {
   CalendarDays,
   LayoutDashboard,
   Mail,
+  Ticket,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -34,6 +35,11 @@ const navLinks = [
     href: "/dashboard/communications",
     label: "Communications",
     icon: Mail,
+  },
+  {
+    href: "/dashboard/invites",
+    label: "Invites",
+    icon: Ticket,
   },
 ] as const satisfies ReadonlyArray<{
   href: string;

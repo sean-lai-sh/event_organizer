@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { api } from "@/convex/_generated/api";
@@ -30,11 +30,23 @@ function CheckIcon() {
   );
 }
 
+import { Suspense } from "react";
+
 export default function SignUpPage() {
+  return (
+    <Suspense>
+      <SignUpForm />
+    </Suspense>
+  );
+}
+
+function SignUpForm() {
   const router = useRouter();
+  const params = useSearchParams();
+  const codeFromUrl = params.get("code")?.trim().toUpperCase() ?? "";
 
   const [step, setStep] = useState<Step>("invite");
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(codeFromUrl);
   const [inviteError, setInviteError] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [lockedInviteEmail, setLockedInviteEmail] = useState<string | null>(null);
