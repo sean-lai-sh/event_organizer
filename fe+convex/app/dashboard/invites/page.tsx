@@ -1,128 +1,338 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Eye, EyeOff, Copy, Check, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-// ─── small atoms ────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+type InviteRow = {
+  _id: Id<"invites">;
+  code: string;
+  invited_email?: string | null;
+  used_at?: number | null;
+  expires_at?: number | null;
+  max_uses?: number | null;
+  use_count?: number | null;
+  grants_role?: string | null;
+};
+
+type InviteType = "code" | "link";
+type CreatedInvite = { code: string; label: string };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+type StatusVariant = "active" | "exhausted" | "expired" | "used";
+
+function inviteStatus(invite: InviteRow): StatusVariant {
+  if (invite.max_uses != null) {
+    return (invite.use_count ?? 0) >= invite.max_uses ? "exhausted" : "active";
+  }
+  if (invite.used_at) return "used";
+  if (invite.expires_at && invite.expires_at < Date.now()) return "expired";
+  return "active";
+}
+
+function inviteStateLabel(invite: InviteRow): string {
+  if (invite.max_uses != null) {
+    const used = invite.use_count ?? 0;
+    if (used >= invite.max_uses) return "Exhausted";
+    return `${used} / ${invite.max_uses} uses`;
+  }
+  if (invite.used_at) return "Used";
+  if (invite.expires_at && invite.expires_at < Date.now()) return "Expired";
+  return "Active";
+}
+
+function isRevokable(invite: InviteRow): boolean {
+  if (invite.max_uses != null) return (invite.use_count ?? 0) < invite.max_uses;
+  return !invite.used_at;
+}
+
+const statusDot: Record<StatusVariant, string> = {
+  active: "bg-emerald-500",
+  used: "bg-red-400",
+  exhausted: "bg-red-400",
+  expired: "bg-[#d0d0d0]",
+};
+
+const statusText: Record<StatusVariant, string> = {
+  active: "text-[#0a0a0a]",
+  used: "text-[#8d8d8d]",
+  exhausted: "text-[#8d8d8d]",
+  expired: "text-[#b0b0b0]",
+};
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function CopyIconButton({
+  text,
+  label,
+  tooltip,
+}: {
+  text: string;
+  label?: string;
+  tooltip?: string;
+}) {
   const [copied, setCopied] = useState(false);
+
   async function copy() {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
+    const id = toast.success(label ?? "Copied to clipboard", {
+      cancel: { label: "Dismiss", onClick: () => toast.dismiss(id) },
+    });
   }
-  return (
+
+  const btn = (
     <button
+      type="button"
       onClick={copy}
-      className="text-xs font-medium text-neutral-400 transition hover:text-neutral-700"
+      className="flex h-6 w-6 items-center justify-center rounded text-[#b0b0b0] transition hover:text-[#4d4d4d]"
     >
-      {copied ? "Copied" : label}
+      {copied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
     </button>
   );
-}
 
-function StatusPill({ invite }: { invite: { used_at?: number; expires_at?: number } }) {
-  if (invite.used_at)
-    return (
-      <span className="inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-500">
-        Used
-      </span>
-    );
-  if (invite.expires_at && invite.expires_at < Date.now())
-    return (
-      <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-500">
-        Expired
-      </span>
-    );
+  if (!tooltip) return btn;
+
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
-      Active
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>{btn}</TooltipTrigger>
+      <TooltipContent>{copied ? "Copied!" : tooltip}</TooltipContent>
+    </Tooltip>
   );
 }
 
-// ─── revoke modal ────────────────────────────────────────────────────────────
-
-function RevokeModal({
-  email,
-  onConfirm,
-  onCancel,
-  loading,
+function RevealCell({
+  code,
+  revealed,
+  onToggle,
 }: {
-  email: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  loading: boolean;
+  code: string;
+  revealed: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
-      <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl">
-        <h2 className="text-base font-semibold text-neutral-900">Revoke invite?</h2>
-        <p className="mt-2 text-sm text-neutral-500">
-          The invite for <span className="font-medium text-neutral-700">{email}</span> will be
-          permanently deleted. They won't be able to sign up with this code.
-        </p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="h-9 rounded-lg border border-neutral-200 px-4 text-sm font-medium text-neutral-600 transition hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="h-9 rounded-lg bg-red-600 px-4 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60"
-          >
-            {loading ? "Revoking…" : "Revoke invite"}
-          </button>
-        </div>
-      </div>
+    <div className="flex items-center gap-1">
+      {revealed ? (
+        <>
+          <span className="font-mono text-[12px] tracking-widest text-[#202020]">{code}</span>
+          <CopyIconButton text={code} label="Code copied" tooltip="Copy code" />
+        </>
+      ) : (
+        <span className="font-mono text-[13px] tracking-widest text-[#c0c0c0] select-none">
+          {"•".repeat(8)}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="ml-0.5 flex h-6 w-6 items-center justify-center rounded text-[#c0c0c0] transition hover:text-[#4d4d4d]"
+        title={revealed ? "Hide code" : "Reveal code"}
+      >
+        {revealed ? <EyeOff size={13} strokeWidth={2} /> : <Eye size={13} strokeWidth={2} />}
+      </button>
     </div>
   );
 }
 
-// ─── page ────────────────────────────────────────────────────────────────────
+function RevokeDialog({
+  open,
+  label,
+  onConfirm,
+  onOpenChange,
+  loading,
+}: {
+  open: boolean;
+  label: string;
+  onConfirm: () => void;
+  onOpenChange: (open: boolean) => void;
+  loading: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="text-[22px] font-semibold tracking-[-0.6px]">Revoke invite?</DialogTitle>
+          <DialogDescription className="mt-1 text-[14px] leading-[1.55] text-[#7d7d7d]">
+            The invite for <span className="font-medium text-[#4d4d4d]">{label}</span> will be permanently
+            deleted.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={onConfirm} disabled={loading}>
+            {loading ? "Revoking..." : "Revoke"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-type CreatedInvite = { code: string; email: string };
+function AdminRequired() {
+  return (
+    <DashboardPageShell title="Invites">
+      <div className="flex flex-col gap-3 rounded-[14px] border border-[#E0E0E0] bg-[#F4F4F4] p-5">
+        <h2 className="text-[26px] font-semibold tracking-[-1px] text-[#0A0A0A]">Admin access required</h2>
+        <p className="text-[14px] leading-[1.55] text-[#7d7d7d]">
+          Only admins can manage invites. Contact your admin to get access.
+        </p>
+      </div>
+    </DashboardPageShell>
+  );
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function InvitesSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-[#E0E0E0] bg-white">
+      <div className="border-b border-[#E0E0E0] px-3 py-2.5">
+        <div className="flex gap-6">
+          <Skeleton className="h-4 w-8" />
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-14" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      </div>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-6 border-b border-[#F0F0F0] px-3 py-3">
+          <Skeleton className="h-2 w-2 rounded-full" />
+          <Skeleton className="h-3.5 w-36" />
+          <Skeleton className="h-3.5 w-24" />
+          <Skeleton className="h-5 w-14 rounded-full" />
+          <Skeleton className="h-3.5 w-10" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InvitesPage() {
+  const member = useQuery(api.eboard.getCurrentMember);
+
   const [showAll, setShowAll] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [inviteType, setInviteType] = useState<InviteType>("code");
   const [formEmail, setFormEmail] = useState("");
+  const [grantAdmin, setGrantAdmin] = useState(false);
+  const [linkRole, setLinkRole] = useState("member");
+  const [maxUses, setMaxUses] = useState("1");
   const [formError, setFormError] = useState("");
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedInvite | null>(null);
 
-  const [revokeTarget, setRevokeTarget] = useState<{
-    id: Id<"invites">;
-    email: string;
-  } | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: Id<"invites">; label: string } | null>(null);
   const [revoking, setRevoking] = useState(false);
 
-  const invites = useQuery(api.invites.list, { includeUsed: showAll });
+  const allInvites = useQuery(api.invites.list, { includeUsed: true });
+  const invites = showAll
+    ? allInvites
+    : allInvites?.filter((i) => inviteStatus(i as InviteRow) === "active");
   const createInvite = useMutation(api.invites.create);
   const revokeInvite = useMutation(api.invites.revoke);
 
   const signupBase =
     typeof window !== "undefined" ? `${window.location.origin}/signup` : "/signup";
 
-  async function handleCreate(e: React.FormEvent) {
+  function toggleRevealed(id: string) {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  if (member === undefined) {
+    return (
+      <DashboardPageShell title="Invites">
+        <InvitesSkeleton />
+      </DashboardPageShell>
+    );
+  }
+
+  if (member?.role !== "admin") return <AdminRequired />;
+
+  function resetCreateState() {
+    setInviteType("code");
+    setFormEmail("");
+    setGrantAdmin(false);
+    setLinkRole("member");
+    setMaxUses("1");
+    setFormError("");
+    setCreated(null);
+  }
+
+  function handleCreateModalChange(nextOpen: boolean) {
+    setCreateModalOpen(nextOpen);
+    if (!nextOpen) resetCreateState();
+  }
+
+  async function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const email = formEmail.trim();
-    if (!email) return;
     setCreating(true);
     setFormError("");
     setCreated(null);
+
     try {
-      const code = await createInvite({ invited_email: email });
-      setCreated({ code, email });
-      setFormEmail("");
+      if (inviteType === "code") {
+        const email = formEmail.trim();
+        if (!email) {
+          setFormError("Email is required");
+          setCreating(false);
+          return;
+        }
+        const code = await createInvite({
+          invited_email: email,
+          grants_role: grantAdmin ? "admin" : undefined,
+        });
+        setCreated({ code, label: email });
+        setFormEmail("");
+      } else {
+        const uses = parseInt(maxUses, 10);
+        if (!uses || uses < 1) {
+          setFormError("Number of uses must be at least 1");
+          setCreating(false);
+          return;
+        }
+        const code = await createInvite({ grants_role: linkRole, max_uses: uses });
+        setCreated({ code, label: `${linkRole} · ${uses} use${uses !== 1 ? "s" : ""}` });
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create invite");
     } finally {
@@ -142,225 +352,267 @@ export default function InvitesPage() {
   }
 
   return (
+    <TooltipProvider delayDuration={300}>
     <>
-      {revokeTarget && (
-        <RevokeModal
-          email={revokeTarget.email}
-          onConfirm={handleRevoke}
-          onCancel={() => setRevokeTarget(null)}
-          loading={revoking}
-        />
-      )}
+      <RevokeDialog
+        open={Boolean(revokeTarget)}
+        label={revokeTarget?.label ?? ""}
+        onConfirm={handleRevoke}
+        onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}
+        loading={revoking}
+      />
 
+      {/* Create modal */}
+      <Dialog open={createModalOpen} onOpenChange={handleCreateModalChange}>
+        <DialogContent className="max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Send invite</DialogTitle>
+            <DialogDescription>
+              Generate a code locked to one email, or a reusable invite link.
+            </DialogDescription>
+          </DialogHeader>
+
+          {created ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-[13px] font-medium text-[#4d4d4d]">
+                Invite created — <span className="text-[#202020]">{created.label}</span>.
+              </p>
+
+              <div className="flex items-center justify-between rounded-[8px] border border-[#E0E0E0] bg-white px-3 py-2.5">
+                <span className="font-mono text-[13px] font-semibold tracking-widest text-[#202020]">
+                  {created.code}
+                </span>
+                <div className="flex items-center gap-2">
+                  <CopyIconButton text={created.code} label="Invite code copied" />
+                  <span className="text-[11px] text-[#c0c0c0]">code</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-[8px] border border-[#E0E0E0] bg-white px-3 py-2.5">
+                <span className="truncate font-mono text-[12px] text-[#8d8d8d]">
+                  {signupBase}?code={created.code}
+                </span>
+                <div className="flex items-center gap-2">
+                  <CopyIconButton text={`${signupBase}?code=${created.code}`} label="Invite link copied" />
+                  <span className="text-[11px] text-[#c0c0c0]">link</span>
+                </div>
+              </div>
+
+              <DialogFooter className="mt-2">
+                <Button type="button" variant="outline" onClick={resetCreateState}>
+                  Create another
+                </Button>
+                <Button type="button" onClick={() => setCreateModalOpen(false)}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={handleCreate} className="space-y-4">
+              <Tabs
+                value={inviteType}
+                onValueChange={(v) => { setInviteType(v as InviteType); setFormError(""); }}
+              >
+                <TabsList className="w-full">
+                  <TabsTrigger value="code" className="flex-1">Invite code</TabsTrigger>
+                  <TabsTrigger value="link" className="flex-1">Invite link</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="code" className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[13px] font-medium text-[#555555]">Member email</label>
+                    <input
+                      type="email"
+                      required
+                      value={formEmail}
+                      onChange={(e) => { setFormEmail(e.target.value); setFormError(""); }}
+                      placeholder="member@example.com"
+                      autoFocus
+                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[14px] text-[14px] text-[#111111] placeholder:text-[#BBBBBB] outline-none transition focus:border-[#111111]"
+                    />
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={grantAdmin}
+                      onChange={(e) => setGrantAdmin(e.target.checked)}
+                      className="h-4 w-4 rounded-[4px] border border-[#E0E0E0] accent-[#0A0A0A]"
+                    />
+                    <span className="text-[13px] text-[#4d4d4d]">Grant admin access</span>
+                  </label>
+                </TabsContent>
+
+                <TabsContent value="link" className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[13px] font-medium text-[#555555]">Base role after signup</label>
+                    <select
+                      value={linkRole}
+                      onChange={(e) => setLinkRole(e.target.value)}
+                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
+                    >
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[13px] font-medium text-[#555555]">Number of uses</label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={maxUses}
+                      onChange={(e) => { setMaxUses(e.target.value); setFormError(""); }}
+                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              {formError && <p className="text-[12px] text-[#8d8d8d]">{formError}</p>}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={creating}>
+                  {creating ? "Creating..." : "Generate"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Main page */}
       <DashboardPageShell
         title="Invites"
         action={
-          <button
-            onClick={() => {
-              setShowForm((v) => !v);
-              setCreated(null);
-              setFormError("");
-            }}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => { resetCreateState(); setCreateModalOpen(true); }}
+            className="gap-1.5"
           >
-            <span className="text-base leading-none">+</span>
+            <Plus size={14} strokeWidth={2.5} />
             New invite
-          </button>
+          </Button>
         }
       >
-        {/* ── create form ── */}
-        {showForm && (
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5">
-            <p className="mb-4 text-sm font-semibold text-neutral-900">Send invite</p>
-
-            {created ? (
-              <div className="space-y-3">
-                <p className="text-sm text-neutral-500">
-                  Invite created for{" "}
-                  <span className="font-medium text-neutral-800">{created.email}</span>.
-                </p>
-
-                <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
-                  <span className="font-mono text-sm font-semibold tracking-widest text-neutral-900">
-                    {created.code}
-                  </span>
-                  <CopyButton text={created.code} label="Copy code" />
-                </div>
-
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
-                  <span className="truncate font-mono text-xs text-neutral-400">
-                    {signupBase}?code={created.code}
-                  </span>
-                  <CopyButton
-                    text={`${signupBase}?code=${created.code}`}
-                    label="Copy link"
-                  />
-                </div>
-
-                <button
-                  onClick={() => setCreated(null)}
-                  className="text-xs text-neutral-400 transition hover:text-neutral-600"
-                >
-                  Send another
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleCreate} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1 space-y-1.5">
-                  <label className="block text-xs font-medium text-neutral-500">
-                    Member email
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={formEmail}
-                    onChange={(e) => {
-                      setFormEmail(e.target.value);
-                      setFormError("");
-                    }}
-                    placeholder="member@example.com"
-                    className="h-10 w-full rounded-lg border border-neutral-200 bg-transparent px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 outline-none transition focus:border-neutral-800"
-                    autoFocus
-                  />
-                  {formError && (
-                    <p className="text-xs text-red-500">{formError}</p>
-                  )}
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(false)}
-                    className="h-10 rounded-lg border border-neutral-200 px-4 text-sm font-medium text-neutral-500 transition hover:bg-neutral-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={creating}
-                    className="h-10 rounded-lg bg-neutral-900 px-5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:opacity-60"
-                  >
-                    {creating ? "Creating…" : "Generate"}
-                  </button>
-                </div>
-              </form>
-            )}
-          </section>
-        )}
-
-        {/* ── filter tabs ── */}
-        <section className="rounded-2xl border border-neutral-200 bg-white p-3">
-          <div className="flex gap-1.5">
-            {(["Active", "All"] as const).map((label) => {
-              const active = label === "All" ? showAll : !showAll;
-              return (
-                <button
-                  key={label}
-                  onClick={() => setShowAll(label === "All")}
-                  className={`h-8 rounded-md px-3 text-xs font-medium transition ${
-                    active
-                      ? "bg-neutral-900 text-white"
-                      : "text-neutral-500 hover:bg-neutral-100"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── table ── */}
-        <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-          {invites === undefined ? (
-            <p className="p-8 text-center text-sm text-neutral-400">Loading…</p>
-          ) : invites.length === 0 ? (
-            <p className="p-8 text-center text-sm text-neutral-400">
-              No invites yet — create one to onboard your first member.
+        <Tabs
+          value={showAll ? "all" : "active"}
+          onValueChange={(v) => setShowAll(v === "all")}
+          className="w-full"
+        >
+          <div className="flex items-center justify-between gap-4 pb-3">
+            <p className="text-[14px] leading-[1.55] text-[#7d7d7d]">
+              Codes are single-use; links can be reused up to their limit.
             </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-neutral-100 bg-neutral-50">
-                    {["Invited", "Code", "Status", "Sent by", "Used by", ""].map((h) => (
-                      <th
-                        key={h}
-                        className="h-10 px-4 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400 last:text-right"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {invites.map((invite) => (
-                    <tr key={invite._id} className="group hover:bg-neutral-50">
-                      {/* email */}
-                      <td className="px-4 py-3.5">
-                        <span className="text-sm font-medium text-neutral-800">
-                          {invite.invited_email ?? (
-                            <span className="font-normal text-neutral-400">—</span>
-                          )}
-                        </span>
-                      </td>
+            <TabsList>
+              <TabsTrigger value="active">Active</TabsTrigger>
+              <TabsTrigger value="all">All</TabsTrigger>
+            </TabsList>
+          </div>
 
-                      {/* code */}
-                      <td className="px-4 py-3.5">
-                        <span className="font-mono text-sm font-semibold tracking-wider text-neutral-700">
-                          {invite.code}
-                        </span>
-                      </td>
+          {(["active", "all"] as const).map((tab) => (
+            <TabsContent key={tab} value={tab}>
+              {invites === undefined ? (
+                <InvitesSkeleton />
+              ) : invites.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-[#b0b0b0]">
+                  No invites yet — create one to onboard your first member.
+                </p>
+              ) : (
+                <div className="overflow-hidden rounded-[10px] border border-[#E0E0E0] bg-white">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-[#E0E0E0]">
+                        <TableHead className="w-8 pl-4" />
+                        <TableHead>For / Type</TableHead>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="pr-4 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invites.map((invite) => {
+                        const status = inviteStatus(invite as InviteRow);
+                        const stateLabel = inviteStateLabel(invite as InviteRow);
+                        const revokable = isRevokable(invite as InviteRow);
+                        const isLink = invite.max_uses != null;
+                        const label = isLink
+                          ? `Link · ${invite.max_uses} use${invite.max_uses !== 1 ? "s" : ""}`
+                          : (invite.invited_email ?? "—");
+                        const revealed = revealedIds.has(invite._id);
 
-                      {/* status */}
-                      <td className="px-4 py-3.5">
-                        <StatusPill invite={invite} />
-                      </td>
+                        return (
+                          <TableRow key={invite._id} className="border-b border-[#F0F0F0]">
+                            <TableCell className="pl-4">
+                              <span className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${statusDot[status]}`} />
+                            </TableCell>
 
-                      {/* created by */}
-                      <td className="px-4 py-3.5 text-sm text-neutral-500">
-                        {invite.created_by_email ?? (
-                          <span className="text-neutral-300">system</span>
-                        )}
-                      </td>
+                            <TableCell>
+                              <span className="text-[13px] font-medium text-[#202020]">{label}</span>
+                            </TableCell>
 
-                      {/* used by */}
-                      <td className="px-4 py-3.5 text-sm text-neutral-500">
-                        {invite.used_by_email ?? (
-                          <span className="text-neutral-300">—</span>
-                        )}
-                      </td>
+                            <TableCell>
+                              <RevealCell
+                                code={invite.code}
+                                revealed={revealed}
+                                onToggle={() => toggleRevealed(invite._id)}
+                              />
+                            </TableCell>
 
-                      {/* actions */}
-                      <td className="px-4 py-3.5 text-right">
-                        {!invite.used_at && (
-                          <div className="flex items-center justify-end gap-4 opacity-0 transition group-hover:opacity-100">
-                            <CopyButton text={invite.code} label="Copy code" />
-                            <CopyButton
-                              text={`${signupBase}?code=${invite.code}`}
-                              label="Copy link"
-                            />
-                            <button
-                              onClick={() =>
-                                setRevokeTarget({
-                                  id: invite._id,
-                                  email: invite.invited_email ?? invite.code,
-                                })
-                              }
-                              className="text-xs font-medium text-red-400 transition hover:text-red-600"
-                            >
-                              Revoke
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                            <TableCell>
+                              {invite.grants_role === "admin" ? (
+                                <span className="inline-flex items-center rounded-full bg-[#0a0a0a] px-2 py-0.5 text-[11px] font-medium text-white">
+                                  Admin
+                                </span>
+                              ) : invite.grants_role ? (
+                                <span className="text-[12px] text-[#4d4d4d]">{invite.grants_role}</span>
+                              ) : (
+                                <span className="text-[12px] text-[#c0c0c0]">—</span>
+                              )}
+                            </TableCell>
+
+                            <TableCell>
+                              <span className={`text-[12px] font-medium ${statusText[status]}`}>
+                                {stateLabel}
+                              </span>
+                            </TableCell>
+
+                            <TableCell className="pr-4">
+                              <div className="flex items-center justify-end gap-3">
+                                {revokable && (
+                                  <CopyIconButton
+                                    text={`${signupBase}?code=${invite.code}`}
+                                    label="Invite link copied"
+                                    tooltip="Copy invitation"
+                                  />
+                                )}
+                                {revokable && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setRevokeTarget({ id: invite._id, label })}
+                                    className="text-[12px] font-medium text-[#c0c0c0] transition hover:text-[#8d8d8d]"
+                                  >
+                                    Revoke
+                                  </button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
       </DashboardPageShell>
     </>
+    </TooltipProvider>
   );
 }

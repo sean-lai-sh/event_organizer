@@ -298,47 +298,58 @@ async def handle_net_new(
             "classification": decision["classification"], "reasoning": decision["reasoning"],
         })
 
-    if not (decision["event_signal"] and decision["timing_signal"]):
-        await append_attio_note(
-            record_id,
-            f"Inbound captured (net-new), insufficient signal for auto-create. "
-            f"classification={decision['classification']} "
-            f"event_signal={decision['event_signal']} timing_signal={decision['timing_signal']}",
-        )
-        return log_and_return({
-            "path": "net_new", "record_id": record_id, "event_created": False,
-            "event_signal": decision["event_signal"], "timing_signal": decision["timing_signal"],
-            "classification": decision["classification"], "reasoning": decision["reasoning"],
-        })
+    strong_signal = decision["event_signal"] and decision["timing_signal"]
 
     async with ConvexClient() as sb:
         owner_emails = await resolve_owner_emails(
             sb, attio_record_id=record_id, event=None, to_emails=to_emails, cc_emails=cc_emails,
         )
+        created_by = owner_emails[0] if owner_emails else None
+
+        # Always create a draft event to anchor the thread — even weak-signal replies
+        # need a Convex outreach row so follow-ups on the same thread hit known_thread.
+        event_extract = decision["event_extract"] if strong_signal else {}
         event_id = await sb.create_event(
-            build_event_payload(decision["event_extract"], subject=subject, created_by=owner_emails[0] if owner_emails else None)
-        )
-        await sb.upsert_outreach_link(event_id, record_id, thread_id=thread_id)
-        response, inbound_state = to_workflow_state(decision["classification"])
-        await sb.apply_inbound_update(
-            event_id, record_id,
-            classification=decision["classification"],
-            inbound_state=inbound_state,
-            response=response,
-            sender_email=sender_email,
-        )
-        await sb.apply_inbound_milestones(
-            event_id,
-            speaker_confirmed=decision["speaker_confirmed"],
-            room_confirmed=decision["room_confirmed"],
+            build_event_payload(event_extract, subject=subject, created_by=created_by)
         )
 
-    await append_attio_note(
-        record_id,
-        f"Inbound created draft event {event_id}. classification={decision['classification']} "
-        f"speaker_confirmed={decision['speaker_confirmed']} room_confirmed={decision['room_confirmed']}",
-    )
+        # Always link the thread so subsequent replies route to known_thread.
+        await sb.upsert_outreach_link(event_id, record_id, thread_id=thread_id)
+
+        if strong_signal:
+            response, inbound_state = to_workflow_state(decision["classification"])
+            await sb.apply_inbound_update(
+                event_id, record_id,
+                classification=decision["classification"],
+                inbound_state=inbound_state,
+                response=response,
+                sender_email=sender_email,
+            )
+            await sb.apply_inbound_milestones(
+                event_id,
+                speaker_confirmed=decision["speaker_confirmed"],
+                room_confirmed=decision["room_confirmed"],
+            )
+
+    if strong_signal:
+        note = (
+            f"Inbound created draft event {event_id}. classification={decision['classification']} "
+            f"speaker_confirmed={decision['speaker_confirmed']} room_confirmed={decision['room_confirmed']}"
+        )
+    else:
+        note = (
+            f"Inbound captured (net-new), weak signal — draft event {event_id} created for thread tracking. "
+            f"classification={decision['classification']} "
+            f"event_signal={decision['event_signal']} timing_signal={decision['timing_signal']}"
+        )
+    await append_attio_note(record_id, note)
+
     return log_and_return({
-        "path": "net_new", "record_id": record_id, "event_id": event_id, "event_created": True,
-        "classification": decision["classification"], "reasoning": decision["reasoning"],
+        "path": "net_new",
+        "record_id": record_id,
+        "event_id": event_id,
+        "event_created": True,
+        "strong_signal": strong_signal,
+        "classification": decision["classification"],
+        "reasoning": decision["reasoning"],
     })
