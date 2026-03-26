@@ -69,6 +69,26 @@ Typography should prioritize legibility and predictable hierarchy over display f
   - Secondary app actions should default to outlined monochrome
   - High-emphasis destructive/auth actions should not dominate utility navigation zones
 
+## Shadcn Baseline
+
+- Preset source of truth: `fe+convex/components.json` must use `style: "radix-vega"` for generated components.
+- Shared shadcn semantic tokens must be defined in `fe+convex/app/globals.css` and remain monochrome-first:
+  - `background`: `#FAFAFA`
+  - `foreground`: `#111111`
+  - `card`: `#FFFFFF`
+  - `popover`: `#F4F4F4`
+  - `border` / `input`: `#E0E0E0`
+  - `primary`: `#0A0A0A`
+  - `primary-foreground`: `#FFFFFF`
+  - `muted-foreground`: `#999999`
+  - `ring`: `#0A0A0A`
+  - `radius`: `8px`
+- Default primitive behavior requirements:
+  - `Button`: monochrome variants, default control height `44px`, radius `8px`
+  - `Dialog`: centered modal, monochrome overlay/surface, Pencil typography hierarchy
+  - `Tabs`: strong active highlight, monochrome inactive state, radius `8px`
+- New dashboard/auth interfaces should prefer shared shadcn primitives over per-page ad hoc class stacks.
+
 ## Interaction + Motion
 
 - Use subtle transitions (`transition`, 120-200ms feel)

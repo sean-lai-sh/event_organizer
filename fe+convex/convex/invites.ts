@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { authComponent, getAuthUser, safeGetAuthUser } from "./auth";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 function generateCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -17,7 +18,18 @@ function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
-/** Check if an invite code is valid (unused, not expired). Safe to call unauthenticated. */
+async function requireAdmin(ctx: MutationCtx | QueryCtx) {
+  const user = await getAuthUser(ctx);
+  if (!user) throw new Error("Not authenticated");
+  const member = await ctx.db
+    .query("eboard_members")
+    .withIndex("by_userId", (q) => q.eq("userId", user._id))
+    .first();
+  if (member?.role !== "admin") throw new Error("Admin access required");
+  return user;
+}
+
+/** Check if an invite code is valid (unused / within use limit, not expired). Safe to call unauthenticated. */
 export const validate = query({
   args: {
     code: v.string(),
@@ -30,9 +42,19 @@ export const validate = query({
       .withIndex("by_code", (q) => q.eq("code", normalizedCode))
       .first();
     if (!invite) return { valid: false, reason: "Invalid invite code" };
-    if (invite.used_at || invite.used_by || invite.used_email) {
-      return { valid: false, reason: "Invite code already used" };
+
+    // Multi-use invite
+    if (invite.max_uses !== undefined) {
+      const used = invite.use_count ?? 0;
+      if (used >= invite.max_uses)
+        return { valid: false, reason: "Invite link has reached its maximum uses" };
+    } else {
+      // Single-use invite
+      if (invite.used_at || invite.used_by || invite.used_email) {
+        return { valid: false, reason: "Invite code already used" };
+      }
     }
+
     if (invite.expires_at && invite.expires_at < Date.now())
       return { valid: false, reason: "Invite code expired" };
 
@@ -41,7 +63,11 @@ export const validate = query({
         return { valid: false, reason: "Invite code is bound to a different email" };
       }
     }
-    return { valid: true, invited_email: invite.invited_email ?? null };
+    return {
+      valid: true,
+      invited_email: invite.invited_email ?? null,
+      grants_role: invite.grants_role ?? null,
+    };
   },
 });
 
@@ -59,11 +85,10 @@ export const consume = mutation({
       .withIndex("by_code", (q) => q.eq("code", normalizedCode))
       .first();
     if (!invite) throw new Error("Invalid invite code");
-    if (invite.used_at || invite.used_by || invite.used_email) {
-      throw new Error("Invite code already used");
-    }
+
     if (invite.expires_at && invite.expires_at < Date.now())
       throw new Error("Invite code expired");
+
     if (
       invite.invited_email &&
       normalizeEmail(invite.invited_email) !== normalizedEmail
@@ -73,24 +98,47 @@ export const consume = mutation({
 
     const user = await safeGetAuthUser(ctx);
 
-    await ctx.db.patch(invite._id, {
-      used_by: user?._id,
-      used_email: normalizedEmail,
-      used_at: Date.now(),
-    });
+    if (invite.max_uses !== undefined) {
+      // Multi-use invite
+      const used = invite.use_count ?? 0;
+      if (used >= invite.max_uses) throw new Error("Invite link has reached its maximum uses");
+      await ctx.db.patch(invite._id, { use_count: used + 1 });
+    } else {
+      // Single-use invite
+      if (invite.used_at || invite.used_by || invite.used_email) {
+        throw new Error("Invite code already used");
+      }
+      await ctx.db.patch(invite._id, {
+        used_by: user?._id,
+        used_email: normalizedEmail,
+        used_at: Date.now(),
+      });
+    }
+
+    // Assign role if the invite grants one
+    if (invite.grants_role && user) {
+      const member = await ctx.db
+        .query("eboard_members")
+        .withIndex("by_userId", (q) => q.eq("userId", user._id))
+        .first();
+      if (member) {
+        await ctx.db.patch(member._id, { role: invite.grants_role });
+      }
+    }
   },
 });
 
-/** Create a new invite code. Requires an authenticated eboard member. */
+/** Create a new invite code. Requires an authenticated admin. */
 export const create = mutation({
   args: {
     code: v.optional(v.string()),
     invited_email: v.optional(v.string()),
     expires_at: v.optional(v.number()),
+    grants_role: v.optional(v.string()),
+    max_uses: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthUser(ctx);
-    if (!user) throw new Error("Not authenticated");
+    const user = await requireAdmin(ctx);
 
     const code = normalizeCode(args.code ?? generateCode());
     const invitedEmail = args.invited_email
@@ -109,24 +157,32 @@ export const create = mutation({
       created_by: user._id,
       expires_at: args.expires_at,
       created_at: Date.now(),
+      grants_role: args.grants_role,
+      max_uses: args.max_uses,
+      use_count: args.max_uses !== undefined ? 0 : undefined,
     });
     return code;
   },
 });
 
-/** List invite codes for dashboard management. Requires authentication. */
+/** List invite codes for dashboard management. Requires admin. */
 export const list = query({
   args: {
     includeUsed: v.optional(v.boolean()),
   },
   handler: async (ctx, { includeUsed }) => {
-    const user = await getAuthUser(ctx);
-    if (!user) throw new Error("Not authenticated");
+    await requireAdmin(ctx);
 
     const invites = await ctx.db.query("invites").collect();
     const filtered = includeUsed
       ? invites
-      : invites.filter((invite) => !invite.used_by);
+      : invites.filter((invite) => {
+          if (invite.max_uses !== undefined) {
+            // Multi-use: filter out fully-used
+            return (invite.use_count ?? 0) < invite.max_uses;
+          }
+          return !invite.used_by;
+        });
     const sorted = filtered.sort((a, b) => b.created_at - a.created_at);
 
     return Promise.all(
@@ -152,16 +208,16 @@ export const list = query({
   },
 });
 
-/** Revoke (delete) an unused invite code. Requires authentication. */
+/** Revoke (delete) an invite code. Requires admin. */
 export const revoke = mutation({
   args: { id: v.id("invites") },
   handler: async (ctx, { id }) => {
-    const user = await getAuthUser(ctx);
-    if (!user) throw new Error("Not authenticated");
+    await requireAdmin(ctx);
 
     const invite = await ctx.db.get(id);
     if (!invite) throw new Error("Invite not found");
-    if (invite.used_at) throw new Error("Cannot revoke a used invite");
+    // For single-use: cannot revoke if already used
+    if (!invite.max_uses && invite.used_at) throw new Error("Cannot revoke a used invite");
 
     await ctx.db.delete(id);
   },
@@ -170,7 +226,6 @@ export const revoke = mutation({
 /**
  * Seed the very first admin invite code. Only succeeds when no invites exist yet.
  * Run once via `npx convex run invites:seedAdminInvite` to bootstrap the first account.
- * Optionally pass a custom code, otherwise defaults to a random 8-char code.
  */
 export const seedAdminInvite = mutation({
   args: { code: v.optional(v.string()) },
@@ -186,6 +241,7 @@ export const seedAdminInvite = mutation({
     await ctx.db.insert("invites", {
       code: inviteCode,
       created_at: Date.now(),
+      grants_role: "admin",
     });
     console.log(`Admin invite created: ${inviteCode}`);
     return inviteCode;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
@@ -50,13 +50,18 @@ function SignUpForm() {
   const [inviteError, setInviteError] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [lockedInviteEmail, setLockedInviteEmail] = useState<string | null>(null);
+  const [inviteGrantsRole, setInviteGrantsRole] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Set<string>>(new Set());
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const autoAdvanced = useRef(false);
 
   const normalizedCode = inviteCode.trim().toUpperCase();
 
@@ -76,6 +81,24 @@ function SignUpForm() {
     [email, lockedInviteEmail]
   );
 
+  // Auto-advance when a valid code comes in via the URL
+  useEffect(() => {
+    if (autoAdvanced.current) return;
+    if (!codeFromUrl || step !== "invite") return;
+    if (validateResult?.valid !== true) return;
+
+    autoAdvanced.current = true;
+    const inviteEmail = validateResult.invited_email ?? null;
+    setLockedInviteEmail(inviteEmail);
+    if (inviteEmail) setEmail(inviteEmail);
+    setInviteGrantsRole(validateResult.grants_role ?? null);
+    setStep("register");
+  }, [codeFromUrl, step, validateResult]);
+
+  function markTouched(field: string) {
+    setTouched((prev) => new Set(prev).add(field));
+  }
+
   async function handleInviteSubmit(e: FormEvent) {
     e.preventDefault();
     setInviteLoading(true);
@@ -87,14 +110,13 @@ function SignUpForm() {
       return;
     }
 
-    const inviteEmail = validateResult.invited_email;
+    const inviteEmail = validateResult.invited_email ?? null;
+    setLockedInviteEmail(inviteEmail);
     if (inviteEmail) {
-      setLockedInviteEmail(inviteEmail);
       setEmail(inviteEmail);
       setErrors((prev) => ({ ...prev, email: "" }));
-    } else {
-      setLockedInviteEmail(null);
     }
+    setInviteGrantsRole(validateResult.grants_role ?? null);
 
     setStep("register");
     setInviteLoading(false);
@@ -129,6 +151,7 @@ function SignUpForm() {
 
   async function handleRegisterSubmit(e: FormEvent) {
     e.preventDefault();
+    setSubmitAttempted(true);
     if (!validateForm()) return;
 
     setLoading(true);
@@ -147,6 +170,12 @@ function SignUpForm() {
     }
 
     router.push("/dashboard");
+  }
+
+  // Determine if a field error should be visible
+  function fieldError(field: string): string | undefined {
+    if (touched.has(field) || submitAttempted) return errors[field];
+    return undefined;
   }
 
   return (
@@ -183,6 +212,7 @@ function SignUpForm() {
                   setInviteCode(e.target.value);
                   setInviteError("");
                 }}
+                onBlur={() => markTouched("inviteCode")}
                 className={`h-11 w-full rounded-[8px] border bg-transparent px-[14px] pr-10 text-[14px] uppercase tracking-[0.22em] text-[#111111] outline-none transition ${
                   inviteIsValid
                     ? "border-[#22C55E]"
@@ -198,7 +228,7 @@ function SignUpForm() {
               )}
             </div>
 
-            {normalizedCode.length >= 4 && validateResult?.valid === false && (
+            {touched.has("inviteCode") && normalizedCode.length >= 4 && validateResult?.valid === false && (
               <p className="text-[12px] text-[#555555]">{validateResult.reason}</p>
             )}
             {inviteIsValid && (
@@ -213,7 +243,7 @@ function SignUpForm() {
             type="submit"
             disabled={
               inviteLoading ||
-              (normalizedCode.length >= 4 && validateResult?.valid === false)
+              (touched.has("inviteCode") && normalizedCode.length >= 4 && validateResult?.valid === false)
             }
             className="h-11 w-full rounded-[8px] bg-[#0A0A0A] text-[14px] font-semibold text-[#FFFFFF] transition hover:bg-[#111111] disabled:opacity-60"
           >
@@ -248,6 +278,12 @@ function SignUpForm() {
                 Email is locked to this invite.
               </p>
             )}
+            {inviteGrantsRole && (
+              <p className="mt-1 text-[12px] text-[#999999]">
+                Joining as:{" "}
+                <span className="font-medium text-[#555555] capitalize">{inviteGrantsRole}</span>
+              </p>
+            )}
           </div>
 
           {errors.submit && (
@@ -263,8 +299,9 @@ function SignUpForm() {
               setName(value);
               setErrors((prev) => ({ ...prev, name: "" }));
             }}
+            onBlur={() => markTouched("name")}
             placeholder="Enter your full name"
-            error={errors.name}
+            error={fieldError("name")}
           />
 
           <Field
@@ -276,8 +313,9 @@ function SignUpForm() {
               setEmail(value);
               setErrors((prev) => ({ ...prev, email: "" }));
             }}
+            onBlur={() => markTouched("email")}
             placeholder="you@example.com"
-            error={errors.email}
+            error={fieldError("email")}
             readOnly={Boolean(lockedInviteEmail)}
           />
 
@@ -289,8 +327,9 @@ function SignUpForm() {
               setPassword(value);
               setErrors((prev) => ({ ...prev, password: "" }));
             }}
+            onBlur={() => markTouched("password")}
             placeholder="At least 8 characters"
-            error={errors.password}
+            error={fieldError("password")}
             success={passwordStrong}
             successText="Password length looks good."
           />
@@ -303,8 +342,9 @@ function SignUpForm() {
               setConfirmPassword(value);
               setErrors((prev) => ({ ...prev, confirmPassword: "" }));
             }}
+            onBlur={() => markTouched("confirmPassword")}
             placeholder="Repeat your password"
-            error={errors.confirmPassword}
+            error={fieldError("confirmPassword")}
             success={confirmMatches}
             successText="Passwords match."
           />
@@ -333,6 +373,7 @@ function Field({
   label,
   value,
   onChange,
+  onBlur,
   placeholder,
   error,
   type = "text",
@@ -343,6 +384,7 @@ function Field({
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   placeholder: string;
   error?: string;
   type?: "text" | "email" | "password";
@@ -360,14 +402,17 @@ function Field({
           readOnly={readOnly}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           className={`h-11 w-full rounded-[8px] border bg-transparent px-[14px] pr-10 text-[14px] text-[#111111] outline-none transition ${
-            success
+            error
+              ? "border-[#E0E0E0]"
+              : success
               ? "border-[#22C55E]"
               : "border-[#E0E0E0] focus:border-[#111111]"
           } ${readOnly ? "text-[#555555]" : ""}`}
           placeholder={placeholder}
         />
-        {success && (
+        {success && !error && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#16A34A]">
             <CheckIcon />
           </span>

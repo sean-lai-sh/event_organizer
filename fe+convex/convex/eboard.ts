@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { authComponent, safeGetAuthUser } from "./auth";
+import { components } from "./_generated/api";
 
 export const getCurrentMember = query({
   args: {},
@@ -58,6 +59,39 @@ export const upsertMember = mutation({
       return existing._id;
     }
     return await ctx.db.insert("eboard_members", { ...args, created_at: Date.now() });
+  },
+});
+
+/**
+ * Bootstrap: promote a user to admin by email.
+ * Only succeeds when no active admin exists yet.
+ * Run via: npx convex run eboard:bootstrapAdmin '{"email":"you@example.com"}'
+ */
+export const bootstrapAdmin = mutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const allMembers = await ctx.db.query("eboard_members").collect();
+    const hasAdmin = allMembers.some((m) => m.active && m.role === "admin");
+    if (hasAdmin) throw new Error("An admin already exists. Bootstrap is disabled.");
+
+    const authUser = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+      model: "user",
+      where: [{ field: "email", value: email.trim().toLowerCase() }],
+    });
+    if (!authUser) throw new Error(`No user found with email: ${email}`);
+
+    const existing = allMembers.find((m) => m.userId === authUser._id);
+    if (existing) {
+      await ctx.db.patch(existing._id, { role: "admin", active: true });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("eboard_members", {
+      userId: authUser._id,
+      role: "admin",
+      active: true,
+      created_at: Date.now(),
+    });
   },
 });
 
