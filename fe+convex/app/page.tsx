@@ -8,7 +8,7 @@ import StatsSection from "@/components/landing/StatsSection";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#fafafa] text-[#0a0a0a] [font-family:var(--font-inter),Inter,system-ui,sans-serif]">
+    <main className="min-h-screen bg-[#fafafa] text-[#0a0a0a] font-inter-var">
       <LandingNav />
       <LandingHero />
       <div className="border-t border-[#ebebeb]" />
