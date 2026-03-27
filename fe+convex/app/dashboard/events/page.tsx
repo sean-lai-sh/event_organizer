@@ -54,23 +54,23 @@ export default function EventsPage() {
       }
     >
       <section className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
-        <div className="flex flex-col gap-3 xl:flex-row">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <input
             type="text"
             placeholder="Search events"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] font-normal tracking-[-0.01em] text-[#111111] placeholder:font-normal placeholder:tracking-normal placeholder:text-[#999999] outline-none transition focus:border-[#111111]"
+            className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] font-normal tracking-[-0.01em] text-[#111111] placeholder:font-normal placeholder:tracking-normal placeholder:text-[#999999] outline-none transition focus:border-[#111111] xl:max-w-[340px]"
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 whitespace-nowrap xl:ml-auto xl:overflow-visible">
             {statusOptions.map((status) => (
               <button
                 key={status}
                 onClick={() => setFilter(status)}
-                className={`h-10 rounded-[8px] px-3 text-[12px] font-medium uppercase tracking-[0.04em] transition ${
+                className={`h-8 shrink-0 whitespace-nowrap rounded-full px-3 text-[11px] font-medium tracking-[0.01em] transition-colors duration-150 ${
                   filter === status
-                    ? "border border-[#111111] bg-[#111111] text-[#FFFFFF]"
-                    : "border border-[#E0E0E0] text-[#555555] hover:bg-[#F4F4F4]"
+                    ? "border border-[#111111] bg-[#111111] text-[#FFFFFF] shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
+                    : "border border-[#E0E0E0] bg-[#FAFAFA] text-[#555555] hover:bg-[#F4F4F4] hover:text-[#111111]"
                 }`}
               >
                 {formatStatus(status)}
