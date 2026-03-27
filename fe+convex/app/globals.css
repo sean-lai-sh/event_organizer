@@ -97,6 +97,14 @@ body {
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
 }
 
+.font-inter-var {
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+}
+
+.font-outfit-var {
+  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+}
+
 .auth-root {
   color-scheme: light;
 }
