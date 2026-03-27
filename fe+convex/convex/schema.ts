@@ -75,4 +75,17 @@ export default defineSchema({
     max_uses: v.optional(v.number()),     // set for multi-use link invites; omitted/undefined = single-use
     use_count: v.optional(v.number()),    // tracks how many times a multi-use invite has been used
   }).index("by_code", ["code"]),
+
+  room_availability: defineTable({
+    room: v.string(),              // "Pre-money conference room (fits 12 people)"
+    date: v.string(),              // "2026-03-28"
+    day_of_week: v.string(),       // "Saturday"
+    time_slot: v.string(),         // "10:00 AM"
+    available: v.boolean(),
+    duration_minutes: v.number(),  // 90
+    scraped_at: v.number(),        // Date.now() — when this data was captured
+  })
+    .index("by_room", ["room"])
+    .index("by_date", ["date"])
+    .index("by_room_date", ["room", "date"]),
 });
