@@ -32,7 +32,10 @@ FAKE_THREAD_ID = "test-thread-dev-001"
 MSG_KNOWN = "test-msg-known-001"
 MSG_NET_NEW = "test-msg-netnew-001"
 MSG_WEAK = "test-msg-weak-001"
-ALL_MSG_IDS = [MSG_KNOWN, MSG_NET_NEW, MSG_WEAK]
+MSG_THREAD_FOLLOW = "test-msg-thread-follow-001"
+ALL_MSG_IDS = [MSG_KNOWN, MSG_NET_NEW, MSG_WEAK, MSG_THREAD_FOLLOW]
+
+WEAK_THREAD_ID = "test-thread-weak-001"
 
 WEBHOOK_URL = "https://sean-lai-sh--event-outreach-replies-handle-reply-dev.modal.run"
 
@@ -158,13 +161,13 @@ async def test_net_new_event(reply_state: dict) -> None:
 
 
 async def test_weak_signal(reply_state: dict) -> None:
-    """Step 3 — inbound with weak signal is captured as a contact only, no event created."""
+    """Step 3 — weak signal still creates a draft event + outreach link for thread tracking."""
     async with httpx.AsyncClient(timeout=60) as client:
-        body = await _fire(client, "NET-NEW (weak signal → contact only)", {
+        body = await _fire(client, "NET-NEW (weak signal → draft event for thread tracking)", {
             "event_type": "message.received",
             "message": {
                 "message_id": MSG_WEAK,
-                "thread_id": "test-thread-weak-001",
+                "thread_id": WEAK_THREAD_ID,
                 "from_": f"Sean Lai <{SEAN_EMAIL}>",
                 "to": "events@yourdomain.com",
                 "cc": "",
@@ -173,4 +176,37 @@ async def test_weak_signal(reply_state: dict) -> None:
             },
         })
     assert body.get("path") == "net_new"
-    assert not body.get("event_created"), f"Weak signal should not create event: {body}"
+    assert body.get("event_created"), f"Weak signal should still create a draft tracking event: {body}"
+    assert body.get("event_id"), f"event_id missing from weak signal response: {body}"
+    assert not body.get("strong_signal"), f"Weak signal should not be flagged as strong: {body}"
+    # Track for teardown
+    reply_state["created_event_ids"].append(body["event_id"])
+
+
+async def test_thread_continuation(reply_state: dict) -> None:
+    """Step 4 — follow-up on a weak-signal thread routes to known_thread.
+
+    Depends on test_weak_signal having run first and written the outreach link.
+    Verifies that any reply on an existing thread — even one that started weak —
+    is correctly routed through the known_thread path rather than spawning a
+    duplicate net_new event.
+    """
+    async with httpx.AsyncClient(timeout=60) as client:
+        body = await _fire(client, "THREAD CONTINUATION (follow-up on weak thread → known_thread)", {
+            "event_type": "message.received",
+            "message": {
+                "message_id": MSG_THREAD_FOLLOW,
+                "thread_id": WEAK_THREAD_ID,
+                "from_": f"Sean Lai <{SEAN_EMAIL}>",
+                "to": "events@yourdomain.com",
+                "cc": "",
+                "subject": "Re: Quick hello",
+                "text": (
+                    "Actually, I'd love to do a talk for your club. "
+                    "I'm thinking a 45-minute session on AI tooling — would April work?"
+                ),
+            },
+        })
+    assert body.get("path") == "known_thread", (
+        f"Follow-up on existing thread should route to known_thread, got: {body}"
+    )

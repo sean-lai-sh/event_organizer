@@ -66,10 +66,13 @@ export default defineSchema({
     code: v.string(),
     invited_email: v.optional(v.string()), // optional email lock for this invite
     created_by: v.optional(v.string()), // userId of the eboard member who created it
-    used_by: v.optional(v.string()),    // userId who consumed it
+    used_by: v.optional(v.string()),    // userId who consumed it (single-use only)
     used_email: v.optional(v.string()), // email address used when consuming invite
     used_at: v.optional(v.number()),
     expires_at: v.optional(v.number()),
     created_at: v.number(),
+    grants_role: v.optional(v.string()),  // role to assign on consume ("admin" | "member" etc.)
+    max_uses: v.optional(v.number()),     // set for multi-use link invites; omitted/undefined = single-use
+    use_count: v.optional(v.number()),    // tracks how many times a multi-use invite has been used
   }).index("by_code", ["code"]),
 });
