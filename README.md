@@ -2,11 +2,11 @@
 
 This repo has three main parts:
 
-| Directory | What it is |
-|---|---|
-| `fe+convex/` | Next.js 16 frontend + Convex real-time backend (TypeScript) |
-| `backend/` | Python services — Attio CRM clients and FastMCP server |
-| `agent/` | AI agent / MCP server (Attio CRM tools for outreach automation) |
+| Directory    | What it is                                                      |
+| ------------ | --------------------------------------------------------------- |
+| `fe+convex/` | Next.js 16 frontend + Convex real-time backend (TypeScript)     |
+| `backend/`   | Python services — Attio CRM clients and FastMCP server          |
+| `agent/`     | AI agent / MCP server (Attio CRM tools for outreach automation) |
 
 Secrets are managed via **Doppler** — you will never manually create `.env` files.
 
@@ -16,13 +16,13 @@ Secrets are managed via **Doppler** — you will never manually create `.env` fi
 
 Install these before anything else:
 
-| Tool | Install |
-|---|---|
-| [Node.js 20+](https://nodejs.org) | `brew install node` |
-| [Bun](https://bun.sh) | `curl -fsSL https://bun.sh/install \| bash` |
-| [Python 3.11+](https://python.org) | `brew install python@3.11` |
-| [uv](https://docs.astral.sh/uv/) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| [Doppler CLI](https://docs.doppler.com/docs/install-cli) | `brew install dopplerhq/cli/doppler` |
+| Tool                                                     | Install                                            |
+| -------------------------------------------------------- | -------------------------------------------------- |
+| [Node.js 20+](https://nodejs.org)                        | `brew install node`                                |
+| [Bun](https://bun.sh)                                    | `curl -fsSL https://bun.sh/install \| bash`        |
+| [Python 3.11+](https://python.org)                       | `brew install python@3.11`                         |
+| [uv](https://docs.astral.sh/uv/)                         | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| [Doppler CLI](https://docs.doppler.com/docs/install-cli) | `brew install dopplerhq/cli/doppler`               |
 
 ---
 
@@ -112,13 +112,13 @@ doppler run -- npx @modelcontextprotocol/inspector uv run python agent/mcp_serve
 
 These live in Doppler — do **not** add them to any `.env` file.
 
-| Variable | Used by | Description |
-|---|---|---|
-| `ATTIO_API_KEY` | `backend/`, `agent/` | Attio CRM API token |
-| `BETTER_AUTH_URL` | `fe+convex/` | Base URL for the auth server (e.g. `http://localhost:3000`) |
-| `BETTER_AUTH_SECRET` | `fe+convex/` | Secret key for better-auth session signing |
-| `CONVEX_DEPLOYMENT` | `fe+convex/` | Convex deployment URL (auto-set by `convex dev`) |
-| `ANTHROPIC_API_KEY` | `agent/` | Anthropic API key for AI features |
+| Variable             | Used by              | Description                                                 |
+| -------------------- | -------------------- | ----------------------------------------------------------- |
+| `ATTIO_API_KEY`      | `backend/`, `agent/` | Attio CRM API token                                         |
+| `BETTER_AUTH_URL`    | `fe+convex/`         | Base URL for the auth server (e.g. `http://localhost:3000`) |
+| `BETTER_AUTH_SECRET` | `fe+convex/`         | Secret key for better-auth session signing                  |
+| `CONVEX_DEPLOYMENT`  | `fe+convex/`         | Convex deployment URL (auto-set by `convex dev`)            |
+| `ANTHROPIC_API_KEY`  | `agent/`             | Anthropic API key for AI features                           |
 
 ---
 
@@ -148,7 +148,7 @@ event-organizer/
 │   ├── convex/            # Convex functions (queries, mutations, auth)
 │   │   ├── schema.ts      # Database schema
 │   │   ├── auth.ts        # better-auth integration
-│   │   └── eboard.ts      # Eboard member functions
+│   │   └── eboard.ts      # Eboard member functions`
 │   └── package.json
 ├── backend/
 │   ├── attio/client.py    # Attio CRM API wrapper
