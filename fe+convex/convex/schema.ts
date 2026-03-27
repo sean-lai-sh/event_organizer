@@ -72,7 +72,7 @@ export default defineSchema({
     expires_at: v.optional(v.number()),
     created_at: v.number(),
     grants_role: v.optional(v.string()),  // role to assign on consume ("admin" | "member" etc.)
-    max_uses: v.optional(v.number()),     // set for multi-use link invites; null = single-use
+    max_uses: v.optional(v.number()),     // set for multi-use link invites; omitted/undefined = single-use
     use_count: v.optional(v.number()),    // tracks how many times a multi-use invite has been used
   }).index("by_code", ["code"]),
 });
