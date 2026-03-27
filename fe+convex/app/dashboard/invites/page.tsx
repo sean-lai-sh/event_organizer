@@ -259,7 +259,10 @@ export default function InvitesPage() {
   const [revokeTarget, setRevokeTarget] = useState<{ id: Id<"invites">; label: string } | null>(null);
   const [revoking, setRevoking] = useState(false);
 
-  const allInvites = useQuery(api.invites.list, { includeUsed: true });
+  const allInvites = useQuery(
+    api.invites.list,
+    member?.role === "admin" ? { includeUsed: true } : "skip"
+  );
   const invites = showAll
     ? allInvites
     : allInvites?.filter((i) => inviteStatus(i as InviteRow) === "active");
