@@ -217,7 +217,12 @@ export const revoke = mutation({
     const invite = await ctx.db.get(id);
     if (!invite) throw new Error("Invite not found");
     // For single-use: cannot revoke if already used
-    if (!invite.max_uses && invite.used_at) throw new Error("Cannot revoke a used invite");
+    const isSingleUse = invite.max_uses === undefined;
+    const isUsed =
+      !!invite.used_at || !!(invite as any).used_by || !!(invite as any).used_email;
+    if (isSingleUse && isUsed) {
+      throw new Error("Cannot revoke a used invite");
+    }
 
     await ctx.db.delete(id);
   },
