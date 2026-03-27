@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import { CalendarDays, MapPin } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
+import { Calendar } from "@/components/ui/calendar";
 import { api } from "@/convex/_generated/api";
 
 type EventType = "Speaker Panel" | "Workshop" | "Networking" | "Social";
@@ -40,6 +41,46 @@ const defaultState: FormState = {
   description: "",
   targetingNotes: "",
 };
+
+const readableDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+function parseStoredDate(value: string): Date | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return undefined;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+function formatDateForStorage(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateForDisplay(value: string): string {
+  const parsed = parseStoredDate(value);
+  if (!parsed) {
+    return value;
+  }
+  return readableDateFormatter.format(parsed);
+}
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return <label className="text-[12px] font-medium text-[#555555]">{children}</label>;
@@ -123,12 +164,44 @@ export default function NewEventPage() {
   const createEvent = useMutation(api.events.createEvent);
 
   const [form, setForm] = useState<FormState>(defaultState);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [submittingAction, setSubmittingAction] = useState<null | "create" | "matching">(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
 
   const titleReady = form.title.trim().length > 0;
   const dateReady = form.date.trim().length > 0;
   const hasSignals = form.targetingNotes.trim().length > 0;
+  const selectedDate = parseStoredDate(form.date);
+
+  useEffect(() => {
+    if (!isDatePickerOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!datePickerRef.current) {
+        return;
+      }
+
+      if (!datePickerRef.current.contains(event.target as Node)) {
+        setIsDatePickerOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsDatePickerOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDatePickerOpen]);
 
   const canCreateEvent = titleReady && dateReady;
   const canStartMatching = titleReady;
@@ -151,7 +224,7 @@ export default function NewEventPage() {
 
   const laterMissingItems = checklistItems.filter((item) => item.phase === "later" && !item.done);
 
-  const previewDate = form.date.trim() || "Mar 28, 2026";
+  const previewDate = form.date.trim() ? formatDateForDisplay(form.date.trim()) : "Mar 28, 2026";
   const previewTime =
     form.startTime.trim() || form.endTime.trim()
       ? `${form.startTime.trim() || "TBD"} - ${form.endTime.trim() || "TBD"}`
@@ -277,13 +350,56 @@ export default function NewEventPage() {
           <div className="grid gap-3 md:grid-cols-3 md:gap-2 xl:grid-cols-[340px_220px_220px]">
             <div className="space-y-2">
               <FieldLabel>Date (required)</FieldLabel>
-              <div className="relative">
-                <TextInput
-                  value={form.date}
-                  onChange={(value) => setForm((prev) => ({ ...prev, date: value }))}
-                  placeholder="Select date"
-                />
-                <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#AAAAAA]" />
+              <div ref={datePickerRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsDatePickerOpen((prev) => !prev)}
+                  className="flex h-10 w-full items-center justify-between rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 text-left text-[13px] outline-none transition hover:bg-[#FAFAFA] focus:border-[#111111]"
+                >
+                  <span className={form.date ? "text-[#111111]" : "text-[#CCCCCC]"}>
+                    {form.date ? formatDateForDisplay(form.date) : "Select date"}
+                  </span>
+                  <CalendarDays className="h-4 w-4 text-[#AAAAAA]" />
+                </button>
+                {isDatePickerOpen ? (
+                  <div className="absolute left-0 top-[calc(100%+8px)] z-30 rounded-[10px] border border-[#E0E0E0] bg-[#FFFFFF] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      defaultMonth={selectedDate ?? new Date()}
+                      onSelect={(date) => {
+                        if (!date) {
+                          return;
+                        }
+                        setForm((prev) => ({
+                          ...prev,
+                          date: formatDateForStorage(date),
+                        }));
+                        setIsDatePickerOpen(false);
+                      }}
+                      className="rounded-[8px]"
+                    />
+                    <div className="mt-2 flex items-center justify-between border-t border-[#EBEBEB] pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, date: "" }));
+                          setIsDatePickerOpen(false);
+                        }}
+                        className="text-[12px] font-medium text-[#7B7B7B] transition hover:text-[#111111]"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsDatePickerOpen(false)}
+                        className="text-[12px] font-medium text-[#7B7B7B] transition hover:text-[#111111]"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="space-y-2">
