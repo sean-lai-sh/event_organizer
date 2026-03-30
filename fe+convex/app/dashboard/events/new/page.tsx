@@ -42,7 +42,7 @@ const defaultState: FormState = {
 };
 
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <label className="text-[12px] font-medium text-[#555555]">{children}</label>;
+  return <label className="text-[13px] font-medium text-[#555555]">{children}</label>;
 }
 
 function TextInput({
@@ -59,7 +59,7 @@ function TextInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 text-[13px] text-[#111111] placeholder:text-[#CCCCCC] outline-none transition focus:border-[#111111]"
+      className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 text-[13px] text-[#111111] placeholder:text-[#BBBBBB] outline-none transition focus:border-[#111111]"
     />
   );
 }
@@ -81,7 +81,7 @@ function TextAreaInput({
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
       rows={rows}
-      className="w-full resize-none rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 py-2 text-[13px] text-[#111111] placeholder:text-[#CCCCCC] outline-none transition focus:border-[#111111]"
+      className="w-full resize-none rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 py-2 text-[13px] text-[#111111] placeholder:text-[#BBBBBB] outline-none transition focus:border-[#111111]"
     />
   );
 }
@@ -335,7 +335,7 @@ export default function NewEventPage() {
         </div>
 
         <aside className="order-1 space-y-3 xl:order-2">
-          <div className="rounded-[12px] border border-[#E0E0E0] bg-[#FAFAFA] p-3">
+          <div className="rounded-[14px] border border-[#E0E0E0] bg-[#FAFAFA] p-3">
             <h3 className="text-[12px] font-semibold text-[#111111]">Readiness Checklist ({form.eventType})</h3>
             {checklistItems.map((item) => (
               <p key={item.key} className="mt-1 text-[11px] font-medium text-[#7B7B7B]">
@@ -344,7 +344,7 @@ export default function NewEventPage() {
             ))}
           </div>
 
-          <div className="rounded-[12px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
+          <div className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
             <div className="mb-3 flex items-center gap-2">
               <span className="rounded-[4px] bg-[#F4F4F4] px-2 py-[2px] text-[10px] font-semibold text-[#3B3B3B]">
                 {form.eventType}

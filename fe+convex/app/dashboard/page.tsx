@@ -38,9 +38,9 @@ export default function DashboardPage() {
         {kpis.map((k) => (
           <div
             key={k.label}
-            className="flex flex-col gap-2 rounded-[18px] border border-[#e8e8e8] bg-[#f4f4f4] p-4"
+            className="flex flex-col gap-2 rounded-[14px] border border-[#E0E0E0] bg-[#F4F4F4] p-4"
           >
-            <span className="font-[var(--font-outfit)] text-[34px] font-light leading-none tracking-[-0.04em] text-[#1f1f1f]">
+            <span className="font-[var(--font-geist-sans)] text-[34px] font-light leading-none tracking-[-0.04em] text-[#1f1f1f]">
               {k.value}
             </span>
             <span className="text-[13px] font-medium text-[#767676]">{k.label}</span>
@@ -59,12 +59,12 @@ export default function DashboardPage() {
               View all
             </Link>
           </div>
-          <div className="overflow-hidden rounded-[12px] border border-[#EBEBEB] bg-white">
+          <div className="overflow-hidden rounded-[14px] border border-[#EBEBEB] bg-white">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#EBEBEB] bg-[#F7F7F7]">
+                <tr className="border-b border-[#EBEBEB] bg-[#F4F4F4]">
                   {["Event", "Type", "Date", "Status"].map((h) => (
-                    <th key={h} className="h-9 px-4 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[#999999]">
+                    <th key={h} className="h-10 px-4 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[#6B6B6B]">
                       {h}
                     </th>
                   ))}
@@ -86,7 +86,7 @@ export default function DashboardPage() {
 
         {/* Sidebar */}
         <div className="flex flex-col gap-3">
-          <div className="rounded-[12px] border border-[#EBEBEB] bg-white p-4">
+          <div className="rounded-[14px] border border-[#EBEBEB] bg-white p-4">
             <p className="text-[12px] font-semibold uppercase tracking-[0.07em] text-[#999999]">Inbox</p>
             <div className="mt-3 space-y-2">
               <div className="flex items-center justify-between text-[13px]">
@@ -100,7 +100,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-[12px] border border-[#EBEBEB] bg-white p-4">
+          <div className="rounded-[14px] border border-[#EBEBEB] bg-white p-4">
             <p className="text-[12px] font-semibold uppercase tracking-[0.07em] text-[#999999]">Next actions</p>
             <ol className="mt-3 space-y-2">
               {[

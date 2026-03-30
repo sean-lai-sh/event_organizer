@@ -76,7 +76,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-[#FAFAFA] text-[#111111]">
-      <aside className="w-64 border-r border-[#EBEBEA] bg-[#FAFAFA]">
+      <aside className="w-64 border-r border-[#EBEBEB] bg-[#FAFAFA]">
         <div className="flex h-full flex-col">
           <div className="flex h-[72px] items-center gap-3 border-b border-[#EBEBEB] px-5">
             <div className="h-7 w-7 rounded-[12px] bg-[#0A0A0A]" />
@@ -112,7 +112,7 @@ export default function DashboardLayout({
             </div>
           </nav>
 
-          <div className="border-t border-[#EBEBEA] px-4 py-4">
+          <div className="border-t border-[#EBEBEB] px-4 py-4">
             <div className="mb-3 border-b border-[#EBEBEB] pb-3 text-sm">
               <p className="text-[13px] font-medium text-[#111111]">{session.user.name}</p>
               <p className="text-[12px] text-[#7B7B7B]">{session.user.email}</p>

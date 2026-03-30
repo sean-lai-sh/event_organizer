@@ -215,7 +215,7 @@ function AdminRequired() {
 
 function InvitesSkeleton() {
   return (
-    <div className="overflow-hidden rounded-[10px] border border-[#E0E0E0] bg-white">
+    <div className="overflow-hidden rounded-[14px] border border-[#E0E0E0] bg-white">
       <div className="border-b border-[#E0E0E0] px-3 py-2.5">
         <div className="flex gap-6">
           <Skeleton className="h-4 w-8" />
@@ -428,7 +428,7 @@ export default function InvitesPage() {
                       onChange={(e) => { setFormEmail(e.target.value); setFormError(""); }}
                       placeholder="member@example.com"
                       autoFocus
-                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[14px] text-[14px] text-[#111111] placeholder:text-[#BBBBBB] outline-none transition focus:border-[#111111]"
+                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] text-[#111111] placeholder:text-[#BBBBBB] outline-none transition focus:border-[#111111]"
                     />
                   </div>
                   <label className="flex cursor-pointer items-center gap-2.5">
@@ -448,7 +448,7 @@ export default function InvitesPage() {
                     <select
                       value={linkRole}
                       onChange={(e) => setLinkRole(e.target.value)}
-                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
+                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
                     >
                       <option value="member">Member</option>
                       <option value="admin">Admin</option>
@@ -462,7 +462,7 @@ export default function InvitesPage() {
                       required
                       value={maxUses}
                       onChange={(e) => { setMaxUses(e.target.value); setFormError(""); }}
-                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
+                      className="h-11 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] text-[#111111] outline-none transition focus:border-[#111111]"
                     />
                   </div>
                 </TabsContent>
@@ -522,7 +522,7 @@ export default function InvitesPage() {
                   No invites yet — create one to onboard your first member.
                 </p>
               ) : (
-                <div className="overflow-hidden rounded-[10px] border border-[#E0E0E0] bg-white">
+                <div className="overflow-hidden rounded-[14px] border border-[#E0E0E0] bg-white">
                   <Table>
                     <TableHeader>
                       <TableRow className="border-b border-[#E0E0E0]">
