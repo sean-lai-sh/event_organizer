@@ -65,8 +65,8 @@ These rules are the source of truth for future implementation:
 
 ### Attio client and agent runtime
 
-- `backend/attio/client.py` still flattens and assumes non-existent `people` attributes such as `contact_source`, `outreach_status`, and `enrichment_status`.
-- `agent/tools.py` still queries and writes those non-existent `people` fields.
+- `agent/helper/attio.py` still flattens and assumes non-existent `people` attributes such as `contact_source`, `outreach_status`, and `enrichment_status`.
+- `agent/helper/tools.py` still queries and writes those non-existent `people` fields.
 - `agent/mcp_server.py` still exposes an MCP schema where workflow state lives on `people`.
 - `agent/match.py` and `agent/outreach.py` still depend on `people`-level workflow fields and therefore cannot comply with the live Attio model.
 
@@ -209,7 +209,7 @@ Use the live status pipeline for outbound work:
 
 ## Required Runtime Changes
 
-### `backend/attio/client.py`
+### `agent/helper/attio.py`
 
 Implement Attio list-entry support for `speakers`:
 

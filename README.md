@@ -1,12 +1,11 @@
 # Event Organizer — Dev Setup Guide
 
-This repo has three main parts:
+This repo has two main runtime areas:
 
 | Directory | What it is |
 |---|---|
-| `fe+convex/` | Next.js 16 frontend + Convex real-time backend (TypeScript) |
-| `backend/` | Python services — Attio CRM clients and FastMCP server |
-| `agent/` | AI agent / MCP server (Attio CRM tools for outreach automation) |
+| `fe+convex/` | Next.js 16 frontend + Convex backend (TypeScript) |
+| `agent/` | Python agent jobs, Attio/Convex helpers, and the FastMCP server |
 
 Secrets are managed via **Doppler** — you will never manually create `.env` files.
 
@@ -101,12 +100,12 @@ doppler run -- npx convex dev --once  # deploy schema + functions once
 
 ---
 
-## 3. Backend / Agent (`backend/`, `agent/`)
+## 3. Agent (`agent/`)
 
 ### Install Python dependencies
 
 ```bash
-cd backend
+cd agent
 uv sync
 ```
 
@@ -129,11 +128,13 @@ These live in Doppler — do **not** add them to any `.env` file.
 
 | Variable | Used by | Description |
 |---|---|---|
-| `ATTIO_API_KEY` | `backend/`, `agent/` | Attio CRM API token |
+| `ATTIO_API_KEY` | `agent/` | Attio CRM API token |
 | `BETTER_AUTH_URL` | `fe+convex/` | Base URL for the auth server (e.g. `http://localhost:3000`) |
 | `BETTER_AUTH_SECRET` | `fe+convex/` | Secret key for better-auth session signing |
 | `CONVEX_DEPLOYMENT` | `fe+convex/` | Convex deployment URL (auto-set by `convex dev`) |
 | `ANTHROPIC_API_KEY` | `agent/` | Anthropic API key for AI features |
+
+The canonical local-dev path is Doppler-injected env vars. Some agent modules still contain legacy dotenv/env-name fallbacks that should be normalized in code; use the Doppler-backed variables above as the source of truth.
 
 ---
 
@@ -165,14 +166,12 @@ event-organizer/
 │   │   ├── auth.ts        # better-auth integration
 │   │   └── eboard.ts      # Eboard member functions
 │   └── package.json
-├── backend/
-│   ├── attio/client.py    # Attio CRM API wrapper
-│   ├── models/contact.py  # Pydantic data models
-│   └── pyproject.toml
 ├── agent/
+│   ├── helper/attio.py    # Attio API wrapper and record flattening
+│   ├── helper/tools.py    # Shared Attio and Convex helpers
 │   ├── mcp_server.py      # FastMCP server (Attio CRM tools)
 │   ├── outreach.py        # Outreach automation
-│   └── tools.py           # Agent tool definitions
+│   └── pyproject.toml
 └── PLAN.md                # Architecture decisions
 ```
 

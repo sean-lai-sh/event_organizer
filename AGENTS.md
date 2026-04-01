@@ -43,8 +43,8 @@ Convex is not the source of truth for identity or speaker workflow fields that a
 
 Python agent code coordinates the two systems.
 
-- `backend/attio/` wraps Attio API access.
-- `agent/tools.py` contains shared Attio and Convex helpers.
+- `agent/helper/attio.py` wraps Attio API access.
+- `agent/helper/tools.py` contains shared Attio and Convex helpers.
 - `agent/match.py` handles candidate selection.
 - `agent/outreach.py` handles outbound sends.
 - `agent/reply_handler.py` handles inbound email processing.
