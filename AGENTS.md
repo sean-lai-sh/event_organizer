@@ -1,11 +1,12 @@
 # Event Organizer Agent Guide
 
-This file explains how the repo's live data models and external sources interact.
+This file explains how the repo's live runtime, data models, and external systems interact in practice.
 
 ## Canonical Docs
 
-- `PLAN.md` is the source of truth for data contracts and compliance rules.
-- `AGENTS.md` is the operator guide for how systems interact in practice.
+- `PLAN.md` is the source of truth for architecture, data contracts, and compliance rules.
+- `AGENTS.md` is the operator guide for how those systems are executed in practice.
+- `IMPLEMENTATION.md` is the active work breakdown for the agent-first MVP.
 - `DESIGN.md` is the source of truth for frontend layout and visual consistency.
 - `README.md` is setup and local-dev documentation.
 
@@ -34,19 +35,47 @@ Convex is the operational application database.
 - `contact_assignments` stores internal ownership history.
 - `inbound_receipts` stores webhook dedupe state.
 - `invites` stores invite-code access control for onboarding.
+- `agent_threads` stores conversation shells.
+- `agent_messages` stores normalized conversation messages.
+- `agent_runs` stores normalized run lifecycle records.
+- `agent_artifacts` stores renderable agent outputs.
+- `agent_approvals` stores approval gates and decisions.
+- `agent_context_links` stores links between conversations and product entities.
 
 Convex is not the source of truth for identity or speaker workflow fields that already live in Attio.
+Convex is also not the source of truth for agent orchestration policy.
 
 ### Agent Runtime
 
-Python agent code coordinates the two systems.
+Modal-hosted Python agent code coordinates the systems and is the authoritative execution layer.
 
-- `backend/attio/` wraps Attio API access.
-- `agent/tools.py` contains shared Attio and Convex helpers.
+- `agent/helper/attio.py` wraps Attio API access.
+- `agent/helper/tools.py` contains shared Attio and Convex helpers.
 - `agent/match.py` handles candidate selection.
 - `agent/outreach.py` handles outbound sends.
 - `agent/reply_handler.py` handles inbound email processing.
 - `agent/mcp_server.py` exposes CRM tools to other agents.
+- Modal-hosted conversational endpoints own thread runs, approvals, artifacts, and policy.
+- Anthropic Agent SDK is used inside Modal as the harness layer only.
+
+### Thin Clients
+
+Next.js and Discord are thin clients over the same Modal runtime.
+
+They may:
+
+- create or resume threads
+- start runs
+- render streamed output
+- render artifacts and approvals
+- submit approval decisions
+
+They must not:
+
+- choose tools locally
+- implement guardrails locally
+- bypass Modal approval policy
+- become independent orchestration paths
 
 ## Data Model Responsibilities
 
@@ -111,6 +140,30 @@ Current intended meaning:
 - `inbound_state` = internal processing state only
 
 `inbound_state` must never replace `speakers.status`.
+
+#### `agent_threads`
+
+Stores durable thread identity for web and Discord conversations.
+
+#### `agent_messages`
+
+Stores normalized message content for rendering and continuation.
+
+#### `agent_runs`
+
+Stores normalized run status and step metadata.
+
+#### `agent_artifacts`
+
+Stores renderable outputs such as tables, metrics, timelines, checklists, reports, charts, and link bundles.
+
+#### `agent_approvals`
+
+Stores pending and completed approvals for Modal-side actions.
+
+#### `agent_context_links`
+
+Stores optional links between threads/runs and events, speakers, people, or communication threads.
 
 #### `eboard_members`
 
@@ -191,6 +244,14 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 
 ## Interaction Patterns
 
+### Conversational run
+
+1. A web or Discord client sends a thread action to Modal.
+2. Modal assembles context, runs the Anthropic Agent SDK harness, and decides tool usage.
+3. If a write or send action is required, Modal creates an approval record and pauses the run.
+4. The client renders the normalized run, message, artifact, and approval state from Convex.
+5. On approval, the client submits the decision back to Modal and the run resumes.
+
 ### Outbound matching
 
 1. Read event context from Convex `events`.
@@ -229,7 +290,23 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 - Do not treat Convex `inbound_state` as the user-visible workflow state.
 - Do not write Attio select or status values using guessed labels.
 - Do not update assignment or ownership in Convex without also updating the corresponding Attio speaker entry when that path is implemented.
+- Do not move tool policy or guardrails into Next.js or Discord.
+- Do not expose raw Anthropic Agent SDK event payloads as product contracts.
 - Do not introduce a second document that competes with `PLAN.md` as the data-contract source of truth.
+
+## MVP Scope Guardrail
+
+The active milestone is the agent-first MVP.
+
+Only work that directly advances one of these should remain in active scope:
+
+- `/agent` workspace
+- Modal runtime
+- Anthropic harness integration
+- approvals and artifacts
+- Discord parity on the same backend
+- scoped context launchers
+- required architecture-doc updates
 
 ## Frontend Design System
 
