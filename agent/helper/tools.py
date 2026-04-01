@@ -186,6 +186,35 @@ class ConvexClient:
     async def delete_inbound_receipt(self, message_id: str) -> None:
         await self.mutation("outreach:deleteInboundReceipt", {"message_id": message_id})
 
+    # ── Attendance ──
+
+    async def get_attendance_trends(self) -> list[dict]:
+        return await self.query("attendance:getAttendanceTrends", {})
+
+    async def get_attendee_profiles(self, min_events: int = 0) -> list[dict]:
+        return await self.query("attendance:getAttendeeProfiles", {"min_events": min_events})
+
+    async def get_attendance_stats(self) -> dict:
+        return await self.query("attendance:getAttendanceStats", {})
+
+    async def save_insight(
+        self,
+        *,
+        insight_text: str,
+        data_snapshot: str,
+        event_count: int,
+        attendee_count: int,
+    ) -> Any:
+        return await self.mutation(
+            "attendance:saveInsight",
+            {
+                "insight_text": insight_text,
+                "data_snapshot": data_snapshot,
+                "event_count": event_count,
+                "attendee_count": attendee_count,
+            },
+        )
+
     # ── Assignments / Eboard ──
 
     async def get_active_eboard_members(self) -> list[dict]:

@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import DashboardNav from "@/components/DashboardNav";
 import {
+  BarChart3,
   CalendarDays,
   LayoutDashboard,
   Mail,
@@ -35,6 +36,11 @@ const navLinks = [
     href: "/dashboard/communications",
     label: "Communications",
     icon: Mail,
+  },
+  {
+    href: "/dashboard/data",
+    label: "Data",
+    icon: BarChart3,
   },
   {
     href: "/dashboard/invites",

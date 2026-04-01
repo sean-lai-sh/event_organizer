@@ -5,6 +5,7 @@ This document replaces the previous legacy CRM plan. As of March 11, 2026, the l
 - Attio `people` records are identity records.
 - Attio `speakers` list entries are workflow records.
 - Convex stores events, thread links, internal ownership, and retry-safe processing state.
+- Convex also stores attendance check-ins and generated attendance insights for `/dashboard/data`.
 
 ## Live Attio Contract
 
@@ -102,6 +103,38 @@ Keep the table as the event-specific linkage layer, but extend it:
 - treat `inbound_state` as internal processing state only; it must not replace or drift from `speakers.status`
 
 If a later migration is acceptable, rename `attio_record_id` to `attio_people_record_id`.
+
+### `attendance`
+
+Add a dedicated attendance table for analytics:
+
+- `event_id: Id<"events">`
+- `email: string`
+- `name?: string`
+- `checked_in_at: number`
+- `source?: string`
+
+Behavioral contract:
+
+- deduplicate by `(event_id, email)`
+- normalize emails to lowercase before writes
+- treat this as the canonical source for attendance analytics and attendee profile derivation
+
+### `attendance_insights`
+
+Add an append-only table for AI-generated summaries:
+
+- `generated_at: number`
+- `insight_text: string`
+- `data_snapshot?: string`
+- `event_count: number`
+- `attendee_count: number`
+
+Behavioral contract:
+
+- keep historical rows for auditability
+- frontend reads the most recent row reactively
+- `data_snapshot` should store the serialized analytics context sent to the model
 
 ### `eboard_members`
 

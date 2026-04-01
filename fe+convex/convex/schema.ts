@@ -88,4 +88,23 @@ export default defineSchema({
     .index("by_room", ["room"])
     .index("by_date", ["date"])
     .index("by_room_date", ["room", "date"]),
+
+  attendance: defineTable({
+    event_id: v.id("events"),
+    email: v.string(),
+    name: v.optional(v.string()),
+    checked_in_at: v.number(),
+    source: v.optional(v.string()),
+  })
+    .index("by_event", ["event_id"])
+    .index("by_email", ["email"])
+    .index("by_event_email", ["event_id", "email"]),
+
+  attendance_insights: defineTable({
+    generated_at: v.number(),
+    insight_text: v.string(),
+    data_snapshot: v.optional(v.string()),
+    event_count: v.number(),
+    attendee_count: v.number(),
+  }),
 });
