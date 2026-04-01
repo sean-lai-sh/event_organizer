@@ -1,315 +1,474 @@
-# Attio + Convex Compliance Plan
+# Agent-First Architecture Plan
 
-This document replaces the previous legacy CRM plan. As of March 11, 2026, the live system is Attio + Convex:
+`PLAN.md` is the source of truth for system contracts, ownership rules, and compliance requirements.
 
-- Attio `people` records are identity records.
-- Attio `speakers` list entries are workflow records.
-- Convex stores events, thread links, internal ownership, and retry-safe processing state.
-- Convex also stores attendance check-ins and generated attendance insights for `/dashboard/data`.
+If runtime behavior, data contracts, or ownership rules change, update this file first and keep `AGENTS.md` aligned in the same change.
 
-## Live Attio Contract
+## Product Direction
 
-### `people` object
+The active product direction is an agent-first MVP:
 
-Use `people` for identity only:
+- `/agent` is the default authenticated workspace
+- dashboard routes remain as structured drill-down tools
+- Modal is the execution authority for all agent logic
+- Convex persists product state and normalized agent interaction history
+- Attio remains the CRM system of record
+- Discord is a second client of the same agent runtime
+
+The web app and Discord client must never become independent orchestration layers.
+
+## System Ownership
+
+### Attio
+
+Attio is the CRM system of record.
+
+- `people` is the identity layer
+- `speakers` is the workflow layer
+- Attio notes may be attached to the parent `people` record for audit history
+
+Do not store speaker workflow state on `people`.
+
+### Convex
+
+Convex is the operational application database and product query layer.
+
+Existing business tables:
+
+- `events`
+- `event_outreach`
+- `eboard_members`
+- `contact_assignments`
+- `inbound_receipts`
+- `invites`
+
+Agent-first persistence tables to add:
+
+- `agent_threads`
+- `agent_messages`
+- `agent_runs`
+- `agent_artifacts`
+- `agent_approvals`
+- `agent_context_links`
+
+Convex stores normalized thread, run, artifact, and approval history for product rendering and continuation.
+Convex is not the source of truth for agent execution policy.
+
+### Modal Runtime
+
+Modal is the authoritative execution plane for all agent behavior.
+
+The Modal runtime owns:
+
+- prompt assembly
+- model execution
+- Anthropic Agent SDK harness lifecycle
+- tool selection and tool execution
+- MCP access
+- approval gating
+- guardrails and policy enforcement
+- artifact generation
+- run state transitions
+
+Next.js and Discord may proxy authenticated requests, but they must not make execution decisions locally.
+
+### Anthropic Agent SDK
+
+The Anthropic Agent SDK is the runtime harness inside Modal.
+
+Use it for:
+
+- run orchestration
+- streaming assistant output
+- tool loop management
+- step tracing
+- handoff between model output, tool execution, and approval pauses
+
+Do not treat the SDK as the business-logic layer.
+
+Repo-specific logic must remain in local modules:
+
+- Attio wrappers
+- Convex synchronization
+- MCP adapters
+- artifact normalization
+- approval policy and risk classification
+
+Application code should depend on an internal runtime adapter, not directly on SDK-specific primitives across the repo.
+
+## Canonical Agent API
+
+Modal exposes the canonical agent API surface:
+
+- `POST /agent/threads`
+  - create or resume a thread with optional context
+- `GET /agent/threads/:id`
+  - return normalized thread, message, artifact, and approval state
+- `POST /agent/runs`
+  - start a run for a thread
+- `GET /agent/runs/:id/stream`
+  - stream assistant output, tool activity, and artifact events
+- `POST /agent/approvals/:id`
+  - approve or reject a pending action
+
+Implementation rules:
+
+- Modal remains authoritative for run lifecycle and approval state
+- Convex stores synchronized normalized records for UI and history
+- clients render state; they do not decide state
+
+## Agent-First UI Contract
+
+The authenticated app should converge on this shape:
+
+- `/agent` as primary landing route
+- left rail for threads and recent work
+- center conversation timeline for streaming responses and approvals
+- right artifact canvas for rendered outputs
+
+Scoped launchers must exist from:
+
+- events
+- speakers
+- communications
+
+These launchers may open the full `/agent` route or a scoped modal entrypoint, but they must pass context into the same shared thread/run model.
+
+## Attio Contract
+
+### `people`
+
+Use `people` for identity and profile data only:
 
 - `record_id`
 - `name`
 - `email_addresses`
 - `phone_numbers`
-- standard profile fields such as `company`, `job_title`, `description`
+- standard fields such as `company`, `job_title`, and `description`
 
-Verified live: `people` does not currently expose the old pseudo-schema fields `outreach_status`, `contact_source`, `assigned_members`, `enrichment_status`, `relationship_stage`, `contact_type`, `career_profile`, or `last_agent_action_at`.
-
-### `speakers` list
-
-Live list:
-
-- name: `Speakers-Mentors`
-- api slug: `speakers`
-- parent object: `people`
-
-Verified writable list attributes:
-
-| Attribute         | Type             | Live values / notes                                                                                        |
-| ----------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `status`          | status           | `Prospect`, `Outreach (Cold)`, `Outreach (Warm)`, `Engaged`, `Confirmed`, `Spoke`, `Mentoring`, `Declined` |
-| `speaker_info`    | text             | summary text                                                                                               |
-| `work_history`    | text             | JSON stored as text                                                                                        |
-| `previous_events` | text             | JSON array of Convex event ids stored as text                                                              |
-| `managed_poc`     | record-reference | references `people`; live field is currently multiselect                                                   |
-| `assigned`        | text             | intended to hold Convex `eboard_members._id`                                                               |
-| `source`          | select           | `warm`, `alumni`, `in bound`, `event`, `outreach`                                                          |
-| `active_event_id` | text             | current Convex event id                                                                                    |
-
-## Compliance Rules
-
-These rules are the source of truth for future implementation:
-
-1. Do not create or rely on Attio workflow fields on `people`.
-2. Do not create an Attio `inbound_state` field. Speaker workflow lives in `speakers.status`.
-3. Always write Attio select/status fields using the exact live option titles or resolved option ids.
-4. `speakers.assigned` stores the Convex `eboard_members._id` as text.
-5. `speakers.managed_poc` stores the Attio `people.record_id` of the owning eboard member.
-6. Because `managed_poc` is currently multiselect in Attio, application code must write at most one record reference until the field is reconfigured.
-7. `speakers.previous_events` remains a JSON array of Convex event ids serialized as text.
-8. `speakers.active_event_id` stores the current Convex event id.
-9. There must be at most one active `speakers` entry per parent `people.record_id`. Code should enforce this even though Attio does not currently guarantee it.
-10. Attio notes may still be attached to the parent `people` record for audit history.
-
-## Current Contradictions
-
-### Documentation
-
-- The previous plan described a legacy pre-Attio model and no longer matches the repo or the live Attio workspace.
-
-### Attio client and agent runtime
-
-- `agent/helper/attio.py` still flattens and assumes non-existent `people` attributes such as `contact_source`, `outreach_status`, and `enrichment_status`.
-- `agent/helper/tools.py` still queries and writes those non-existent `people` fields.
-- `agent/mcp_server.py` still exposes an MCP schema where workflow state lives on `people`.
-- `agent/match.py` and `agent/outreach.py` still depend on `people`-level workflow fields and therefore cannot comply with the live Attio model.
-
-### Convex model
-
-- `event_outreach` stores only `attio_record_id`, which currently means the parent `people.record_id`. It does not store the Attio `speakers` list entry id required for direct list-entry updates.
-- `event_outreach.inbound_state` is still used as the operational workflow state in code, while the agreed Attio workflow field is `speakers.status`.
-- `eboard_members` does not store the Attio `people.record_id` needed to populate `speakers.managed_poc`.
-- `contact_assignments` is keyed by `attio_record_id` rather than a `speakers` list entry id. This only remains safe if the system enforces one speaker entry per person.
-
-### Runtime behavior
-
-- `agent/reply_handler.py` upserts an Attio `people` record, but it does not ensure a `speakers` list entry exists and it never writes `status`, `source`, `active_event_id`, `assigned`, `managed_poc`, or `previous_events`.
-- Webhook dedupe is recorded before Attio/Convex writes complete, so a partial failure can permanently suppress retries.
-
-### Live Attio option mismatch
-
-- Historical code values such as `warm_intro`, `agent_outreach`, and `inbound` do not match the live `speakers.source` options `warm`, `outreach`, and `in bound`.
-- Historical code values such as `agent_active` do not match the live `speakers.status` pipeline.
-
-## Target Convex Contract
-
-### `events`
-
-Keep the existing event table. No schema change is required here for Attio alignment.
-
-### `event_outreach`
-
-Keep the table as the event-specific linkage layer, but extend it:
-
-- keep `attio_record_id` as the parent `people.record_id` for now to avoid a breaking migration
-- add `attio_speakers_entry_id` as the durable Attio list-entry id
-- keep `response` as event-specific reply state
-- treat `inbound_state` as internal processing state only; it must not replace or drift from `speakers.status`
-
-If a later migration is acceptable, rename `attio_record_id` to `attio_people_record_id`.
-
-### `attendance`
-
-Add a dedicated attendance table for analytics:
-
-- `event_id: Id<"events">`
-- `email: string`
-- `name?: string`
-- `checked_in_at: number`
-- `source?: string`
-
-Behavioral contract:
-
-- deduplicate by `(event_id, email)`
-- normalize emails to lowercase before writes
-- treat this as the canonical source for attendance analytics and attendee profile derivation
-
-### `attendance_insights`
-
-Add an append-only table for AI-generated summaries:
-
-- `generated_at: number`
-- `insight_text: string`
-- `data_snapshot?: string`
-- `event_count: number`
-- `attendee_count: number`
-
-Behavioral contract:
-
-- keep historical rows for auditability
-- frontend reads the most recent row reactively
-- `data_snapshot` should store the serialized analytics context sent to the model
-
-### `eboard_members`
-
-Add:
-
-- `attio_people_record_id: string | undefined`
-
-Requirement:
-
-- every active eboard member that can own speaker communication must have a corresponding Attio `people` record
-
-### `contact_assignments`
-
-Short term:
-
-- current person-based keying may remain if one `speakers` entry per parent person is enforced
-
-Long term if duplicates are allowed:
-
-- migrate assignments to key by `attio_speakers_entry_id`
-
-### `inbound_receipts`
-
-Change behavior, not just schema:
-
-- write the receipt only after Attio + Convex updates succeed
-- or add processing status so failed attempts are retryable
-
-### `invites`
-
-Keep invite onboarding logic in Convex with explicit email binding support:
-
-- `code` remains the one-time onboarding token
-- `invited_email` optionally binds an invite to a single email address
-- `used_email` records the email that consumed the invite
-- `used_by` is best-effort and may be unset if consume runs before session hydration
-
-Behavioral contract:
-
-- validation and consume must reject mismatched `invited_email`
-- consume must not rely exclusively on an authenticated session immediately after account creation
-
-## Status and Source Mapping
-
-### Inbound classification -> `speakers.status`
-
-| Agent classification                    | Required `speakers.status` |
-| --------------------------------------- | -------------------------- |
-| `ACCEPTED`                              | `Confirmed`                |
-| `DECLINED`                              | `Declined`                 |
-| `QUESTION`                              | `Engaged`                  |
-| `NEEDS_HUMAN`                           | `Engaged`                  |
-| net-new inbound with no confirmed event | `Prospect`                 |
-
-### Workflow-origin -> `speakers.source`
-
-| Workflow origin                   | Required `speakers.source` |
-| --------------------------------- | -------------------------- |
-| cold outreach seeded by the agent | `outreach`                 |
-| warm intro                        | `warm`                     |
-| inbound email                     | `in bound`                 |
-| sourced from past event activity  | `event`                    |
-| alumni sourcing                   | `alumni`                   |
-
-### Outbound stage initialization
-
-Use the live status pipeline for outbound work:
-
-- cold outbound send -> `Outreach (Cold)`
-- warm intro outreach -> `Outreach (Warm)`
-- once a real conversation is active -> `Engaged`
-
-## Required Runtime Changes
-
-### `agent/helper/attio.py`
-
-Implement Attio list-entry support for `speakers`:
-
-- find a speaker entry by parent `people.record_id`
-- create a speaker entry from a person record
-- update list-entry attributes
-- append or replace `previous_events`
-- add dedicated flatteners for:
-  - Attio `people` records
-  - Attio `speakers` list entries
-
-Do not keep a generic flattener that silently assumes workflow fields exist on `people`.
-
-### `agent/tools.py`
-
-Refactor helpers so that:
-
-- identity upserts continue to target `people`
-- workflow reads/writes target `speakers`
-- assignment sync writes both:
-  - Convex assignment history
-  - `speakers.assigned`
-- owner sync writes `speakers.managed_poc` from `eboard_members.attio_people_record_id`
-- outreach helpers stop filtering on non-existent `enrichment_status` until a real enrichment field exists in Attio
-
-### `agent/reply_handler.py`
-
-Known-thread path must:
-
-- load the linked speaker entry from `event_outreach.attio_speakers_entry_id`
-- update `speakers.status`
-- update `speakers.active_event_id`
-- append the event id to `speakers.previous_events` when appropriate
-- sync `assigned` and `managed_poc`
-- only write inbound dedupe after successful completion
-
-Net-new path must:
-
-- upsert the sender in `people`
-- ensure exactly one `speakers` entry exists
-- set `source` to `in bound`
-- set `status` using the mapping table above
-- set `active_event_id` when a Convex event is created
-- persist `attio_speakers_entry_id` on `event_outreach`
-
-### `agent/match.py`
-
-Move matching input away from pseudo-fields on `people`:
-
-- read candidate workflow rows from `speakers`
-- join each speaker entry to its parent `people` identity record
-- use `speaker_info`, `work_history`, and parent identity data as ranking context
-
-### `agent/outreach.py`
-
-Before send:
-
-- resolve the speaker entry for each parent person
-- ensure `event_outreach` has both Attio ids
-
-After send:
-
-- set `speakers.status` to `Outreach (Cold)` or `Outreach (Warm)` as appropriate
-- set `speakers.active_event_id`
-- sync `assigned` if ownership is known
-- keep note logging on the parent `people` record
-
-### `agent/mcp_server.py`
-
-Expose the real Attio model:
-
-- `people` tools for identity reads/writes
-- `speakers` tools for workflow reads/writes
-
-Deprecate or remove tools that imply these `people` fields exist:
+Do not assume `people` has workflow fields such as:
 
 - `outreach_status`
 - `contact_source`
 - `assigned_members`
 - `enrichment_status`
-- any pseudo-field equivalent of `inbound_state`
+- `relationship_stage`
+- `contact_type`
+- `career_profile`
+- `last_agent_action_at`
 
-## Verification
+### `speakers`
 
-After the implementation changes land:
+Use `speakers` list entries for outreach and speaker workflow:
 
-1. Re-run Attio validation against the live workspace.
-2. Add an end-to-end test for known-thread inbound updating an existing speaker entry.
-3. Add an end-to-end test for net-new inbound creating a `people` record plus `speakers` entry.
-4. Add a retry test covering partial failure before dedupe is committed.
-5. Add a regression test proving that the runtime writes the exact live Attio option titles:
-   - `in bound`
-   - `warm`
-   - `outreach`
-   - `Engaged`
-   - `Confirmed`
-   - `Declined`
+- `status`
+- `source`
+- `active_event_id`
+- `assigned`
+- `managed_poc`
+- `previous_events`
+- `speaker_info`
+- `work_history`
 
-Operational Guarantees
+Live rules:
 
-1. The Attio + Convex integration must maintain the following guarantees at runtime:
-2. Identity and workflow separation people records remain identity-only.
-3. speakers list entries remain the sole location for workflow state.
+- `status` is the speaker workflow state
+- `source` must use the exact live Attio option titles
+- `assigned` stores Convex `eboard_members._id` as text
+- `managed_poc` stores an Attio `people.record_id` for the owning eboard member
+- `previous_events` is a JSON array of Convex event ids serialized as text
+- `active_event_id` is the current Convex event id as text
+
+## Convex Contract
+
+### Existing tables
+
+#### `events`
+
+Stores event objects and milestone booleans.
+
+#### `event_outreach`
+
+Stores the per-event link to an Attio person and the related speaker entry.
+
+Current intended meaning:
+
+- `attio_record_id` = parent Attio `people.record_id`
+- `attio_speakers_entry_id` = Attio `speakers` entry id
+- `response` = event-specific reply outcome
+- `inbound_state` = internal processing state only
+
+`inbound_state` must never replace `speakers.status`.
+
+#### `eboard_members`
+
+Stores internal ownership records keyed by Better Auth user id.
+
+Required extension:
+
+- `attio_people_record_id`
+
+#### `contact_assignments`
+
+Stores internal assignment history.
+
+Short-term contract:
+
+- if the system enforces one speaker entry per Attio person, person-keyed assignments are acceptable
+
+Long-term contract:
+
+- if multiple speaker entries per person are allowed, assignments must key by `attio_speakers_entry_id`
+
+#### `inbound_receipts`
+
+Stores message dedupe state.
+
+Write dedupe only after the related Attio and Convex mutations succeed, or make the receipt explicitly retryable.
+
+#### `invites`
+
+Stores invite-code onboarding state.
+
+Current intended meaning:
+
+- `code` = one-time invite token
+- `invited_email` = optional locked email for this invite
+- `used_email` = email used during successful consume
+- `used_by` = Better Auth user id when a session is available at consume time
+
+`invites.consume` must enforce `invited_email` when present and must not fail only because a session cookie is not available immediately after signup.
+
+### Agent-first tables
+
+#### `agent_threads`
+
+Stores durable conversations.
+
+Required fields:
+
+- owner identity
+- title
+- channel: `web` or `discord`
+- external Modal thread id
+- pinned context metadata
+- last activity timestamp
+
+#### `agent_messages`
+
+Stores normalized message history.
+
+Required fields:
+
+- thread id
+- role
+- content blocks
+- artifact references
+- external Modal message id
+- channel metadata
+
+#### `agent_runs`
+
+Stores normalized run lifecycle records.
+
+Required fields:
+
+- thread id
+- external Modal run id
+- status
+- current step
+- error state
+- started and finished timestamps
+
+#### `agent_artifacts`
+
+Stores renderable outputs.
+
+Allowed v1 artifact types:
+
+- `metric_group`
+- `table`
+- `timeline`
+- `checklist`
+- `report`
+- `chart`
+- `link_bundle`
+
+#### `agent_approvals`
+
+Stores pending and completed approvals.
+
+Required fields:
+
+- run id or thread linkage
+- external Modal approval id
+- requested action
+- risk level
+- proposed action payload
+- approver identity
+- decision timestamp
+
+#### `agent_context_links`
+
+Stores optional links between conversations and product entities:
+
+- event ids
+- Attio person ids
+- Attio speaker entry ids
+- communication thread ids
+
+## Shared Keys And Mappings
+
+### Cross-system ids
+
+- Attio person id: `people.record_id`
+- Attio speaker workflow id: `speakers.entry_id`
+- Convex event id: `events._id`
+- Convex owner id: `eboard_members._id`
+
+### Required field mappings
+
+- `speakers.assigned` = Convex `eboard_members._id`
+- `speakers.managed_poc` = Attio `people.record_id` for the owning eboard member
+- `speakers.active_event_id` = Convex `events._id`
+- `speakers.previous_events` = JSON array of Convex `events._id`
+
+### Status mapping
+
+- `ACCEPTED` -> `Confirmed`
+- `DECLINED` -> `Declined`
+- `QUESTION` -> `Engaged`
+- `NEEDS_HUMAN` -> `Engaged`
+- net-new inbound without a confirmed event -> `Prospect`
+
+### Source mapping
+
+Use the exact live Attio `speakers.source` option titles:
+
+- cold outreach -> `outreach`
+- warm intro -> `warm`
+- inbound email -> `in bound`
+- event sourcing -> `event`
+- alumni sourcing -> `alumni`
+
+Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`.
+
+## Runtime Rules
+
+### Thin clients
+
+Next.js and Discord are thin clients.
+
+They may:
+
+- start threads or runs
+- render streamed output
+- render approvals
+- submit approval decisions
+- deep-link into richer views
+
+They must not:
+
+- decide which tool to call
+- apply guardrails locally
+- bypass Modal execution policy
+- mutate state directly in place of approved Modal actions
+
+### Approval policy
+
+Modal must enforce approval rules.
+
+Default contract:
+
+- read, analyze, and fetch tools may execute without approval
+- write, send, destructive, or externally visible actions require explicit approval
+
+The normalized approval decision must be persisted back to Convex.
+
+### Artifact normalization
+
+Anthropic Agent SDK events and internal tool output must be converted to the app’s normalized artifact model before persistence.
+
+No frontend surface should depend on raw SDK event shapes.
+
+## Interaction Patterns
+
+### Outbound matching
+
+1. Read event context from Convex `events`.
+2. Read candidate workflow rows from Attio `speakers`.
+3. Join each speaker entry to its parent Attio `people` record.
+4. Write suggestions to Convex `event_outreach`.
+
+### Outbound send
+
+1. Resolve the target Attio `speakers` entry and parent `people` record.
+2. Send the email.
+3. Update Convex `event_outreach` with thread metadata.
+4. Update Attio `speakers.status` and `speakers.active_event_id`.
+5. Add a note to the parent Attio `people` record.
+
+### Known-thread inbound
+
+1. Resolve the Convex `event_outreach` row by thread id.
+2. Resolve the linked Attio `speakers` entry.
+3. Update Convex processing metadata.
+4. Update Attio `speakers.status`, `assigned`, `managed_poc`, `active_event_id`, and `previous_events` as needed.
+5. Commit dedupe only after the write path succeeds.
+
+### Net-new inbound
+
+1. Upsert the sender into Attio `people`.
+2. Ensure exactly one Attio `speakers` entry exists for that person.
+3. Create a Convex event if event extraction justifies it.
+4. Link the new event in Convex `event_outreach`.
+5. Set Attio `speakers.source` to `in bound`.
+6. Set Attio `speakers.status` using the inbound mapping above.
+
+## MVP Scope Control
+
+### In scope
+
+- `/agent` primary workspace
+- Modal-hosted shared runtime
+- Anthropic Agent SDK harness inside Modal
+- Convex persistence for threads, runs, artifacts, approvals, and context links
+- scoped launchers from Events, Speakers, and Communications
+- Discord as the same conversation backend with thinner rendering
+- documentation rewrite aligned to the new architecture
+
+### Out of scope for MVP
+
+- orchestration logic in Next.js
+- autonomous background agents or scheduled multi-step workflows
+- rich BI builders beyond fixed artifact types
+- non-Discord integrations
+- unrelated dashboard redesign work
+- broad CRM refactors unrelated to the agent-first surface
+
+### Backlog pruning
+
+GitHub issues are the source of truth for MVP pruning.
+
+Required milestone:
+
+- `Agent-First MVP`
+
+Required labels:
+
+- `mvp-agent`
+- `post-mvp`
+- `close-as-out-of-scope`
+
+Triage rule:
+
+- if an issue does not directly advance `/agent`, Modal runtime, Anthropic harness, approvals, artifacts, Discord parity, scoped launchers, or the required doc rewrite, move it out of MVP
+
+## Non-Negotiable Rules
+
+- Do not add new workflow fields to Attio `people`.
+- Do not treat Convex `inbound_state` as the user-visible workflow state.
+- Do not write Attio select or status values using guessed labels.
+- Do not move tool policy or guardrails into Next.js or Discord.
+- Do not expose raw Anthropic Agent SDK event shapes as product contracts.
+- Do not introduce a second document that competes with `PLAN.md` as the data-contract source of truth.
