@@ -13,10 +13,16 @@ import {
   Mail,
   Ticket,
   Users,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
 const navLinks = [
+  {
+    href: "/agent",
+    label: "Agent",
+    icon: Zap,
+  },
   {
     href: "/dashboard",
     label: "Dashboard",
@@ -99,7 +105,9 @@ export default function DashboardLayout({
               {navLinks.map((link) => {
                 const active =
                   pathname === link.href ||
-                  (link.href !== "/dashboard" && pathname.startsWith(link.href));
+                  (link.href !== "/dashboard" &&
+                    link.href !== "/agent" &&
+                    pathname.startsWith(link.href));
                 return (
                   <Link
                     key={link.href}
