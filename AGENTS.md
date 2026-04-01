@@ -51,6 +51,8 @@ Modal-hosted Python agent code coordinates the systems and is the authoritative 
 
 - `agent/helper/attio.py` wraps Attio API access.
 - `agent/helper/tools.py` contains shared Attio and Convex helpers.
+- `agent/helper/attio.py` wraps Attio API access.
+- `agent/helper/tools.py` contains shared Attio and Convex helpers.
 - `agent/match.py` handles candidate selection.
 - `agent/outreach.py` handles outbound sends.
 - `agent/reply_handler.py` handles inbound email processing.
