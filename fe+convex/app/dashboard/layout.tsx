@@ -11,6 +11,7 @@ import {
   CalendarDays,
   LayoutDashboard,
   Mail,
+  ShieldCheck,
   Ticket,
   Users,
   Zap,
@@ -52,6 +53,11 @@ const navLinks = [
     href: "/dashboard/invites",
     label: "Invites",
     icon: Ticket,
+  },
+  {
+    href: "/dashboard/user-management",
+    label: "User Management",
+    icon: ShieldCheck,
   },
 ] as const satisfies ReadonlyArray<{
   href: string;

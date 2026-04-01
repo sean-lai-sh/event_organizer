@@ -39,6 +39,30 @@ export const updateEventStatus = mutation({
   },
 });
 
+export const updateEvent = mutation({
+  args: {
+    event_id: v.id("events"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    event_date: v.optional(v.string()),
+    event_time: v.optional(v.string()),
+    event_end_time: v.optional(v.string()),
+    location: v.optional(v.string()),
+    event_type: v.optional(v.string()),
+    target_profile: v.optional(v.string()),
+    needs_outreach: v.boolean(),
+    status: v.string(),
+  },
+  handler: async (ctx, { event_id, ...patch }) => {
+    const event = await ctx.db.get(event_id);
+    if (!event) {
+      throw new Error("Event not found.");
+    }
+
+    await ctx.db.patch(event_id, patch);
+  },
+});
+
 export const listEvents = query({
   args: { status: v.optional(v.string()) },
   handler: async (ctx, { status }) => {
@@ -47,13 +71,20 @@ export const listEvents = query({
   },
 });
 
-// ⚠️ Test-only — requires ALLOW_TEST_MUTATIONS=true in Convex env vars (dev only, never prod).
 export const deleteEvent = mutation({
   args: { event_id: v.id("events") },
   handler: async (ctx, { event_id }) => {
-    if (process.env.ALLOW_TEST_MUTATIONS !== "true") {
-      throw new Error("deleteEvent is only callable in test environments");
+    const event = await ctx.db.get(event_id);
+    if (!event) {
+      throw new Error("Event not found.");
     }
+
+    const outreachRows = await ctx.db
+      .query("event_outreach")
+      .withIndex("by_event_id", (q) => q.eq("event_id", event_id))
+      .collect();
+
+    await Promise.all(outreachRows.map((row) => ctx.db.delete(row._id)));
     await ctx.db.delete(event_id);
   },
 });

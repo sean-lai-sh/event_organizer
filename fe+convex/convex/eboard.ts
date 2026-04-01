@@ -1,7 +1,24 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { authComponent, safeGetAuthUser } from "./auth";
 import { components } from "./_generated/api";
+
+async function requireAdminMember(ctx: MutationCtx | QueryCtx) {
+  const authUser = await safeGetAuthUser(ctx);
+  if (!authUser) throw new Error("Not authenticated");
+
+  const member = await ctx.db
+    .query("eboard_members")
+    .withIndex("by_userId", (q) => q.eq("userId", authUser._id))
+    .first();
+
+  if (!member || !member.active || member.role !== "admin") {
+    throw new Error("Admin access required");
+  }
+
+  return { authUser, member };
+}
 
 export const getCurrentMember = query({
   args: {},
@@ -40,6 +57,29 @@ export const listActive = query({
         return { ...m, name: user?.name ?? null, email: user?.email ?? null };
       })
     );
+  },
+});
+
+export const listMembers = query({
+  args: {
+    includeInactive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { includeInactive }) => {
+    await requireAdminMember(ctx);
+
+    const members = await ctx.db.query("eboard_members").collect();
+    const filtered = includeInactive
+      ? members
+      : members.filter((member) => member.active);
+
+    const hydrated = await Promise.all(
+      filtered.map(async (member) => {
+        const user = await authComponent.getAnyUserById(ctx, member.userId);
+        return { ...member, name: user?.name ?? null, email: user?.email ?? null };
+      })
+    );
+
+    return hydrated.sort((a, b) => b.created_at - a.created_at);
   },
 });
 
@@ -136,7 +176,54 @@ export const setRole = mutation({
       throw new Error("Only admins can assign roles");
     }
 
+    const activeAdminCount = allMembers.filter(
+      (member) => member.active && member.role === "admin"
+    ).length;
+    if (
+      targetMember.active &&
+      targetMember.role === "admin" &&
+      role !== "admin" &&
+      activeAdminCount <= 1
+    ) {
+      throw new Error("You must keep at least one active admin");
+    }
+
     await ctx.db.patch(targetMember._id, { role });
+    return targetMember._id;
+  },
+});
+
+export const setActive = mutation({
+  args: {
+    userId: v.string(),
+    active: v.boolean(),
+  },
+  handler: async (ctx, { userId, active }) => {
+    await requireAdminMember(ctx);
+
+    const [targetMember, allMembers] = await Promise.all([
+      ctx.db
+        .query("eboard_members")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .first(),
+      ctx.db.query("eboard_members").collect(),
+    ]);
+
+    if (!targetMember) throw new Error("Target member not found");
+
+    const activeAdminCount = allMembers.filter(
+      (member) => member.active && member.role === "admin"
+    ).length;
+    if (
+      targetMember.active &&
+      targetMember.role === "admin" &&
+      !active &&
+      activeAdminCount <= 1
+    ) {
+      throw new Error("You must keep at least one active admin");
+    }
+
+    await ctx.db.patch(targetMember._id, { active });
     return targetMember._id;
   },
 });
