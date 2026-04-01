@@ -9,13 +9,9 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from email.utils import parseaddr
-from pathlib import Path
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parents[2] / "backend" / ".env")
 
 from helper.attio import AttioClient, flatten_record
 
