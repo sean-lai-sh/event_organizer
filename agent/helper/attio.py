@@ -58,9 +58,9 @@ class AttioClient:
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> AttioClient:
-        token = os.environ.get("ATTIO_KEY")
+        token = os.environ.get("ATTIO_API_KEY") or os.environ.get("ATTIO_KEY")
         if not token:
-            raise RuntimeError("ATTIO_KEY must be set")
+            raise RuntimeError("ATTIO_API_KEY must be set (ATTIO_KEY is accepted as a temporary fallback)")
         self._client = httpx.AsyncClient(
             base_url=BASE_URL,
             headers={

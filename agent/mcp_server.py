@@ -27,10 +27,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from dotenv import load_dotenv
 from fastmcp import FastMCP
-
-load_dotenv(Path(__file__).parents[1] / "backend" / ".env")
 
 from helper.attio import AttioClient, flatten_record
 
