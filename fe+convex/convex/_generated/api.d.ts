@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as agentState from "../agentState.js";
+import type * as agentStateValidators from "../agentStateValidators.js";
 import type * as auth from "../auth.js";
 import type * as contactAssignments from "../contactAssignments.js";
 import type * as eboard from "../eboard.js";
@@ -25,6 +27,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agentState: typeof agentState;
+  agentStateValidators: typeof agentStateValidators;
   auth: typeof auth;
   contactAssignments: typeof contactAssignments;
   eboard: typeof eboard;
