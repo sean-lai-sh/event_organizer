@@ -1,0 +1,90 @@
+name: Engineering Task
+description: Create an engineering issue with implementation scope, tests, and acceptance criteria.
+title: "[Area] Short task title"
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Pick the primary area this task affects.
+      options:
+        - frontend
+        - convex
+        - agent
+        - attio
+        - docs
+        - infra
+        - data-model
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the user or operator outcome this task should deliver.
+      placeholder: |
+        Explain the problem and the expected end state.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_gaps
+    attributes:
+      label: Current Gaps
+      description: List the concrete repo/runtime gaps that justify the issue.
+      placeholder: |
+        - File/path still uses mock data
+        - Runtime writes the wrong Attio field
+        - Missing route or query
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Describe the intended implementation surface.
+      placeholder: |
+        - Add or update the relevant route/query/mutation/helper
+        - Replace placeholder or mock data
+        - Keep unrelated business logic unchanged
+    validations:
+      required: true
+
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests
+      description: Call out the automated coverage required for the behavior.
+      placeholder: |
+        - Unit tests for helper behavior
+        - Integration test for the main workflow
+        - Regression test for exact status/source values
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define the observable done state.
+      placeholder: |
+        - The page uses live data
+        - The workflow is retry-safe
+        - The route no longer 404s
+        - Tests cover the critical path
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Optional implementation notes, dependencies, or follow-ups.
+      placeholder: |
+        Link related issues, docs, or blockers if needed.
+    validations:
+      required: false
