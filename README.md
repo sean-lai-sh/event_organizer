@@ -79,18 +79,31 @@ App runs at [http://localhost:3000](http://localhost:3000).
 
 ### Seed demo attendance data for `/dashboard/data`
 
-For local/dev demos, seed a small attendance dataset so the dashboard data page is populated without a manual CSV import:
+For local/dev demos, seed a richer attendance dataset so the dashboard data page can exercise:
+- aggregate all-event trends
+- event-scoped views
+- an event with attendance but no scoped insight
+- an event with no attendance
 
 ```bash
 cd fe+convex
 doppler run -- bun run seed:attendance-demo
 ```
 
-This mutation is idempotent. Re-running it will reuse the same demo events and attendance rows instead of duplicating them.
+This mutation is idempotent. Re-running it will reuse the same demo events, attendance rows, and seeded insights instead of duplicating them.
 
 If you open `/dashboard/data` with no attendance yet, the empty state also exposes a `Load demo attendance` button in non-production builds.
 
 Tests can clean up demo attendance and demo insight rows with `attendance:deleteDemoData`, but that mutation is intentionally guarded behind the Convex env var `ALLOW_TEST_MUTATIONS=true`.
+
+### Validate the event-data insights feature
+
+```bash
+cd fe+convex
+bun run test:attendance
+```
+
+This runs the Convex attendance tests plus page-level rendering coverage for `/dashboard/data`.
 
 ### First-time Convex setup (only needed once per new Convex project)
 

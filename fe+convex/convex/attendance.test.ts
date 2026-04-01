@@ -7,6 +7,7 @@ import {
   getAttendanceStats,
   getAttendanceTrends,
   importAttendanceBatch,
+  refreshInsight,
   recordAttendance,
   seedDemoData,
 } from "./attendance";
@@ -20,6 +21,8 @@ type SeedDemoResult = {
   events_created: number;
   attendance_imported: number;
   insight_id: string | null;
+  scoped_insight_ids: string[];
+  insights_created: number;
 };
 type AttendanceStatsResult = {
   total_events_tracked: number;
@@ -47,6 +50,7 @@ type AttendeeProfileResult = {
 };
 type InsightResult = {
   _id: string;
+  event_id?: string;
   insight_text: string;
 };
 type CleanupResult = {
@@ -181,6 +185,7 @@ function createHarness() {
     },
     async insertInsight(overrides: Record<string, unknown> = {}) {
       return await db.insert("attendance_insights", {
+        event_id: overrides.event_id,
         generated_at: overrides.generated_at ?? 1,
         insight_text: overrides.insight_text ?? "baseline insight",
         data_snapshot: overrides.data_snapshot ?? "{}",
@@ -241,15 +246,10 @@ describe("attendance MVP write behavior", () => {
       source: "manual",
     });
 
-    const insightRows = db.rows("attendance_insights");
-    expect(insightRows).toHaveLength(1);
-    expect(insightRows[0]).toMatchObject({
-      event_count: 1,
-      attendee_count: 1,
-    });
+    expect(db.rows("attendance_insights")).toHaveLength(0);
   });
 
-  test("importAttendanceBatch reports imported vs duplicates and appends a refreshed insight when new rows land", async () => {
+  test("importAttendanceBatch reports imported vs duplicates without generating insights automatically", async () => {
     const { ctx, db, insertAttendance, insertEvent, insertInsight } = createHarness();
     const eventId = await insertEvent();
 
@@ -293,12 +293,11 @@ describe("attendance MVP write behavior", () => {
     ]);
 
     const insightRows = db.rows("attendance_insights");
-    expect(insightRows).toHaveLength(2);
-    expect(insightRows[1]).toMatchObject({
-      event_count: 1,
-      attendee_count: 3,
+    expect(insightRows).toHaveLength(1);
+    expect(insightRows[0]).toMatchObject({
+      insight_text: "previous snapshot",
+      attendee_count: 1,
     });
-    expect(typeof insightRows[1]?.data_snapshot).toBe("string");
   });
 
   test("duplicate-only imports do not add attendance rows or create another insight snapshot", async () => {
@@ -341,6 +340,64 @@ describe("attendance MVP write behavior", () => {
     });
   });
 
+  test("refreshInsight creates append-only aggregate and event-scoped snapshots", async () => {
+    const { ctx, db, insertAttendance, insertEvent } = createHarness();
+    const workshopId = await insertEvent({
+      title: "Workshop",
+      event_date: "2026-04-01",
+      event_type: "workshop",
+    });
+    const panelId = await insertEvent({
+      title: "Panel",
+      event_date: "2026-04-15",
+      event_type: "speaker_panel",
+    });
+
+    await insertAttendance({ event_id: workshopId, email: "a@example.com", name: "A" });
+    await insertAttendance({ event_id: workshopId, email: "b@example.com", name: "B" });
+    await insertAttendance({ event_id: panelId, email: "a@example.com", name: "A" });
+    await insertAttendance({ event_id: panelId, email: "c@example.com", name: "C" });
+    await insertAttendance({ event_id: panelId, email: "d@example.com", name: "D" });
+
+    const aggregateInsightId = await getHandler<{ event_id?: string }, string>(refreshInsight)(
+      ctx as never,
+      {}
+    );
+    const scopedInsightId = await getHandler<{ event_id?: string }, string>(refreshInsight)(
+      ctx as never,
+      { event_id: panelId }
+    );
+
+    const aggregateInsight = await getHandler<{ event_id?: string }, InsightResult | null>(
+      getLatestInsight
+    )(ctx as never, {});
+    const panelInsight = await getHandler<{ event_id?: string }, InsightResult | null>(
+      getLatestInsight
+    )(ctx as never, { event_id: panelId });
+    const workshopInsight = await getHandler<{ event_id?: string }, InsightResult | null>(
+      getLatestInsight
+    )(ctx as never, { event_id: workshopId });
+
+    expect(aggregateInsight?._id).toBe(aggregateInsightId);
+    expect(aggregateInsight?.event_id).toBeUndefined();
+    expect(panelInsight?._id).toBe(scopedInsightId);
+    expect(panelInsight?.event_id).toBe(panelId);
+    expect(workshopInsight).toBeNull();
+    expect(db.rows("attendance_insights")).toHaveLength(2);
+  });
+
+  test("refreshInsight rejects scopes with no attendance", async () => {
+    const { ctx, insertEvent } = createHarness();
+    const eventId = await insertEvent({
+      title: "No Attendance Yet",
+      event_date: "2026-05-01",
+    });
+
+    await expect(
+      getHandler<{ event_id?: string }, string>(refreshInsight)(ctx as never, { event_id: eventId })
+    ).rejects.toThrow("No attendance data is available for this scope");
+  });
+
   test("seedDemoData is idempotent and populates dashboard queries", async () => {
     const { ctx, db } = createHarness();
 
@@ -348,33 +405,53 @@ describe("attendance MVP write behavior", () => {
       ctx as never,
       {}
     );
-    const stats = await getHandler<EmptyArgs, AttendanceStatsResult>(getAttendanceStats)(
+    const stats = await getHandler<{ event_id?: string }, AttendanceStatsResult>(getAttendanceStats)(
       ctx as never,
       {}
     );
-    const trends = await getHandler<EmptyArgs, TrendResult[]>(getAttendanceTrends)(
+    const trends = await getHandler<{ event_id?: string }, TrendResult[]>(getAttendanceTrends)(
       ctx as never,
       {}
     );
-    const profiles = await getHandler<{ min_events?: number }, AttendeeProfileResult[]>(
+    const profiles = await getHandler<{ min_events?: number; event_id?: string }, AttendeeProfileResult[]>(
       getAttendeeProfiles
     )(ctx as never, { min_events: 0 });
-    const latestInsight = await getHandler<EmptyArgs, InsightResult | null>(getLatestInsight)(
+    const latestInsight = await getHandler<{ event_id?: string }, InsightResult | null>(getLatestInsight)(
       ctx as never,
       {}
     );
+    const noInsightEventId = db
+      .rows("events")
+      .find((row) => row.title === "[Demo] Builder Sprint Workshop II")?._id;
+    const noAttendanceEventId = db
+      .rows("events")
+      .find((row) => row.title === "[Demo] Summer Planning Session")?._id;
+    const workshopWithoutInsight = await getHandler<{ event_id?: string }, InsightResult | null>(
+      getLatestInsight
+    )(ctx as never, { event_id: noInsightEventId });
+    const emptyEventStats = await getHandler<{ event_id?: string }, AttendanceStatsResult>(
+      getAttendanceStats
+    )(ctx as never, { event_id: noAttendanceEventId });
 
-    expect(firstResult.events_created).toBe(3);
-    expect(firstResult.attendance_imported).toBe(18);
+    expect(firstResult.events_created).toBe(6);
+    expect(firstResult.attendance_imported).toBe(45);
+    expect(firstResult.insights_created).toBe(4);
     expect(stats).toEqual({
-      total_events_tracked: 3,
-      total_unique_attendees: 10,
-      avg_attendance: 6,
-      top_event: { title: "[Demo] Agent Workshop", count: 7 },
+      total_events_tracked: 5,
+      total_unique_attendees: 20,
+      avg_attendance: 9,
+      top_event: { title: "[Demo] AI Founder Panel", count: 14 },
     });
-    expect(trends).toHaveLength(3);
+    expect(trends).toHaveLength(5);
     expect(profiles.length).toBeGreaterThan(0);
     expect(latestInsight?._id).toBe(firstResult.insight_id);
+    expect(workshopWithoutInsight).toBeNull();
+    expect(emptyEventStats).toEqual({
+      total_events_tracked: 0,
+      total_unique_attendees: 0,
+      avg_attendance: 0,
+      top_event: null,
+    });
 
     const secondResult = await getHandler<EmptyArgs, SeedDemoResult>(seedDemoData)(
       ctx as never,
@@ -386,10 +463,12 @@ describe("attendance MVP write behavior", () => {
       events_created: 0,
       attendance_imported: 0,
       insight_id: firstResult.insight_id,
+      scoped_insight_ids: firstResult.scoped_insight_ids,
+      insights_created: 0,
     });
-    expect(db.rows("events")).toHaveLength(3);
-    expect(db.rows("attendance")).toHaveLength(18);
-    expect(db.rows("attendance_insights")).toHaveLength(1);
+    expect(db.rows("events")).toHaveLength(6);
+    expect(db.rows("attendance")).toHaveLength(45);
+    expect(db.rows("attendance_insights")).toHaveLength(4);
   });
 
   test("deleteDemoData removes only demo attendance artifacts", async () => {
@@ -417,14 +496,14 @@ describe("attendance MVP write behavior", () => {
 
     process.env.ALLOW_TEST_MUTATIONS = "true";
     const deleted = await getHandler<EmptyArgs, CleanupResult>(deleteDemoData)(ctx as never, {});
-    const statsAfterCleanup = await getHandler<EmptyArgs, AttendanceStatsResult>(
+    const statsAfterCleanup = await getHandler<{ event_id?: string }, AttendanceStatsResult>(
       getAttendanceStats
     )(ctx as never, {});
 
     expect(deleted).toEqual({
-      events_deleted: 3,
-      attendance_deleted: 18,
-      insights_deleted: 1,
+      events_deleted: 6,
+      attendance_deleted: 45,
+      insights_deleted: 4,
     });
     expect(db.rows("events")).toHaveLength(1);
     expect(db.rows("attendance")).toHaveLength(1);

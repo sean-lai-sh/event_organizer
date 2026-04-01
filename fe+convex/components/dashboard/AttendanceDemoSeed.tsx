@@ -22,8 +22,8 @@ export function AttendanceDemoSeed({
       setIsSeeding(true);
       const result = await seedDemoData({});
       const message =
-        result.events_created > 0 || result.attendance_imported > 0
-          ? `Loaded ${result.events_created} demo events and ${result.attendance_imported} attendance rows.`
+        result.events_created > 0 || result.attendance_imported > 0 || result.insights_created > 0
+          ? `Loaded ${result.events_created} demo events, ${result.attendance_imported} attendance rows, and ${result.insights_created} insights.`
           : "Demo attendance data already exists.";
       toast.success(message);
     } catch (error) {

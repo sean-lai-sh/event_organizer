@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-type Insight = {
+export type Insight = {
   generated_at: number;
   insight_text: string;
 };
@@ -28,10 +28,22 @@ function formatRelativeTime(timestamp: number) {
 export function InsightCard({
   insight,
   hasData,
+  selectedEventName,
+  isGenerating,
+  errorMessage,
+  onGenerate,
 }: {
   insight: Insight | null;
   hasData: boolean;
+  selectedEventName?: string | null;
+  isGenerating?: boolean;
+  errorMessage?: string | null;
+  onGenerate?: () => void;
 }) {
+  const emptyStateCopy = selectedEventName
+    ? `No insight for ${selectedEventName} yet. Generate one to summarize this event's attendance.`
+    : "No insight yet for this attendance view. Generate one to summarize the current data.";
+
   return (
     <div className="rounded-[14px] border border-[#EBEBEB] bg-white p-4">
       <div className="flex items-center gap-1.5">
@@ -48,23 +60,37 @@ export function InsightCard({
             <span className="text-[11px] text-[#999999]">
               Generated {formatRelativeTime(insight.generated_at)}
             </span>
-            <Link
-              href="/dashboard/agent?context=attendance"
-              className="text-[13px] font-medium text-[#111111] transition-colors duration-[120ms] hover:text-[#555555]"
+            <Button
+              type="button"
+              size="xs"
+              onClick={onGenerate}
+              disabled={isGenerating || !onGenerate}
             >
-              Chat about this →
-            </Link>
+              {isGenerating ? "Refreshing…" : "Refresh insight"}
+            </Button>
           </div>
         </>
       ) : hasData ? (
-        <p className="mt-3 text-[13px] text-[#999999]">
-          Import complete. Run the insight agent to see analysis here.
-        </p>
+        <div className="mt-3 space-y-3">
+          <p className="text-[13px] text-[#999999]">{emptyStateCopy}</p>
+          <Button
+            type="button"
+            size="xs"
+            onClick={onGenerate}
+            disabled={isGenerating || !onGenerate}
+          >
+            {isGenerating ? "Generating…" : "Generate insight"}
+          </Button>
+        </div>
       ) : (
         <p className="mt-3 text-[13px] text-[#999999]">
-          No insights yet. Import attendance data to get started.
+          Import attendance data to unlock insights for this view.
         </p>
       )}
+
+      {errorMessage ? (
+        <p className="mt-3 text-[12px] text-[#777777]">{errorMessage}</p>
+      ) : null}
     </div>
   );
 }

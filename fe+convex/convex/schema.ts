@@ -101,10 +101,11 @@ export default defineSchema({
     .index("by_event_email", ["event_id", "email"]),
 
   attendance_insights: defineTable({
+    event_id: v.optional(v.id("events")),
     generated_at: v.number(),
     insight_text: v.string(),
     data_snapshot: v.optional(v.string()),
     event_count: v.number(),
     attendee_count: v.number(),
-  }),
+  }).index("by_event_id", ["event_id"]),
 });

@@ -55,12 +55,14 @@ type DemoEventSeed = {
   event_end_time: string;
   location: string;
   event_type: string;
+  seed_scoped_insight?: boolean;
   attendees: Array<{ email: string; name: string }>;
 };
 
 type InsightSnapshotPayload = {
   trends: TrendRow[];
   stats: AttendanceStats;
+  event_id?: Id<"events">;
   seed_key?: string;
   source?: string;
 };
@@ -72,6 +74,21 @@ const DEMO_EVENT_TARGET_PROFILE = "Seeded sample event for the data dashboard.";
 
 const DEMO_EVENT_SEEDS: DemoEventSeed[] = [
   {
+    title: "[Demo] Resume Clinic",
+    description: "Seeded sample event for the attendance dashboard.",
+    event_date: "2026-01-29",
+    event_time: "17:00",
+    event_end_time: "18:00",
+    location: "Bobst LL140",
+    event_type: "workshop",
+    attendees: [
+      { email: "alex@example.com", name: "Alex Chen" },
+      { email: "mila@example.com", name: "Mila Tran" },
+      { email: "omar@example.com", name: "Omar Haddad" },
+      { email: "priya@example.com", name: "Priya Shah" },
+    ],
+  },
+  {
     title: "[Demo] AI Founder Panel",
     description: "Seeded sample event for the attendance dashboard.",
     event_date: "2026-02-12",
@@ -79,19 +96,51 @@ const DEMO_EVENT_SEEDS: DemoEventSeed[] = [
     event_end_time: "19:30",
     location: "Kimmel 808",
     event_type: "speaker_panel",
+    seed_scoped_insight: true,
     attendees: [
       { email: "alex@example.com", name: "Alex Chen" },
       { email: "sam@example.com", name: "Sam Patel" },
-      { email: "jordan@example.com", name: "Jordan Lee" },
+      { email: "jamie@example.com", name: "Jamie Park" },
       { email: "casey@example.com", name: "Casey Kim" },
       { email: "morgan@example.com", name: "Morgan Diaz" },
       { email: "riley@example.com", name: "Riley Brown" },
+      { email: "quinn@example.com", name: "Quinn Young" },
+      { email: "taylor@example.com", name: "Taylor Singh" },
+      { email: "drew@example.com", name: "Drew Flores" },
+      { email: "iris@example.com", name: "Iris Gao" },
+      { email: "noah@example.com", name: "Noah Rivera" },
+      { email: "leo@example.com", name: "Leo Kim" },
+      { email: "nora@example.com", name: "Nora James" },
+      { email: "hana@example.com", name: "Hana Yusuf" },
     ],
   },
   {
-    title: "[Demo] Agent Workshop",
+    title: "[Demo] Builder Sprint Workshop I",
     description: "Seeded sample event for the attendance dashboard.",
     event_date: "2026-03-03",
+    event_time: "17:30",
+    event_end_time: "19:00",
+    location: "Tandon Maker Space",
+    event_type: "workshop",
+    seed_scoped_insight: true,
+    attendees: [
+      { email: "alex@example.com", name: "Alex Chen" },
+      { email: "sam@example.com", name: "Sam Patel" },
+      { email: "morgan@example.com", name: "Morgan Diaz" },
+      { email: "jamie@example.com", name: "Jamie Park" },
+      { email: "taylor@example.com", name: "Taylor Singh" },
+      { email: "drew@example.com", name: "Drew Flores" },
+      { email: "quinn@example.com", name: "Quinn Young" },
+      { email: "hana@example.com", name: "Hana Yusuf" },
+      { email: "sara@example.com", name: "Sara Ahmed" },
+      { email: "theo@example.com", name: "Theo Brooks" },
+      { email: "kaya@example.com", name: "Kaya Wilson" },
+    ],
+  },
+  {
+    title: "[Demo] Builder Sprint Workshop II",
+    description: "Seeded sample event for the attendance dashboard.",
+    event_date: "2026-03-24",
     event_time: "17:30",
     event_end_time: "19:00",
     location: "Tandon Maker Space",
@@ -101,28 +150,67 @@ const DEMO_EVENT_SEEDS: DemoEventSeed[] = [
       { email: "sam@example.com", name: "Sam Patel" },
       { email: "morgan@example.com", name: "Morgan Diaz" },
       { email: "jamie@example.com", name: "Jamie Park" },
-      { email: "taylor@example.com", name: "Taylor Singh" },
-      { email: "drew@example.com", name: "Drew Flores" },
       { email: "quinn@example.com", name: "Quinn Young" },
+      { email: "hana@example.com", name: "Hana Yusuf" },
+      { email: "theo@example.com", name: "Theo Brooks" },
     ],
   },
   {
-    title: "[Demo] Spring Mixer",
+    title: "[Demo] Alumni Mixer",
     description: "Seeded sample event for the attendance dashboard.",
-    event_date: "2026-03-21",
-    event_time: "19:00",
-    event_end_time: "21:00",
-    location: "Washington Square Park",
+    event_date: "2026-04-09",
+    event_time: "18:30",
+    event_end_time: "20:00",
+    location: "Washington Square Lounge",
     event_type: "networking",
+    seed_scoped_insight: true,
     attendees: [
       { email: "alex@example.com", name: "Alex Chen" },
       { email: "casey@example.com", name: "Casey Kim" },
       { email: "jamie@example.com", name: "Jamie Park" },
       { email: "riley@example.com", name: "Riley Brown" },
       { email: "quinn@example.com", name: "Quinn Young" },
+      { email: "iris@example.com", name: "Iris Gao" },
+      { email: "noah@example.com", name: "Noah Rivera" },
+      { email: "nora@example.com", name: "Nora James" },
+      { email: "priya@example.com", name: "Priya Shah" },
     ],
   },
+  {
+    title: "[Demo] Summer Planning Session",
+    description: "Seeded sample event for the attendance dashboard.",
+    event_date: "2026-04-22",
+    event_time: "16:00",
+    event_end_time: "17:00",
+    location: "Club Room",
+    event_type: "social",
+    attendees: [],
+  },
 ];
+
+function buildInsightScopeKey(eventId?: Id<"events">) {
+  return eventId ? `event:${eventId}` : "all_events";
+}
+
+function findDemoInsightForScope(
+  insights: AttendanceInsightRow[],
+  eventId?: Id<"events">
+) {
+  const scopeKey = buildInsightScopeKey(eventId);
+  return insights.find((insight) => {
+    if (!isDemoInsight(insight)) {
+      return false;
+    }
+    return buildInsightScopeKey(insight.event_id) === scopeKey;
+  });
+}
+
+function isScopedInsightForEvent(
+  insight: Pick<AttendanceInsightRow, "event_id">,
+  eventId?: Id<"events">
+) {
+  return insight.event_id === eventId;
+}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -161,7 +249,7 @@ function isSameDemoEventSeed(event: Pick<EventRow, "title" | "event_date" | "cre
 function buildInsightSnapshotData(
   stats: AttendanceStats,
   trends: TrendRow[],
-  metadata?: Pick<InsightSnapshotPayload, "seed_key" | "source">
+  metadata?: Pick<InsightSnapshotPayload, "event_id" | "seed_key" | "source">
 ) {
   const payload: InsightSnapshotPayload = {
     trends,
@@ -185,8 +273,16 @@ function isDemoInsight(insight: Pick<AttendanceInsightRow, "data_snapshot">) {
   }
 }
 
-async function getTrackedEventContextsFromDb(ctx: AttendanceDataContext) {
-  const attendanceRows: AttendanceRow[] = await ctx.db.query("attendance").collect();
+async function getTrackedEventContextsFromDb(
+  ctx: AttendanceDataContext,
+  eventId?: Id<"events">
+) {
+  const attendanceRows: AttendanceRow[] = eventId
+    ? await ctx.db
+        .query("attendance")
+        .withIndex("by_event", (q) => q.eq("event_id", eventId))
+        .collect()
+    : await ctx.db.query("attendance").collect();
   const uniqueEventIds = [...new Set(attendanceRows.map((row) => row.event_id))];
   const countsByEventId = new Map<Id<"events">, number>();
 
@@ -209,9 +305,55 @@ async function getTrackedEventContextsFromDb(ctx: AttendanceDataContext) {
   return { attendanceRows, contexts };
 }
 
+async function buildAttendanceTrends(
+  ctx: AttendanceDataContext,
+  eventId?: Id<"events">
+) {
+  const { contexts } = await getTrackedEventContextsFromDb(ctx, eventId);
+  return contexts
+    .map<TrendRow>(({ event, attendeeCount }) => ({
+      event_id: event._id,
+      title: event.title,
+      event_date: event.event_date ?? "",
+      event_type: eventTypeLabel(event.event_type),
+      attendee_count: attendeeCount,
+    }))
+    .sort((a, b) => compareDateAsc(a.event_date, b.event_date));
+}
+
+async function buildAttendanceStats(
+  ctx: AttendanceDataContext,
+  eventId?: Id<"events">
+) {
+  const { attendanceRows, contexts } = await getTrackedEventContextsFromDb(ctx, eventId);
+  const uniqueEmails = new Set(attendanceRows.map((row) => normalizeEmail(row.email)));
+  const totalEventsTracked = contexts.length;
+  const totalAttendance = contexts.reduce((sum, context) => sum + context.attendeeCount, 0);
+  const avgAttendance = totalEventsTracked > 0 ? Math.round(totalAttendance / totalEventsTracked) : 0;
+  const topContext = [...contexts].sort((a, b) => b.attendeeCount - a.attendeeCount)[0] ?? null;
+
+  return {
+    total_events_tracked: totalEventsTracked,
+    total_unique_attendees: uniqueEmails.size,
+    avg_attendance: avgAttendance,
+    top_event: topContext
+      ? {
+          title: topContext.event.title,
+          count: topContext.attendeeCount,
+        }
+      : null,
+  } satisfies AttendanceStats;
+}
+
 function buildDeterministicInsight(stats: AttendanceStats, trends: TrendRow[]) {
   if (trends.length === 0) {
     return "No attendance data is tracked yet. Import attendance for an event to generate a dashboard insight.";
+  }
+
+  if (trends.length === 1) {
+    const [event] = trends;
+    const eventType = event.event_type === "unknown" ? "event" : event.event_type.replaceAll("_", " ");
+    return `${event.title} brought in ${event.attendee_count} attendees for this ${eventType}. Use this turnout as the baseline for the next iteration and test one small programming change to see if the audience expands.`;
   }
 
   const first = trends[0];
@@ -238,11 +380,21 @@ function buildDeterministicInsight(stats: AttendanceStats, trends: TrendRow[]) {
   return `${trendText} ${topEventText} ${recommendation}`;
 }
 
-async function insertInsightSnapshot(ctx: MutationCtx, stats: AttendanceStats, trends: TrendRow[]) {
+async function insertInsightSnapshot(
+  ctx: MutationCtx,
+  stats: AttendanceStats,
+  trends: TrendRow[],
+  eventId?: Id<"events">,
+  metadata?: Pick<InsightSnapshotPayload, "seed_key" | "source">
+) {
   return await ctx.db.insert("attendance_insights", {
+    event_id: eventId,
     generated_at: Date.now(),
     insight_text: buildDeterministicInsight(stats, trends),
-    data_snapshot: buildInsightSnapshotData(stats, trends),
+    data_snapshot: buildInsightSnapshotData(stats, trends, {
+      event_id: eventId,
+      ...(metadata ?? {}),
+    }),
     event_count: stats.total_events_tracked,
     attendee_count: stats.total_unique_attendees,
   });
@@ -278,9 +430,6 @@ export const recordAttendance = mutation({
       source,
     });
 
-    const trends = await getAttendanceTrends.handler(ctx, {});
-    const stats = await getAttendanceStats.handler(ctx, {});
-    await insertInsightSnapshot(ctx, stats, trends);
     return attendanceId;
   },
 });
@@ -331,25 +480,21 @@ export const importAttendanceBatch = mutation({
       imported += 1;
     }
 
-    if (imported > 0) {
-      const trends = await getAttendanceTrends.handler(ctx, {});
-      const stats = await getAttendanceStats.handler(ctx, {});
-      await insertInsightSnapshot(ctx, stats, trends);
-    }
-
     return { imported, duplicates };
   },
 });
 
 export const saveInsight = mutation({
   args: {
+    event_id: v.optional(v.id("events")),
     insight_text: v.string(),
     data_snapshot: v.optional(v.string()),
     event_count: v.number(),
     attendee_count: v.number(),
   },
-  handler: async (ctx, { insight_text, data_snapshot, event_count, attendee_count }) => {
+  handler: async (ctx, { event_id, insight_text, data_snapshot, event_count, attendee_count }) => {
     return await ctx.db.insert("attendance_insights", {
+      event_id,
       generated_at: Date.now(),
       insight_text,
       data_snapshot,
@@ -360,26 +505,17 @@ export const saveInsight = mutation({
 });
 
 export const getAttendanceTrends = query({
-  args: {},
-  handler: async (ctx) => {
-    const { contexts } = await getTrackedEventContextsFromDb(ctx);
-    return contexts
-      .map<TrendRow>(({ event, attendeeCount }) => ({
-        event_id: event._id,
-        title: event.title,
-        event_date: event.event_date ?? "",
-        event_type: eventTypeLabel(event.event_type),
-        attendee_count: attendeeCount,
-      }))
-      .sort((a, b) => compareDateAsc(a.event_date, b.event_date));
+  args: { event_id: v.optional(v.id("events")) },
+  handler: async (ctx, { event_id }) => {
+    return await buildAttendanceTrends(ctx, event_id);
   },
 });
 
 export const getAttendeeProfiles = query({
-  args: { min_events: v.optional(v.number()) },
-  handler: async (ctx, { min_events }) => {
+  args: { min_events: v.optional(v.number()), event_id: v.optional(v.id("events")) },
+  handler: async (ctx, { min_events, event_id }) => {
     const threshold = min_events ?? 0;
-    const { attendanceRows, contexts } = await getTrackedEventContextsFromDb(ctx);
+    const { attendanceRows, contexts } = await getTrackedEventContextsFromDb(ctx, event_id);
     const eventMap = new Map<Id<"events">, EventRow>();
     const recentEvents = contexts
       .map(({ event }) => event)
@@ -487,44 +623,31 @@ export const getAttendeeProfiles = query({
 });
 
 export const getAttendanceStats = query({
-  args: {},
-  handler: async (ctx) => {
-    const { attendanceRows, contexts } = await getTrackedEventContextsFromDb(ctx);
-    const uniqueEmails = new Set(attendanceRows.map((row) => normalizeEmail(row.email)));
-    const totalEventsTracked = contexts.length;
-    const totalAttendance = contexts.reduce((sum, context) => sum + context.attendeeCount, 0);
-    const avgAttendance = totalEventsTracked > 0 ? Math.round(totalAttendance / totalEventsTracked) : 0;
-    const topContext = [...contexts].sort((a, b) => b.attendeeCount - a.attendeeCount)[0] ?? null;
-
-    const stats: AttendanceStats = {
-      total_events_tracked: totalEventsTracked,
-      total_unique_attendees: uniqueEmails.size,
-      avg_attendance: avgAttendance,
-      top_event: topContext
-        ? {
-            title: topContext.event.title,
-            count: topContext.attendeeCount,
-          }
-        : null,
-    };
-    return stats;
+  args: { event_id: v.optional(v.id("events")) },
+  handler: async (ctx, { event_id }) => {
+    return await buildAttendanceStats(ctx, event_id);
   },
 });
 
 export const getLatestInsight = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { event_id: v.optional(v.id("events")) },
+  handler: async (ctx, { event_id }) => {
     const insights = await ctx.db.query("attendance_insights").collect();
-    return insights.sort((a, b) => b.generated_at - a.generated_at)[0] ?? null;
+    return insights
+      .filter((insight) => isScopedInsightForEvent(insight, event_id))
+      .sort((a, b) => b.generated_at - a.generated_at)[0] ?? null;
   },
 });
 
 export const refreshInsight = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const trends = await getAttendanceTrends.handler(ctx, {});
-    const stats = await getAttendanceStats.handler(ctx, {});
-    return await insertInsightSnapshot(ctx, stats, trends);
+  args: { event_id: v.optional(v.id("events")) },
+  handler: async (ctx, { event_id }) => {
+    const trends = await buildAttendanceTrends(ctx, event_id);
+    const stats = await buildAttendanceStats(ctx, event_id);
+    if (stats.total_events_tracked === 0) {
+      throw new Error("No attendance data is available for this scope");
+    }
+    return await insertInsightSnapshot(ctx, stats, trends, event_id);
   },
 });
 
@@ -535,14 +658,16 @@ export const seedDemoData = mutation({
     const attendanceRows = await ctx.db.query("attendance").collect();
     const insights = await ctx.db.query("attendance_insights").collect();
     const eventIds: Id<"events">[] = [];
+    const scopedInsightIds: Id<"attendance_insights">[] = [];
     const existingAttendanceKeys = new Set(
       attendanceRows.map((row) => `${row.event_id}:${normalizeEmail(row.email)}`)
     );
     let eventsCreated = 0;
     let attendanceImported = 0;
+    let insightsCreated = 0;
 
     for (const seed of DEMO_EVENT_SEEDS) {
-      let event = allEvents.find((row) => isSameDemoEventSeed(row, seed));
+      let event: EventRow | undefined = allEvents.find((row) => isSameDemoEventSeed(row, seed));
       if (!event) {
         const eventId = await ctx.db.insert("events", {
           title: seed.title,
@@ -560,7 +685,8 @@ export const seedDemoData = mutation({
           room_confirmed: true,
           created_at: Date.now(),
         });
-        event = await ctx.db.get(eventId);
+        const createdEvent = await ctx.db.get(eventId);
+        event = createdEvent ?? undefined;
         if (!event) {
           throw new Error("Seed event creation failed");
         }
@@ -584,24 +710,54 @@ export const seedDemoData = mutation({
         existingAttendanceKeys.add(attendanceKey);
         attendanceImported += 1;
       }
+
+      const existingScopedInsight = findDemoInsightForScope(insights, event._id);
+      if (existingScopedInsight) {
+        scopedInsightIds.push(existingScopedInsight._id);
+      } else if (seed.seed_scoped_insight) {
+        const trends = await buildAttendanceTrends(ctx, event._id);
+        const stats = await buildAttendanceStats(ctx, event._id);
+        if (stats.total_events_tracked > 0) {
+          const scopedInsightId = await insertInsightSnapshot(
+            ctx,
+            stats,
+            trends,
+            event._id,
+            {
+              seed_key: DEMO_ATTENDANCE_SEED_KEY,
+              source: DEMO_ATTENDANCE_SOURCE,
+            }
+          );
+          insights.push({
+            _id: scopedInsightId,
+            _creationTime: Date.now(),
+            event_id: event._id,
+            generated_at: Date.now(),
+            insight_text: "",
+            data_snapshot: buildInsightSnapshotData(stats, trends, {
+              event_id: event._id,
+              seed_key: DEMO_ATTENDANCE_SEED_KEY,
+              source: DEMO_ATTENDANCE_SOURCE,
+            }),
+            event_count: stats.total_events_tracked,
+            attendee_count: stats.total_unique_attendees,
+          });
+          scopedInsightIds.push(scopedInsightId);
+          insightsCreated += 1;
+        }
+      }
     }
 
-    const latestInsight = insights.sort((a, b) => b.generated_at - a.generated_at)[0] ?? null;
-    const hasDemoInsight = insights.some((insight) => isDemoInsight(insight));
-    let insightId: Id<"attendance_insights"> | null = latestInsight?._id ?? null;
-    if (!hasDemoInsight) {
-      const trends = await getAttendanceTrends.handler(ctx, {});
-      const stats = await getAttendanceStats.handler(ctx, {});
-      insightId = await ctx.db.insert("attendance_insights", {
-        generated_at: Date.now(),
-        insight_text: buildDeterministicInsight(stats, trends),
-        data_snapshot: buildInsightSnapshotData(stats, trends, {
-          seed_key: DEMO_ATTENDANCE_SEED_KEY,
-          source: DEMO_ATTENDANCE_SOURCE,
-        }),
-        event_count: stats.total_events_tracked,
-        attendee_count: stats.total_unique_attendees,
+    const existingGlobalInsight = findDemoInsightForScope(insights);
+    let insightId: Id<"attendance_insights"> | null = existingGlobalInsight?._id ?? null;
+    if (!existingGlobalInsight) {
+      const trends = await buildAttendanceTrends(ctx);
+      const stats = await buildAttendanceStats(ctx);
+      insightId = await insertInsightSnapshot(ctx, stats, trends, undefined, {
+        seed_key: DEMO_ATTENDANCE_SEED_KEY,
+        source: DEMO_ATTENDANCE_SOURCE,
       });
+      insightsCreated += 1;
     }
 
     return {
@@ -609,6 +765,8 @@ export const seedDemoData = mutation({
       events_created: eventsCreated,
       attendance_imported: attendanceImported,
       insight_id: insightId,
+      scoped_insight_ids: scopedInsightIds,
+      insights_created: insightsCreated,
     };
   },
 });

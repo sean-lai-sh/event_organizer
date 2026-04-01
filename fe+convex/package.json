@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:attendance": "bun test convex/attendance.test.ts",
+    "test:attendance": "bun test convex/attendance.test.ts app/dashboard/data/page.test.tsx",
     "seed:attendance-demo": "npx convex run attendance:seedDemoData"
   },
   "dependencies": {
