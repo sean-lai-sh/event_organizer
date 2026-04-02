@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getAttendanceDashboard,
-  listEventAttendance,
+  getAttendanceForEvent,
   recordAttendanceInsight,
   upsertAttendanceBatch,
 } from "./attendance";
@@ -134,7 +134,7 @@ class FakeDb {
 function installConvexHandlerAliases() {
   for (const fn of [
     getAttendanceDashboard,
-    listEventAttendance,
+    getAttendanceForEvent,
     recordAttendanceInsight,
     upsertAttendanceBatch,
   ]) {
@@ -265,6 +265,45 @@ describe("attendance state", () => {
       checked_in_at: 180,
       source: "manual",
     });
+  });
+
+  test("returns attendance for a single event through the MCP alias", async () => {
+    const { db, ctx } = createHarness();
+    const eventId = await seedEvent(db, {
+      title: "Founder Summit",
+      event_date: "2026-04-01",
+    });
+
+    await db.insert("attendance", {
+      event_id: eventId,
+      email: "sam@example.com",
+      name: "Sam Rivera",
+      checked_in_at: 150,
+      source: "manual",
+    });
+    await db.insert("attendance", {
+      event_id: eventId,
+      email: "lee@example.com",
+      name: "Lee Chen",
+      checked_in_at: 200,
+      source: "csv_import",
+    });
+
+    const result = await getHandler<{ event_id: string }, unknown>(getAttendanceForEvent)(ctx as never, {
+      event_id: eventId,
+    });
+
+    expect(result).toMatchObject({
+      event: {
+        _id: eventId,
+        title: "Founder Summit",
+        event_date: "2026-04-01",
+      },
+    });
+    expect((result as { attendees: Array<{ email: string; checked_in_at: number }> }).attendees.map((row) => row.email)).toEqual([
+      "lee@example.com",
+      "sam@example.com",
+    ]);
   });
 
   test("builds dashboard summaries including repeats and latest insight", async () => {

@@ -86,6 +86,14 @@ Use it for:
 - step tracing
 - handoff between model output, tool execution, and approval pauses
 
+Current implementation contract:
+
+- the runtime launches the packaged FastMCP server over stdio from `apps.mcp.server`
+- the Claude agent SDK is the only runtime harness that decides when MCP tools are relevant
+- read tools execute immediately
+- write tools are converted into Modal-managed approvals before execution
+- approved tool calls resume by replaying the exact stored tool name and arguments
+
 Do not treat the SDK as the business-logic layer.
 
 Repo-specific logic must remain in local modules:
@@ -95,6 +103,12 @@ Repo-specific logic must remain in local modules:
 - MCP adapters
 - artifact normalization
 - approval policy and risk classification
+
+Current MCP tool surface:
+
+- Attio: `search_contacts`, `get_contact`, `create_contact`, `update_contact`
+- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
+- Approval-gated Convex writes: `update_event_safe`
 
 Application code should depend on an internal runtime adapter, not directly on SDK-specific primitives across the repo.
 

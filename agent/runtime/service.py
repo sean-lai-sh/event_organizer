@@ -27,6 +27,7 @@ from .convex_sync import ConvexAgentStateSync
 from .normalize import make_report_artifact, text_block
 from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
 from .store import InMemoryRuntimeStore
+from .tool_executor import execute_tool_call
 
 
 def _now_ms() -> int:
@@ -164,20 +165,6 @@ class AgentRuntimeService:
             blocks=[text_block(request.input_text)],
         )
 
-        action = infer_tool_action_from_text(request.input_text)
-        if action:
-            await self._store.append_stream_event(
-                run_id=run.external_id,
-                event="tool.planned",
-                created_at=_now_ms(),
-                data={"name": action.name, "class": action.action_class.value},
-            )
-
-        if action and self._policy.evaluate(action).requires_approval:
-            run = await self._pause_for_approval(run=run, action=action)
-            events = await self._store.list_stream_events(run.external_id)
-            return RunWithEventsResponse(run=run, events=events)
-
         await self._execute_run(run=run, user_input=request.input_text, max_tokens=request.max_tokens)
         resolved = await self._store.get_run(run.external_id)
         if not resolved:
@@ -250,8 +237,7 @@ class AgentRuntimeService:
         pending_action = await self._store.pop_pending_action(run.external_id)
         if not pending_action and approval.payload_json:
             try:
-                payload = json.loads(approval.payload_json)
-                pending_action = ToolAction.model_validate(payload)
+                pending_action = ToolAction.model_validate_json(approval.payload_json)
             except Exception:
                 pending_action = None
 
@@ -266,17 +252,54 @@ class AgentRuntimeService:
         )
 
         action_label = pending_action.name if pending_action else "approved_action"
-        await self._append_message(
-            thread_id=run.thread_external_id,
-            run_id=run.external_id,
-            role="tool",
-            status="final",
-            blocks=[text_block(f"Approved action executed: {action_label}")],
-        )
+        tool_payload = pending_action.payload.get("tool_input") if pending_action else None
+        tool_result: object | None = None
+        if isinstance(tool_payload, dict):
+            try:
+                tool_result = await execute_tool_call(action_label, tool_payload)
+            except Exception as exc:
+                await self._mark_run_error(run=run, message=str(exc))
+                failed = await self._store.get_run(run.external_id)
+                if not failed:
+                    raise HTTPException(status_code=500, detail="Run state missing after tool failure")
+                return ApprovalDecisionResponse(approval=approval, run=failed)
 
-        await self._execute_run(
+            await self._store.append_stream_event(
+                run_id=run.external_id,
+                event="tool.completed",
+                created_at=_now_ms(),
+                data={"name": action_label, "result": self._serialize_tool_result(tool_result)},
+            )
+            await self._append_message(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                role="tool",
+                status="final",
+                blocks=[text_block(f"{action_label}: {self._tool_result_text(tool_result)}")],
+            )
+        else:
+            await self._append_message(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                role="tool",
+                status="final",
+                blocks=[text_block(f"Approved action executed: {action_label}")],
+            )
+
+        await self._store.append_stream_event(
+            run_id=run.external_id,
+            event="assistant.stream_started",
+            created_at=_now_ms(),
+            data={},
+        )
+        await self._execute_text_run(
             run=run,
-            user_input=f"User approved action: {action_label}. Continue and summarize outcomes.",
+            user_input=(
+                f"Approved tool `{action_label}` executed.\n"
+                f"Arguments: {json.dumps(tool_payload)}\n"
+                f"Result: {json.dumps(self._serialize_tool_result(tool_result))}\n"
+                "Summarize the outcome and any next steps."
+            ),
             max_tokens=700,
         )
 
@@ -348,6 +371,69 @@ class AgentRuntimeService:
             data={},
         )
 
+        if hasattr(self._adapter, "run_agent"):
+            await self._execute_tool_aware_run(run=run, user_input=user_input)
+            return
+
+        action = infer_tool_action_from_text(user_input)
+        if action:
+            await self._store.append_stream_event(
+                run_id=run.external_id,
+                event="tool.planned",
+                created_at=_now_ms(),
+                data={"name": action.name, "class": action.action_class.value},
+            )
+
+        if action and self._policy.evaluate(action).requires_approval:
+            await self._pause_for_approval(run=run, action=action)
+            return
+
+        await self._execute_text_run(run=run, user_input=user_input, max_tokens=max_tokens)
+
+    async def _execute_tool_aware_run(self, *, run: RunRecord, user_input: str) -> None:
+        try:
+            result = await self._adapter.run_agent(user_prompt=user_input)
+        except Exception as exc:
+            await self._mark_run_error(run=run, message=str(exc))
+            return
+
+        latest_text = ""
+        for partial_text in result.text_deltas:
+            latest_text = partial_text
+            await self._store.append_stream_event(
+                run_id=run.external_id,
+                event="assistant.delta",
+                created_at=_now_ms(),
+                data={"text": partial_text},
+            )
+
+        for trace in result.tool_traces:
+            await self._store.append_stream_event(
+                run_id=run.external_id,
+                event="tool.planned",
+                created_at=_now_ms(),
+                data={"name": trace.name, "input": trace.tool_input},
+            )
+            if trace.result is not None:
+                await self._store.append_stream_event(
+                    run_id=run.external_id,
+                    event="tool.completed" if not trace.is_error else "tool.failed",
+                    created_at=_now_ms(),
+                    data={
+                        "name": trace.name,
+                        "result": self._serialize_tool_result(trace.result),
+                        "is_error": trace.is_error,
+                    },
+                )
+
+        if result.blocked_action:
+            await self._pause_for_approval(run=run, action=result.blocked_action)
+            return
+
+        final_text = result.final_text or latest_text or "I finished the run but produced no text output."
+        await self._finalize_successful_run(run=run, text=final_text)
+
+    async def _execute_text_run(self, *, run: RunRecord, user_input: str, max_tokens: int) -> None:
         latest_text = ""
         try:
             async for partial_text in self._adapter.stream_text(
@@ -362,31 +448,18 @@ class AgentRuntimeService:
                     data={"text": partial_text},
                 )
         except Exception as exc:
-            now = _now_ms()
-            failed = run.model_copy(
-                update={
-                    "status": RunStatus.ERROR,
-                    "error_message": str(exc),
-                    "updated_at": now,
-                    "completed_at": now,
-                }
-            )
-            await self._store.upsert_run(failed)
-            await self._sync.upsert_run(failed)
-            await self._store.append_stream_event(
-                run_id=run.external_id,
-                event="run.error",
-                created_at=now,
-                data={"message": str(exc)},
-            )
+            await self._mark_run_error(run=run, message=str(exc))
             return
 
+        await self._finalize_successful_run(run=run, text=latest_text)
+
+    async def _finalize_successful_run(self, *, run: RunRecord, text: str) -> None:
         assistant_message = await self._append_message(
             thread_id=run.thread_external_id,
             run_id=run.external_id,
             role="assistant",
             status="final",
-            blocks=[text_block(latest_text)],
+            blocks=[text_block(text)],
         )
 
         artifact = make_report_artifact(
@@ -395,7 +468,7 @@ class AgentRuntimeService:
             run_id=run.external_id,
             title="Run Summary",
             summary="Normalized runtime output",
-            report_text=latest_text,
+            report_text=text,
             sort_order=1,
         )
         await self._store.upsert_artifact(artifact)
@@ -424,6 +497,25 @@ class AgentRuntimeService:
             event="run.completed",
             created_at=now,
             data={"status": completed.status.value},
+        )
+
+    async def _mark_run_error(self, *, run: RunRecord, message: str) -> None:
+        now = _now_ms()
+        failed = run.model_copy(
+            update={
+                "status": RunStatus.ERROR,
+                "error_message": message,
+                "updated_at": now,
+                "completed_at": now,
+            }
+        )
+        await self._store.upsert_run(failed)
+        await self._sync.upsert_run(failed)
+        await self._store.append_stream_event(
+            run_id=run.external_id,
+            event="run.error",
+            created_at=now,
+            data={"message": message},
         )
 
     async def _append_message(
@@ -589,3 +681,14 @@ class AgentRuntimeService:
             created_at=item.get("created_at") or _now_ms(),
             updated_at=item.get("updated_at") or _now_ms(),
         )
+
+    def _serialize_tool_result(self, result: object) -> object:
+        if isinstance(result, (dict, list, str, int, float, bool)) or result is None:
+            return result
+        return str(result)
+
+    def _tool_result_text(self, result: object) -> str:
+        serialized = self._serialize_tool_result(result)
+        if isinstance(serialized, str):
+            return serialized
+        return json.dumps(serialized)

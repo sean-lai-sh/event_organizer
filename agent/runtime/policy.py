@@ -55,6 +55,34 @@ class ApprovalPolicy:
         )
 
 
+READ_ONLY_TOOL_NAMES = {
+    "search_contacts",
+    "get_contact",
+    "list_events",
+    "get_event",
+    "get_event_inbound_status",
+    "get_event_outreach",
+    "get_attendance_dashboard",
+    "get_event_attendance",
+}
+
+WRITE_TOOL_NAMES = {
+    "create_contact",
+    "update_contact",
+    "update_event_safe",
+}
+
+
+def infer_tool_action_from_tool_name(tool_name: str, payload: dict | None = None) -> ToolAction:
+    normalized = tool_name.strip()
+    if normalized in READ_ONLY_TOOL_NAMES:
+        return ToolAction(name=normalized, action_class=ActionClass.READ, payload=payload or {})
+    if normalized in WRITE_TOOL_NAMES:
+        return ToolAction(name=normalized, action_class=ActionClass.WRITE, payload=payload or {})
+
+    return ToolAction(name=normalized or "unknown_tool", action_class=ActionClass.ANALYZE, payload=payload or {})
+
+
 def infer_tool_action_from_text(text: str) -> ToolAction | None:
     """
     Lightweight heuristic to classify intended action type.

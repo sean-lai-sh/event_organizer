@@ -21,8 +21,10 @@ def build_image(*, extra_pip: Iterable[str] = (), add_prompts: bool = False) -> 
         .pip_install(
             "httpx>=0.27",
             "anthropic>=0.40",
+            "claude-agent-sdk",
             "python-dotenv",
             "pydantic[email]>=2.0",
+            "fastmcp>=2.0",
             "fastapi[standard]",
             *list(extra_pip),
         )

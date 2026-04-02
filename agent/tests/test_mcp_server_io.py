@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import mcp_server
+from apps.mcp import service as mcp_service
 
 
 def _sample_record(record_id: str = "rec_123") -> dict:
@@ -60,7 +60,77 @@ class FakeAttioClient:
 
 
 def _install_fake_attio(monkeypatch: pytest.MonkeyPatch, state: dict) -> None:
-    monkeypatch.setattr(mcp_server, "AttioClient", lambda: FakeAttioClient(state))
+    monkeypatch.setattr(mcp_service, "AttioClient", lambda: FakeAttioClient(state))
+
+
+class FakeConvexClient:
+    def __init__(self, state: dict) -> None:
+        self.state = state
+
+    async def __aenter__(self) -> "FakeConvexClient":
+        return self
+
+    async def __aexit__(self, *_args) -> None:
+        return None
+
+    async def list_events(self, status: str | None = None, limit: int | None = None) -> list[dict]:
+        self.state["list_events_calls"].append({"status": status, "limit": limit})
+        rows = self.state.get("list_events_result", [])
+        return rows[:limit] if limit is not None else rows
+
+    async def get_event(self, event_id: str) -> dict | None:
+        self.state["get_event_calls"].append(event_id)
+        return self.state.get("get_event_result")
+
+    async def get_event_inbound_status(self, event_id: str | None = None) -> list[dict]:
+        self.state["inbound_status_calls"].append(event_id)
+        return self.state.get("inbound_status_result", [])
+
+    async def get_outreach_for_event(self, event_id: str, approved: bool | None = None) -> list[dict]:
+        self.state["get_outreach_calls"].append({"event_id": event_id, "approved": approved})
+        return self.state.get("outreach_result", [])
+
+    async def get_attendance_dashboard(self) -> dict:
+        self.state["dashboard_calls"].append(True)
+        return self.state.get("dashboard_result", {})
+
+    async def get_event_attendance(self, event_id: str) -> dict:
+        self.state["attendance_calls"].append(event_id)
+        return self.state.get("attendance_result", {})
+
+    async def update_event_safe(
+        self,
+        event_id: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        event_date: str | None = None,
+        event_time: str | None = None,
+        event_end_time: str | None = None,
+        location: str | None = None,
+        status: str | None = None,
+        speaker_confirmed: bool | None = None,
+        room_confirmed: bool | None = None,
+    ) -> dict | None:
+        self.state["update_event_calls"].append(
+            {
+                "event_id": event_id,
+                "title": title,
+                "description": description,
+                "event_date": event_date,
+                "event_time": event_time,
+                "event_end_time": event_end_time,
+                "location": location,
+                "status": status,
+                "speaker_confirmed": speaker_confirmed,
+                "room_confirmed": room_confirmed,
+            }
+        )
+        return self.state.get("update_event_result")
+
+
+def _install_fake_convex(monkeypatch: pytest.MonkeyPatch, state: dict) -> None:
+    monkeypatch.setattr(mcp_service, "ConvexClient", lambda: FakeConvexClient(state))
 
 
 @pytest.mark.asyncio
@@ -75,7 +145,7 @@ async def test_search_contacts_io(monkeypatch: pytest.MonkeyPatch) -> None:
     }
     _install_fake_attio(monkeypatch, state)
 
-    rows = await mcp_server.search_contacts(
+    rows = await mcp_service.search_contacts(
         outreach_status="pending",
         contact_source="warm_intro",
         limit=7,
@@ -116,7 +186,7 @@ async def test_search_contacts_io_without_filters_uses_empty_filter(monkeypatch:
     }
     _install_fake_attio(monkeypatch, state)
 
-    rows = await mcp_server.search_contacts(limit=3)
+    rows = await mcp_service.search_contacts(limit=3)
 
     assert len(state["search_calls"]) == 1
     call = state["search_calls"][0]
@@ -137,7 +207,7 @@ async def test_get_contact_io(monkeypatch: pytest.MonkeyPatch) -> None:
     }
     _install_fake_attio(monkeypatch, state)
 
-    row = await mcp_server.get_contact("rec_777")
+    row = await mcp_service.get_contact("rec_777")
 
     assert state["get_calls"] == ["rec_777"]
     assert row["id"] == "rec_777"
@@ -156,7 +226,7 @@ async def test_create_contact_io(monkeypatch: pytest.MonkeyPatch) -> None:
     }
     _install_fake_attio(monkeypatch, state)
 
-    created = await mcp_server.create_contact(
+    created = await mcp_service.create_contact(
         firstname="Ada",
         lastname="Lovelace",
         email="ada@example.com",
@@ -194,7 +264,7 @@ async def test_update_contact_io_with_note(monkeypatch: pytest.MonkeyPatch) -> N
     }
     _install_fake_attio(monkeypatch, state)
 
-    updated = await mcp_server.update_contact(
+    updated = await mcp_service.update_contact(
         record_id="rec_abc",
         outreach_status="agent_active",
         relationship_stage="active",
@@ -230,7 +300,7 @@ async def test_update_contact_timestamp_only(monkeypatch: pytest.MonkeyPatch) ->
     }
     _install_fake_attio(monkeypatch, state)
 
-    updated = await mcp_server.update_contact(
+    updated = await mcp_service.update_contact(
         record_id="rec_ts",
         last_agent_action_at="2026-04-01T10:11:12Z",
     )
@@ -257,9 +327,176 @@ async def test_update_contact_no_updates_reads_contact(monkeypatch: pytest.Monke
     }
     _install_fake_attio(monkeypatch, state)
 
-    updated = await mcp_server.update_contact(record_id="rec_read")
+    updated = await mcp_service.update_contact(record_id="rec_read")
 
     assert not state["note_calls"]
     assert not state["update_calls"]
     assert state["get_calls"] == ["rec_read"]
     assert updated["id"] == "rec_read"
+
+
+@pytest.mark.asyncio
+async def test_list_events_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "list_events_result": [
+            {"_id": "evt_1", "title": "Hack Night", "status": "draft"},
+            {"_id": "evt_2", "title": "Workshop", "status": "outreach"},
+        ],
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    rows = await mcp_service.list_events(status="draft", limit=1)
+
+    assert state["list_events_calls"] == [{"status": "draft", "limit": 1}]
+    assert rows == [{"_id": "evt_1", "title": "Hack Night", "status": "draft"}]
+
+
+@pytest.mark.asyncio
+async def test_get_event_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "get_event_result": {"_id": "evt_7", "title": "Talk Night"},
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    event = await mcp_service.get_event("evt_7")
+
+    assert state["get_event_calls"] == ["evt_7"]
+    assert event == {"_id": "evt_7", "title": "Talk Night"}
+
+
+@pytest.mark.asyncio
+async def test_get_event_outreach_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "outreach_result": [{"attio_record_id": "rec_1", "response": "pending"}],
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    rows = await mcp_service.get_event_outreach("evt_7", approved=True)
+
+    assert state["get_outreach_calls"] == [{"event_id": "evt_7", "approved": True}]
+    assert rows == [{"attio_record_id": "rec_1", "response": "pending"}]
+
+
+@pytest.mark.asyncio
+async def test_get_event_inbound_status_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "inbound_status_result": [
+            {"event_id": "evt_1", "summary": {"threads": 2}},
+        ],
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    rows = await mcp_service.get_event_inbound_status("evt_1")
+
+    assert state["inbound_status_calls"] == ["evt_1"]
+    assert rows == [{"event_id": "evt_1", "summary": {"threads": 2}}]
+
+
+@pytest.mark.asyncio
+async def test_get_attendance_dashboard_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "dashboard_result": {"totals": {"events_tracked": 2, "unique_attendees": 12}},
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    dashboard = await mcp_service.get_attendance_dashboard()
+
+    assert state["dashboard_calls"] == [True]
+    assert dashboard["totals"]["events_tracked"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_event_attendance_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "attendance_result": {
+            "event": {"_id": "evt_9", "title": "Workshop"},
+            "attendees": [{"email": "ada@example.com"}],
+        },
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    attendance = await mcp_service.get_event_attendance("evt_9")
+
+    assert state["attendance_calls"] == ["evt_9"]
+    assert attendance["event"]["title"] == "Workshop"
+
+
+@pytest.mark.asyncio
+async def test_update_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "update_event_result": {"_id": "evt_9", "title": "Updated"},
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    updated = await mcp_service.update_event_safe(
+        event_id="evt_9",
+        title="Updated",
+        status="outreach",
+        speaker_confirmed=True,
+        room_confirmed=False,
+    )
+
+    assert state["update_event_calls"] == [
+        {
+            "event_id": "evt_9",
+            "title": "Updated",
+            "description": None,
+            "event_date": None,
+            "event_time": None,
+            "event_end_time": None,
+            "location": None,
+            "status": "outreach",
+            "speaker_confirmed": True,
+            "room_confirmed": False,
+        }
+    ]
+    assert updated == {"_id": "evt_9", "title": "Updated"}
