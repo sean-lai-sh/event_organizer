@@ -33,9 +33,14 @@ class InMemoryRuntimeStore:
         self._run_event_sequences: dict[str, int] = defaultdict(int)
         self._run_events: dict[str, list[StreamEvent]] = defaultdict(list)
         self._pending_actions: dict[str, ToolAction] = {}
+        self._thread_insert_counter = 0
+        self._thread_insert_order: dict[str, int] = {}
 
     async def upsert_thread(self, record: ThreadRecord) -> None:
         async with self._lock:
+            if record.external_id not in self._thread_insert_order:
+                self._thread_insert_counter += 1
+                self._thread_insert_order[record.external_id] = self._thread_insert_counter
             self.threads[record.external_id] = record
 
     async def get_thread(self, thread_id: str) -> ThreadRecord | None:
@@ -44,7 +49,10 @@ class InMemoryRuntimeStore:
     async def list_threads(self, *, limit: int | None = None) -> list[ThreadRecord]:
         rows = list(self.threads.values())
         rows.sort(
-            key=lambda row: row.last_message_at or row.last_run_started_at or row.updated_at,
+            key=lambda row: (
+                row.last_message_at or row.last_run_started_at or row.updated_at,
+                self._thread_insert_order.get(row.external_id, 0),
+            ),
             reverse=True,
         )
         return rows[:limit] if limit else rows

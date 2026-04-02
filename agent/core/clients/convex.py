@@ -154,12 +154,21 @@ class ConvexClient:
             },
         )
 
-    async def record_inbound_receipt(self, message_id: str, thread_id: str | None = None) -> bool:
+    async def begin_inbound_receipt(self, message_id: str, thread_id: str | None = None) -> dict:
+        return await self.mutation(
+            "outreach:beginInboundReceipt",
+            {"message_id": message_id, "thread_id": thread_id},
+        )
+
+    async def complete_inbound_receipt(self, message_id: str, thread_id: str | None = None) -> bool:
         res = await self.mutation(
-            "outreach:recordInboundReceipt",
+            "outreach:completeInboundReceipt",
             {"message_id": message_id, "thread_id": thread_id},
         )
         return bool(res.get("is_duplicate"))
+
+    async def release_inbound_receipt(self, message_id: str) -> None:
+        await self.mutation("outreach:releaseInboundReceipt", {"message_id": message_id})
 
     async def delete_event(self, event_id: str) -> None:
         await self.mutation("events:deleteEvent", {"event_id": event_id})

@@ -1,15 +1,25 @@
-import { NextRequest } from "next/server";
-import { proxyModalRequest } from "../../_lib/modalProxy";
+import { NextRequest, NextResponse } from "next/server";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "@/convex/_generated/api";
+
+function convex() {
+  return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+}
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ threadId: string }> }
 ) {
   const { threadId } = await params;
-  return await proxyModalRequest(
-    request,
-    `/agent/threads/${encodeURIComponent(threadId)}`
-  );
+  const state = await convex().query(api.agentState.getThreadState, {
+    external_id: threadId,
+  });
+
+  if (!state) {
+    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(state);
 }

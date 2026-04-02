@@ -74,11 +74,14 @@ type BackendThreadState = {
   approvals: BackendApproval[];
 };
 
-type StreamEvent = {
+type RunStreamEvent = {
   event: string;
-  data?: {
-    text?: string;
-  };
+  data: Record<string, unknown>;
+};
+
+type RunWithEventsResponse = {
+  run: BackendRun & { error_message?: string | null };
+  events: RunStreamEvent[];
 };
 
 const API_BASE = "/api/agent";
@@ -207,33 +210,26 @@ function mapRun(run: BackendRun): AgentRun {
   };
 }
 
-function parseSseEvents(payload: string): StreamEvent[] {
-  return payload
-    .split("\n\n")
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk) => {
-      const eventLine = chunk
-        .split("\n")
-        .find((line) => line.startsWith("event:"));
-      const dataLine = chunk
-        .split("\n")
-        .find((line) => line.startsWith("data:"));
-      const event = eventLine?.slice("event:".length).trim() ?? "message";
-      const rawData = dataLine?.slice("data:".length).trim() ?? "{}";
-      const parsed = parseJson(rawData) ?? {};
-      const eventData =
-        typeof parsed === "object" &&
-        parsed !== null &&
-        "data" in parsed &&
-        typeof parsed.data === "object"
-          ? (parsed.data as StreamEvent["data"])
-          : {};
-      return {
-        event,
-        data: eventData,
-      };
-    });
+function typewriterReveal(text: string, onChunk: (text: string) => void): Promise<void> {
+  return new Promise((resolve) => {
+    const words = text.split(" ");
+    let revealed = "";
+    let i = 0;
+    // Vary speed slightly so it feels natural, not robotic
+    const step = () => {
+      if (i >= words.length) {
+        resolve();
+        return;
+      }
+      revealed += (i === 0 ? "" : " ") + words[i];
+      onChunk(revealed);
+      i++;
+      // ~60-120ms per word feels natural for reading speed
+      const delay = 60 + Math.random() * 40;
+      setTimeout(step, delay);
+    };
+    step();
+  });
 }
 
 export async function listThreads(): Promise<AgentThread[]> {
@@ -289,11 +285,9 @@ export async function startRun(
   userMessage: string,
   onChunk: (text: string) => void
 ): Promise<void> {
-  const run = await request<BackendRun>("/runs", {
+  const result = await request<RunWithEventsResponse>("/runs", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
       thread_id: threadId,
       input_text: userMessage,
@@ -301,27 +295,19 @@ export async function startRun(
     }),
   });
 
-  const response = await fetch(
-    `${API_BASE}/runs/${encodeURIComponent(run.external_id)}/stream`,
-    {
-      headers: {
-        accept: "text/event-stream",
-      },
-      cache: "no-store",
-    }
-  );
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Agent stream failed: ${response.status}`);
+  if (result.run.error_message) {
+    throw new Error(result.run.error_message);
   }
 
-  const payload = await response.text();
-  const events = parseSseEvents(payload);
-  for (const event of events) {
-    if (event.event === "assistant.delta" && event.data?.text) {
-      onChunk(event.data.text);
-    }
+  // Find the final assistant text from events and reveal it with a typewriter animation
+  const finalText = result.events
+    .filter((e) => e.event === "assistant.delta")
+    .map((e) => e.data.text as string)
+    .filter(Boolean)
+    .at(-1);
+
+  if (finalText) {
+    await typewriterReveal(finalText, onChunk);
   }
 }
 

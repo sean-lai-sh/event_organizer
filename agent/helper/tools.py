@@ -20,7 +20,7 @@ async def llm_call(system: str, user_prompt: str, max_tokens: int = 1024) -> str
     """Small compatibility wrapper for Claude text generation calls."""
     client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user_prompt}],

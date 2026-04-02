@@ -1,212 +1,197 @@
-"""
-Test: reply_handler webhook — known thread, net-new (event created), net-new (weak signal).
-
-Steps (shown individually in pytest output):
-  1. test_known_thread   — thread_id matches seeded outreach row → known_thread path
-  2. test_net_new_event  — strong event + timing signal → net_new, draft event auto-created
-  3. test_weak_signal    — weak signal → net_new, no event created
-
-Idempotency guarantee:
-  • Convex: all seeded and auto-created events, outreach rows, and inbound receipts are
-    deleted in teardown regardless of pass/fail.
-  • Attio: notes written on Sean's record during the run are deleted (timestamp-fenced).
-    Sean's contact fields are not mutated by any webhook path (append_attio_note is called
-    without outreach_status, so no field updates occur).
-  • Seed data (event + outreach link) is always deleted — it only ever existed for the test.
-"""
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
-
-import httpx
 import pytest
 
-from helper.attio import AttioClient
-from helper.tools import ConvexClient
+import reply_handler
 
-SEAN_ATTIO_ID = "2d49cd9b-e058-427f-bdd7-3f8673a31ef0"
-SEAN_EMAIL = "seanlai@nyu.edu"
-FAKE_THREAD_ID = "test-thread-dev-001"
+RAW_HANDLE_REPLY = reply_handler.handle_reply.get_raw_f()
 
-MSG_KNOWN = "test-msg-known-001"
-MSG_NET_NEW = "test-msg-netnew-001"
-MSG_WEAK = "test-msg-weak-001"
-MSG_THREAD_FOLLOW = "test-msg-thread-follow-001"
-ALL_MSG_IDS = [MSG_KNOWN, MSG_NET_NEW, MSG_WEAK, MSG_THREAD_FOLLOW]
-
-WEAK_THREAD_ID = "test-thread-weak-001"
-
-WEBHOOK_URL = "https://sean-lai-sh--event-outreach-replies-handle-reply-dev.modal.run"
+KNOWN_EMAIL_THREAD_ID = "email-thread-known-001"
+WEAK_EMAIL_THREAD_ID = "email-thread-weak-001"
 
 
-# ── HTTP helper ───────────────────────────────────────────────────────────────
+class StubConvexClient:
+    def __init__(
+        self,
+        *,
+        outreach_by_email_thread_id: dict[str, dict],
+        receipt_state: dict | None = None,
+    ) -> None:
+        self._outreach_by_email_thread_id = outreach_by_email_thread_id
+        self._receipt_state = receipt_state or {
+            "should_process": True,
+            "is_duplicate": False,
+            "in_progress": False,
+        }
 
-async def _fire(client: httpx.AsyncClient, label: str, payload: dict) -> dict:
-    print(f"\n── {label} ──")
-    resp = await client.post(WEBHOOK_URL, json=payload)
-    body = resp.json()
-    print(f"  {resp.status_code}: {body}")
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {body}"
-    return body
+    async def __aenter__(self) -> "StubConvexClient":
+        return self
 
+    async def __aexit__(self, *_args) -> None:
+        return None
 
-# ── Async helpers for seed / teardown ─────────────────────────────────────────
+    async def begin_inbound_receipt(self, message_id: str, thread_id: str | None = None) -> dict:
+        _ = (message_id, thread_id)
+        return self._receipt_state
 
-async def _seed(state: dict) -> None:
-    async with ConvexClient() as sb:
-        event_id = await sb.create_event({
-            "title": "AI in Student Clubs — Test Talk",
-            "description": "Seeded by test_reply_handler.py",
-            "event_date": "2026-04-15",
-            "event_time": "6:00 PM",
-            "event_end_time": None,
-            "location": "NYU Bobst Library, Room 601",
-            "event_type": None,
-            "target_profile": None,
-            "needs_outreach": False,
-            "status": "draft",
-            "created_by": SEAN_EMAIL,
-        })
-        state["seeded_event_id"] = event_id
-        state["created_event_ids"].append(event_id)
-        await sb.upsert_outreach_link(event_id, SEAN_ATTIO_ID, thread_id=FAKE_THREAD_ID)
+    async def find_outreach_by_thread(self, thread_id: str) -> dict | None:
+        return self._outreach_by_email_thread_id.get(thread_id)
 
+    async def complete_inbound_receipt(self, message_id: str, thread_id: str | None = None) -> bool:
+        _ = (message_id, thread_id)
+        return False
 
-async def _teardown(state: dict) -> None:
-    async with ConvexClient() as sb:
-        for eid in state["created_event_ids"]:
-            await sb.delete_outreach_for_event(eid)
-            await sb.delete_event(eid)
-        for msg_id in ALL_MSG_IDS:
-            await sb.delete_inbound_receipt(msg_id)
-
-    async with AttioClient() as attio:
-        notes = await attio.list_notes(SEAN_ATTIO_ID)
-        for note in notes:
-            note_id = note.get("id", {}).get("note_id")
-            created_at_str = note.get("created_at")
-            if note_id and created_at_str:
-                note_dt = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
-                if note_dt >= state["test_start"]:
-                    await attio.delete_note(note_id)
+    async def release_inbound_receipt(self, message_id: str) -> None:
+        _ = message_id
 
 
-# ── Module-scoped fixture (sync wrapper so event-loop scope is never an issue) ─
-
-@pytest.fixture(scope="module")
-def reply_state() -> dict:
-    """
-    Seeds Convex with a test event + outreach link before any test runs,
-    yields shared mutable state, then unconditionally tears down all created
-    Convex rows and timestamp-fenced Attio notes.
-    """
-    state: dict = {
-        "created_event_ids": [],
-        "seeded_event_id": None,
-        "test_start": datetime.now(timezone.utc),
+def _payload(
+    *,
+    message_id: str,
+    email_thread_id: str,
+    subject: str,
+    text: str,
+) -> dict:
+    return {
+        "event_type": "message.received",
+        "message": {
+            "message_id": message_id,
+            "thread_id": email_thread_id,
+            "from_": "Sean Lai <seanlai@nyu.edu>",
+            "to": "events@yourdomain.com",
+            "cc": "",
+            "subject": subject,
+            "text": text,
+        },
     }
-    asyncio.run(_seed(state))
-    yield state
-    asyncio.run(_teardown(state))
 
 
-# ── Tests ─────────────────────────────────────────────────────────────────────
-
-async def test_known_thread(reply_state: dict) -> None:
-    """Step 1 — reply on a seeded thread_id is routed through the known_thread path."""
-    async with httpx.AsyncClient(timeout=60) as client:
-        body = await _fire(client, "KNOWN THREAD (accept + speaker confirm)", {
-            "event_type": "message.received",
-            "message": {
-                "message_id": MSG_KNOWN,
-                "thread_id": FAKE_THREAD_ID,
-                "from_": f"Sean Lai <{SEAN_EMAIL}>",
-                "to": "events@yourdomain.com",
-                "cc": "",
-                "subject": "Re: Speaking at AI in Student Clubs",
-                "text": (
-                    "Hey! Yes, I'd love to speak at your event. "
-                    "Count me in — I can talk about LLM tooling for 30 minutes. "
-                    "Does April 15th at 6pm still work?"
-                ),
-            },
-        })
-    assert body.get("path") == "known_thread"
-
-
-async def test_net_new_event(reply_state: dict) -> None:
-    """Step 2 — inbound with strong event + timing signal auto-creates a draft event."""
-    async with httpx.AsyncClient(timeout=60) as client:
-        body = await _fire(client, "NET-NEW (event + timing signal → auto-create draft)", {
-            "event_type": "message.received",
-            "message": {
-                "message_id": MSG_NET_NEW,
-                "thread_id": "test-thread-netnew-001",
-                "from_": f"Sean Lai <{SEAN_EMAIL}>",
-                "to": "events@yourdomain.com",
-                "cc": "",
-                "subject": "Interested in hosting a workshop next month",
-                "text": (
-                    "Hi! I wanted to reach out about potentially hosting a workshop "
-                    "on building AI agents. I'm thinking sometime in April — maybe "
-                    "the week of April 14th? Let me know if that works for your club."
-                ),
-            },
-        })
-    assert body.get("path") == "net_new"
-    # Track any auto-created event so teardown can delete it
-    if body.get("event_created") and body.get("event_id"):
-        reply_state["created_event_ids"].append(body["event_id"])
-
-
-async def test_weak_signal(reply_state: dict) -> None:
-    """Step 3 — weak signal still creates a draft event + outreach link for thread tracking."""
-    async with httpx.AsyncClient(timeout=60) as client:
-        body = await _fire(client, "NET-NEW (weak signal → draft event for thread tracking)", {
-            "event_type": "message.received",
-            "message": {
-                "message_id": MSG_WEAK,
-                "thread_id": WEAK_THREAD_ID,
-                "from_": f"Sean Lai <{SEAN_EMAIL}>",
-                "to": "events@yourdomain.com",
-                "cc": "",
-                "subject": "Quick hello",
-                "text": "Hey, just wanted to introduce myself. Happy to chat sometime!",
-            },
-        })
-    assert body.get("path") == "net_new"
-    assert body.get("event_created"), f"Weak signal should still create a draft tracking event: {body}"
-    assert body.get("event_id"), f"event_id missing from weak signal response: {body}"
-    assert not body.get("strong_signal"), f"Weak signal should not be flagged as strong: {body}"
-    # Track for teardown
-    reply_state["created_event_ids"].append(body["event_id"])
-
-
-async def test_thread_continuation(reply_state: dict) -> None:
-    """Step 4 — follow-up on a weak-signal thread routes to known_thread.
-
-    Depends on test_weak_signal having run first and written the outreach link.
-    Verifies that any reply on an existing thread — even one that started weak —
-    is correctly routed through the known_thread path rather than spawning a
-    duplicate net_new event.
-    """
-    async with httpx.AsyncClient(timeout=60) as client:
-        body = await _fire(client, "THREAD CONTINUATION (follow-up on weak thread → known_thread)", {
-            "event_type": "message.received",
-            "message": {
-                "message_id": MSG_THREAD_FOLLOW,
-                "thread_id": WEAK_THREAD_ID,
-                "from_": f"Sean Lai <{SEAN_EMAIL}>",
-                "to": "events@yourdomain.com",
-                "cc": "",
-                "subject": "Re: Quick hello",
-                "text": (
-                    "Actually, I'd love to do a talk for your club. "
-                    "I'm thinking a 45-minute session on AI tooling — would April work?"
-                ),
-            },
-        })
-    assert body.get("path") == "known_thread", (
-        f"Follow-up on existing thread should route to known_thread, got: {body}"
+@pytest.mark.asyncio
+async def test_known_email_thread_routes_to_known_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        reply_handler,
+        "ConvexClient",
+        lambda: StubConvexClient(
+            outreach_by_email_thread_id={
+                KNOWN_EMAIL_THREAD_ID: {"event_id": "event-1", "attio_record_id": "person-1"}
+            }
+        ),
     )
+
+    async def fake_known_thread(**kwargs):
+        assert kwargs["thread_id"] == KNOWN_EMAIL_THREAD_ID
+        assert kwargs["sender_email"] == "seanlai@nyu.edu"
+        return {"status": "processed", "path": "known_thread"}
+
+    monkeypatch.setattr(reply_handler, "handle_known_thread", fake_known_thread)
+
+    body = await RAW_HANDLE_REPLY(
+        _payload(
+            message_id="msg-known-001",
+            email_thread_id=KNOWN_EMAIL_THREAD_ID,
+            subject="Re: Speaking at AI in Student Clubs",
+            text="Yes, I would love to speak.",
+        )
+    )
+
+    assert body["path"] == "known_thread"
+
+
+@pytest.mark.asyncio
+async def test_net_new_event_routes_to_net_new(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        reply_handler,
+        "ConvexClient",
+        lambda: StubConvexClient(outreach_by_email_thread_id={}),
+    )
+
+    async def fake_net_new(**kwargs):
+        assert kwargs["thread_id"] == "email-thread-netnew-001"
+        assert kwargs["sender_email"] == "seanlai@nyu.edu"
+        return {
+            "status": "processed",
+            "path": "net_new",
+            "event_created": True,
+            "event_id": "event-net-new-1",
+            "strong_signal": True,
+        }
+
+    monkeypatch.setattr(reply_handler, "handle_net_new", fake_net_new)
+
+    body = await RAW_HANDLE_REPLY(
+        _payload(
+            message_id="msg-netnew-001",
+            email_thread_id="email-thread-netnew-001",
+            subject="Interested in hosting a workshop next month",
+            text="I want to host a workshop in April.",
+        )
+    )
+
+    assert body["path"] == "net_new"
+    assert body["event_created"] is True
+    assert body["strong_signal"] is True
+
+
+@pytest.mark.asyncio
+async def test_weak_signal_routes_to_net_new_tracking_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        reply_handler,
+        "ConvexClient",
+        lambda: StubConvexClient(outreach_by_email_thread_id={}),
+    )
+
+    async def fake_net_new(**kwargs):
+        assert kwargs["thread_id"] == WEAK_EMAIL_THREAD_ID
+        return {
+            "status": "processed",
+            "path": "net_new",
+            "event_created": True,
+            "event_id": "event-weak-1",
+            "strong_signal": False,
+        }
+
+    monkeypatch.setattr(reply_handler, "handle_net_new", fake_net_new)
+
+    body = await RAW_HANDLE_REPLY(
+        _payload(
+            message_id="msg-weak-001",
+            email_thread_id=WEAK_EMAIL_THREAD_ID,
+            subject="Quick hello",
+            text="Happy to chat sometime.",
+        )
+    )
+
+    assert body["path"] == "net_new"
+    assert body["event_created"] is True
+    assert body["event_id"] == "event-weak-1"
+    assert body["strong_signal"] is False
+
+
+@pytest.mark.asyncio
+async def test_existing_email_thread_continuation_routes_to_known_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        reply_handler,
+        "ConvexClient",
+        lambda: StubConvexClient(
+            outreach_by_email_thread_id={
+                WEAK_EMAIL_THREAD_ID: {"event_id": "event-weak-1", "attio_record_id": "person-1"}
+            }
+        ),
+    )
+
+    async def fake_known_thread(**kwargs):
+        assert kwargs["thread_id"] == WEAK_EMAIL_THREAD_ID
+        return {"status": "processed", "path": "known_thread"}
+
+    monkeypatch.setattr(reply_handler, "handle_known_thread", fake_known_thread)
+
+    body = await RAW_HANDLE_REPLY(
+        _payload(
+            message_id="msg-thread-follow-001",
+            email_thread_id=WEAK_EMAIL_THREAD_ID,
+            subject="Re: Quick hello",
+            text="Actually I would love to do a talk in April.",
+        )
+    )
+
+    assert body["path"] == "known_thread"

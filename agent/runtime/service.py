@@ -18,6 +18,7 @@ from .contracts import (
     RunCreateRequest,
     RunRecord,
     RunStatus,
+    RunWithEventsResponse,
     ThreadCreateRequest,
     ThreadRecord,
     ThreadStateResponse,
@@ -126,7 +127,7 @@ class AgentRuntimeService:
 
         return hydrated
 
-    async def start_run(self, request: RunCreateRequest) -> RunRecord:
+    async def start_run(self, request: RunCreateRequest) -> RunWithEventsResponse:
         thread = await self._store.get_thread(request.thread_id)
         if not thread:
             await self.get_thread_state(request.thread_id)
@@ -174,19 +175,15 @@ class AgentRuntimeService:
 
         if action and self._policy.evaluate(action).requires_approval:
             run = await self._pause_for_approval(run=run, action=action)
-            return run
+            events = await self._store.list_stream_events(run.external_id)
+            return RunWithEventsResponse(run=run, events=events)
 
         await self._execute_run(run=run, user_input=request.input_text, max_tokens=request.max_tokens)
         resolved = await self._store.get_run(run.external_id)
         if not resolved:
             raise HTTPException(status_code=500, detail="Run state missing after execution")
-        return resolved
-
-    async def list_run_events(self, run_id: str, *, after_sequence: int = 0) -> list:
-        run = await self._store.get_run(run_id)
-        if not run:
-            raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
-        return await self._store.list_stream_events(run_id, after_sequence=after_sequence)
+        events = await self._store.list_stream_events(run.external_id)
+        return RunWithEventsResponse(run=resolved, events=events)
 
     async def submit_approval(self, approval_id: str, request: ApprovalDecisionRequest) -> ApprovalDecisionResponse:
         decision_status = ApprovalStatus(request.decision)

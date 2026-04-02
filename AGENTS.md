@@ -224,6 +224,12 @@ Long-term contract:
 
 Stores message dedupe state.
 
+Current intended meaning:
+
+- `status` = receipt processing lifecycle such as `processing` or `completed`
+- `lease_expires_at` = retry window for an in-flight processing claim
+- `completed_at` = timestamp when dedupe was committed after successful processing
+
 Write dedupe only after the related Attio and Convex mutations succeed, or make the receipt explicitly retryable.
 
 #### `invites`

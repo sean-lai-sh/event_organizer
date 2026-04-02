@@ -113,7 +113,7 @@ async def classify_known_thread(
     try:
         client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         msg = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
             max_tokens=512,
             system=KNOWN_THREAD_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
@@ -134,7 +134,7 @@ async def classify_net_new(
     try:
         client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         msg = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
             max_tokens=1024,
             system=NET_NEW_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],

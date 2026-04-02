@@ -10,6 +10,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "You are the Event Organizer runtime assistant. "
     "Respond with concise operational guidance and clear next actions."
 )
+DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
 
 class AnthropicRuntimeAdapter:
@@ -22,7 +23,7 @@ class AnthropicRuntimeAdapter:
 
     def __init__(self, *, model: str | None = None) -> None:
         self._api_key = os.environ.get("ANTHROPIC_API_KEY")
-        self._model = model or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
+        self._model = model or os.environ.get("ANTHROPIC_MODEL", DEFAULT_ANTHROPIC_MODEL)
 
     @property
     def model(self) -> str:

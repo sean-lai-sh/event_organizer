@@ -28,9 +28,9 @@ async def test_start_run_without_approval_completes() -> None:
     )
 
     thread = await service.create_thread(ThreadCreateRequest(title="Test thread"))
-    run = await service.start_run(RunCreateRequest(thread_id=thread.external_id, input_text="Summarize the agenda"))
+    response = await service.start_run(RunCreateRequest(thread_id=thread.external_id, input_text="Summarize the agenda"))
 
-    assert run.status.value == "completed"
+    assert response.run.status.value == "completed"
 
     state = await service.get_thread_state(thread.external_id)
     assert len(state.messages) >= 2
@@ -48,11 +48,11 @@ async def test_start_run_with_send_pauses_for_approval_and_resumes() -> None:
     )
 
     thread = await service.create_thread(ThreadCreateRequest(title="Approval thread"))
-    run = await service.start_run(
+    response = await service.start_run(
         RunCreateRequest(thread_id=thread.external_id, input_text="Send outreach email to speakers")
     )
 
-    assert run.status.value == "paused_approval"
+    assert response.run.status.value == "paused_approval"
 
     state = await service.get_thread_state(thread.external_id)
     assert len(state.approvals) == 1
@@ -77,10 +77,10 @@ async def test_rejected_approval_finalizes_without_execution() -> None:
     )
 
     thread = await service.create_thread(ThreadCreateRequest(title="Reject thread"))
-    run = await service.start_run(
+    response = await service.start_run(
         RunCreateRequest(thread_id=thread.external_id, input_text="Delete this event")
     )
-    assert run.status.value == "paused_approval"
+    assert response.run.status.value == "paused_approval"
 
     state = await service.get_thread_state(thread.external_id)
     approval = state.approvals[0]
