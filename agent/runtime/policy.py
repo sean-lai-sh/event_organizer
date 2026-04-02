@@ -4,7 +4,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from runtime.contracts import RiskLevel
+from .contracts import RiskLevel
 
 
 class ActionClass(str, Enum):

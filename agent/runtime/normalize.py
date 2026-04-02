@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Iterable
 
-from runtime.contracts import ArtifactKind, ArtifactRecord, ContentBlock, StreamEvent
+from .contracts import ArtifactKind, ArtifactRecord, ContentBlock, StreamEvent
 
 
 def now_ms() -> int:

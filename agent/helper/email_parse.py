@@ -9,12 +9,20 @@ from typing import Any
 
 import anthropic
 
-from helper.tools import (
-    ConvexClient,
-    append_attio_note,
-    get_agentmail_client,
-    upsert_inbound_contact,
-)
+try:
+    from helper.tools import (
+        ConvexClient,
+        append_attio_note,
+        get_agentmail_client,
+        upsert_inbound_contact,
+    )
+except ModuleNotFoundError:  # pragma: no cover - package import fallback
+    from agent.helper.tools import (
+        ConvexClient,
+        append_attio_note,
+        get_agentmail_client,
+        upsert_inbound_contact,
+    )
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 

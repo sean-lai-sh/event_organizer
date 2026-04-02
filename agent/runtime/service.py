@@ -6,8 +6,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from runtime.anthropic_adapter import AnthropicRuntimeAdapter
-from runtime.contracts import (
+from .anthropic_adapter import AnthropicRuntimeAdapter
+from .contracts import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
     ApprovalRecord,
@@ -22,10 +22,10 @@ from runtime.contracts import (
     ThreadRecord,
     ThreadStateResponse,
 )
-from runtime.convex_sync import ConvexAgentStateSync
-from runtime.normalize import make_report_artifact, text_block
-from runtime.policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
-from runtime.store import InMemoryRuntimeStore
+from .convex_sync import ConvexAgentStateSync
+from .normalize import make_report_artifact, text_block
+from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
+from .store import InMemoryRuntimeStore
 
 
 def _now_ms() -> int:

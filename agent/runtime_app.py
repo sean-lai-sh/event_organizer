@@ -1,9 +1,10 @@
-"""Compatibility shim for legacy runtime entrypoint path."""
+"""Root launcher for the conversational runtime Modal app."""
+from __future__ import annotations
 
 try:
-    from runtime_app import app, fastapi_app, image
+    from apps.runtime.app import app, fastapi_app, image
 except ModuleNotFoundError:  # pragma: no cover - package import fallback
-    from agent.runtime_app import app, fastapi_app, image
+    from agent.apps.runtime.app import app, fastapi_app, image
 
 __all__ = ["app", "image", "fastapi_app"]
 
