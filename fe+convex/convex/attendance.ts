@@ -2,7 +2,23 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 
+type EventRow = Doc<"events">;
 type AttendanceRow = Doc<"attendance">;
+type AttendanceInsightRow = Doc<"attendance_insights">;
+
+type AttendanceDashboardContext = {
+  db: {
+    query(table: "events"): {
+      collect: () => Promise<EventRow[]>;
+    };
+    query(table: "attendance"): {
+      collect: () => Promise<AttendanceRow[]>;
+    };
+    query(table: "attendance_insights"): {
+      collect: () => Promise<AttendanceInsightRow[]>;
+    };
+  };
+};
 
 type AttendanceInput = {
   email: string;
@@ -76,7 +92,7 @@ function summarizeSourceCounts(rows: AttendanceRow[]) {
   }, {});
 }
 
-async function buildAttendanceDashboard(ctx: { db: { query: (table: "events" | "attendance" | "attendance_insights") => { collect: () => Promise<any[]> } } }) {
+async function buildAttendanceDashboard(ctx: AttendanceDashboardContext) {
   const [events, attendanceRows, insightRows] = await Promise.all([
     ctx.db.query("events").collect(),
     ctx.db.query("attendance").collect(),
@@ -105,7 +121,7 @@ async function buildAttendanceDashboard(ctx: { db: { query: (table: "events" | "
     }
   >();
 
-  for (const row of attendanceRows as AttendanceRow[]) {
+  for (const row of attendanceRows) {
     const event = eventMap.get(row.event_id);
     if (!event) continue;
 
@@ -189,7 +205,7 @@ async function buildAttendanceDashboard(ctx: { db: { query: (table: "events" | "
       unique_attendees: attendeeMap.size,
       total_check_ins: attendanceRows.length,
       latest_check_in_at: recentAttendance[0]?.checked_in_at ?? null,
-      by_source: summarizeSourceCounts(attendanceRows as AttendanceRow[]),
+      by_source: summarizeSourceCounts(attendanceRows),
     },
     event_breakdown: eventBreakdown,
     repeat_attendees: repeatAttendees,

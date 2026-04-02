@@ -10,6 +10,47 @@ import {
 type TableName = "events" | "attendance" | "attendance_insights";
 type TableRow = { _id: string } & Record<string, unknown>;
 type Tables = Record<TableName, TableRow[]>;
+type AttendanceDashboardResult = {
+  totals: {
+    events_tracked: number;
+    unique_attendees: number;
+    total_check_ins: number;
+    latest_check_in_at: number | null;
+    by_source: Record<string, number>;
+  };
+  event_breakdown: Array<{
+    event_id: string;
+    title: string;
+    event_date: string | null;
+    attendee_count: number;
+    latest_check_in_at: number | null;
+    sources: Record<string, number>;
+  }>;
+  repeat_attendees: Array<{
+    email: string;
+    name: string | null;
+    event_count: number;
+    latest_check_in_at: number;
+  }>;
+  recent_attendance: Array<{
+    _id: string;
+    event_id: string;
+    event_title: string;
+    event_date: string | null;
+    email: string;
+    name: string | null;
+    checked_in_at: number;
+    source: string | null;
+  }>;
+  latest_insight: {
+    _id: string;
+    generated_at: number;
+    insight_text: string;
+    data_snapshot: string | null;
+    event_count: number;
+    attendee_count: number;
+  } | null;
+};
 
 class FakeIndexRangeBuilder {
   readonly filters: Array<[string, unknown]> = [];
@@ -268,7 +309,9 @@ describe("attendance state", () => {
       attendee_count: 2,
     });
 
-    const dashboard = await getHandler<{}, any>(getAttendanceDashboard)(ctx as never, {});
+    const dashboard = await getHandler<Record<string, never>, AttendanceDashboardResult>(
+      getAttendanceDashboard
+    )(ctx as never, {});
 
     expect(dashboard.totals).toMatchObject({
       events_tracked: 2,
@@ -280,7 +323,7 @@ describe("attendance state", () => {
       manual: 2,
       csv_import: 1,
     });
-    expect(dashboard.event_breakdown.map((event: any) => event.title)).toEqual([
+    expect(dashboard.event_breakdown.map((event) => event.title)).toEqual([
       "Founder Summit",
       "AI Fireside",
     ]);
