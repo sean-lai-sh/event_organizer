@@ -8,9 +8,9 @@ import modal
 DEFAULT_PYTHON_VERSION = "3.11"
 
 SECRETS = {
-    "runtime": "event-outreach-secrets",
-    "match": "event-outreach-secrets",
-    "outreach": "event-outreach-secrets",
+    "runtime": "doppler-v1",
+    "match": "doppler-v1",
+    "outreach": "doppler-v1",
     "replies": "doppler-v1",
 }
 

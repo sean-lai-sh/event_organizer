@@ -68,6 +68,7 @@ Next.js and Discord are thin clients over the same Modal runtime.
 
 They may:
 
+- list threads
 - create or resume threads
 - start runs
 - render streamed output

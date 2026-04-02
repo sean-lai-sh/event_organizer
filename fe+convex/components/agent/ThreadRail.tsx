@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageSquare, Plus, Zap } from "lucide-react";
 import type { AgentThread } from "./types";
-import { listThreads, createThread } from "./adapters/mock";
+import { listThreads, createThread } from "./adapters/runtime";
 
 interface ThreadRailProps {
   activeThreadId: string | null;

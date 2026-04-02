@@ -59,3 +59,22 @@ def test_runtime_api_thread_run_stream_and_approval_flow() -> None:
     assert approval_resp.status_code == 200
     assert approval_resp.json()["approval"]["status"] == "approved"
     assert approval_resp.json()["run"]["status"] == "completed"
+
+
+def test_runtime_api_lists_threads() -> None:
+    service = AgentRuntimeService(store=InMemoryRuntimeStore(), adapter=FakeAdapter())
+    app = build_app(service)
+
+    client = TestClient(app)
+
+    first = client.post("/agent/threads", json={"channel": "web", "title": "First thread"})
+    second = client.post("/agent/threads", json={"channel": "web", "title": "Second thread"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    list_resp = client.get("/agent/threads")
+    assert list_resp.status_code == 200
+
+    titles = [thread["title"] for thread in list_resp.json()]
+    assert titles == ["Second thread", "First thread"]

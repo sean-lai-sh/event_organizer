@@ -27,6 +27,10 @@ def build_app(service: AgentRuntimeService | None = None) -> FastAPI:
         description="Canonical Modal-hosted conversational runtime endpoints.",
     )
 
+    @app.get("/agent/threads", response_model=list[ThreadRecord])
+    async def list_threads(limit: int = Query(default=50, ge=1, le=200)) -> list[ThreadRecord]:
+        return await runtime.list_threads(limit=limit)
+
     @app.post("/agent/threads", response_model=ThreadRecord)
     async def create_thread(payload: ThreadCreateRequest) -> ThreadRecord:
         return await runtime.create_thread(payload)

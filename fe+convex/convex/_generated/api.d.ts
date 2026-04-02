@@ -20,6 +20,7 @@ import type * as inboundDashboard from "../inboundDashboard.js";
 import type * as invites from "../invites.js";
 import type * as outreach from "../outreach.js";
 import type * as roomAvailability from "../roomAvailability.js";
+import type * as seed from "../seed.js";
 
 import type {
   ApiFromModules,
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   invites: typeof invites;
   outreach: typeof outreach;
   roomAvailability: typeof roomAvailability;
+  seed: typeof seed;
 }>;
 
 /**

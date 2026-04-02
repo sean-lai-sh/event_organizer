@@ -102,6 +102,8 @@ Application code should depend on an internal runtime adapter, not directly on S
 
 Modal exposes the canonical agent API surface:
 
+- `GET /agent/threads`
+  - list normalized thread shells for the authenticated client rail
 - `POST /agent/threads`
   - create or resume a thread with optional context
 - `GET /agent/threads/:id`

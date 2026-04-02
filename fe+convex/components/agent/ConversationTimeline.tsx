@@ -6,10 +6,9 @@ import { MessageBubble } from "./MessageBubble";
 import { ApprovalCard } from "./ApprovalCard";
 import { AgentInput } from "./AgentInput";
 import {
-  getThreadMessages,
-  getThreadApprovals,
+  getThreadState,
   startRun,
-} from "./adapters/mock";
+} from "./adapters/runtime";
 
 interface ConversationTimelineProps {
   thread: AgentThread | null;
@@ -24,6 +23,14 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
   const [loaded, setLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadIdRef = useRef<string | null>(null);
+
+  async function refreshThreadState(threadId: string) {
+    const state = await getThreadState(threadId);
+    if (threadIdRef.current !== threadId) return;
+    setMessages(state.messages);
+    setApprovals(state.approvals);
+    setLoaded(true);
+  }
 
   useEffect(() => {
     if (!thread) {
@@ -40,14 +47,7 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
     setApprovals([]);
     setStreamingText(null);
 
-    Promise.all([getThreadMessages(thread.id), getThreadApprovals(thread.id)]).then(
-      ([msgs, apps]) => {
-        if (threadIdRef.current !== thread.id) return;
-        setMessages(msgs);
-        setApprovals(apps);
-        setLoaded(true);
-      },
-    );
+    void refreshThreadState(thread.id);
   }, [thread]);
 
   // Scroll to bottom when messages change or streaming updates
@@ -71,20 +71,9 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
     setMessages((prev) => [...prev, optimisticUser]);
 
     try {
-      await startRun(
-        thread.id,
-        text,
-        (chunk) => setStreamingText(chunk),
-        (done) => {
-          setStreamingText(null);
-          // Replace optimistic user message with real messages from adapter
-          setMessages((prev) => {
-            const withoutOptimistic = prev.filter((m) => m.id !== optimisticUser.id);
-            return [...withoutOptimistic, optimisticUser, done];
-          });
-          onArtifactsChange?.();
-        },
-      );
+      await startRun(thread.id, text, (chunk) => setStreamingText(chunk));
+      await refreshThreadState(thread.id);
+      onArtifactsChange?.();
     } finally {
       setIsRunning(false);
       setStreamingText(null);
@@ -147,12 +136,9 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
               <ApprovalCard
                 key={approval.id}
                 approval={approval}
-                onDecision={() => {
-                  setApprovals((prev) =>
-                    prev.map((a) =>
-                      a.id === approval.id ? { ...a, status: "approved" } : a,
-                    ),
-                  );
+                onDecision={async () => {
+                  await refreshThreadState(thread.id);
+                  onArtifactsChange?.();
                 }}
               />
             ))}

@@ -11,11 +11,12 @@ The main end-user agent runtime is:
 This is the Modal service the website uses to run conversations, approvals, and event-management actions.
 It exposes:
 
-1. `POST /agent/threads`
-2. `GET /agent/threads/:id`
-3. `POST /agent/runs`
-4. `GET /agent/runs/:id/stream`
-5. `POST /agent/approvals/:id`
+1. `GET /agent/threads`
+2. `POST /agent/threads`
+3. `GET /agent/threads/:id`
+4. `POST /agent/runs`
+5. `GET /agent/runs/:id/stream`
+6. `POST /agent/approvals/:id`
 
 `runtime/modal_app.py` remains as a compatibility entrypoint for existing deploy commands and forwards to the same runtime service.
 

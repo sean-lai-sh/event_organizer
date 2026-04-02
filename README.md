@@ -137,6 +137,7 @@ These live in Doppler.
 | `BETTER_AUTH_SECRET` | `fe+convex/` | Better Auth signing secret |
 | `CONVEX_DEPLOYMENT` | `fe+convex/` | Convex deployment URL |
 | `NEXT_PUBLIC_CONVEX_URL` | `fe+convex/` | Browser Convex URL |
+| `NEXT_PUBLIC_MODAL_ENDPOINT` | `fe+convex/` | Base URL used by Next route handlers to proxy `/api/agent/*` requests to the Modal runtime |
 | `CONVEX_URL` | `agent/` | Convex HTTP endpoint for Modal-side access |
 | `CONVEX_DEPLOY_KEY` | `agent/` | Convex deploy key for server-side mutations |
 | `ANTHROPIC_API_KEY` | `agent/` | Anthropic API key for the Modal runtime |
