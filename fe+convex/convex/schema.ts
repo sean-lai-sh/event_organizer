@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { agentContentBlocksValidator } from "./agentStateValidators";
 
 export default defineSchema({
   events: defineTable({
@@ -39,6 +40,119 @@ export default defineSchema({
     .index("by_thread_id", ["agentmail_thread_id"])
     .index("by_attio_record_id", ["attio_record_id"])
     .index("by_event_attio", ["event_id", "attio_record_id"]),
+
+  agent_threads: defineTable({
+    external_id: v.string(),
+    channel: v.string(),
+    status: v.string(),
+    title: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    created_by_user_id: v.optional(v.string()),
+    last_message_at: v.optional(v.number()),
+    last_run_started_at: v.optional(v.number()),
+    archived_at: v.optional(v.number()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_external_id", ["external_id"])
+    .index("by_status", ["status"])
+    .index("by_channel", ["channel"])
+    .index("by_created_by_user_id", ["created_by_user_id"]),
+
+  agent_runs: defineTable({
+    thread_id: v.id("agent_threads"),
+    external_id: v.string(),
+    status: v.string(),
+    trigger_source: v.string(),
+    mode: v.optional(v.string()),
+    initiated_by_user_id: v.optional(v.string()),
+    model: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    error_message: v.optional(v.string()),
+    started_at: v.number(),
+    completed_at: v.optional(v.number()),
+    updated_at: v.number(),
+    latest_message_sequence: v.optional(v.number()),
+  })
+    .index("by_external_id", ["external_id"])
+    .index("by_thread_id", ["thread_id"])
+    .index("by_thread_status", ["thread_id", "status"]),
+
+  agent_messages: defineTable({
+    thread_id: v.id("agent_threads"),
+    run_id: v.optional(v.id("agent_runs")),
+    external_id: v.string(),
+    role: v.string(),
+    status: v.string(),
+    sequence_number: v.number(),
+    plain_text: v.optional(v.string()),
+    content_blocks: agentContentBlocksValidator,
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_external_id", ["external_id"])
+    .index("by_thread_id", ["thread_id"])
+    .index("by_run_id", ["run_id"])
+    .index("by_thread_sequence", ["thread_id", "sequence_number"]),
+
+  agent_artifacts: defineTable({
+    thread_id: v.id("agent_threads"),
+    run_id: v.optional(v.id("agent_runs")),
+    external_id: v.string(),
+    kind: v.string(),
+    status: v.string(),
+    sort_order: v.number(),
+    title: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    content_blocks: agentContentBlocksValidator,
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_external_id", ["external_id"])
+    .index("by_thread_id", ["thread_id"])
+    .index("by_run_id", ["run_id"])
+    .index("by_thread_sort_order", ["thread_id", "sort_order"]),
+
+  agent_approvals: defineTable({
+    thread_id: v.id("agent_threads"),
+    run_id: v.id("agent_runs"),
+    external_id: v.string(),
+    status: v.string(),
+    action_type: v.string(),
+    title: v.string(),
+    summary: v.optional(v.string()),
+    risk_level: v.string(),
+    payload_json: v.optional(v.string()),
+    requested_at: v.number(),
+    expires_at: v.optional(v.number()),
+    resolved_at: v.optional(v.number()),
+    decision_note: v.optional(v.string()),
+    decided_by_user_id: v.optional(v.string()),
+    updated_at: v.number(),
+  })
+    .index("by_external_id", ["external_id"])
+    .index("by_thread_id", ["thread_id"])
+    .index("by_run_id", ["run_id"])
+    .index("by_status", ["status"])
+    .index("by_thread_status", ["thread_id", "status"]),
+
+  agent_context_links: defineTable({
+    thread_id: v.id("agent_threads"),
+    run_id: v.optional(v.id("agent_runs")),
+    link_key: v.string(),
+    relation: v.string(),
+    entity_type: v.string(),
+    entity_id: v.string(),
+    label: v.optional(v.string()),
+    url: v.optional(v.string()),
+    metadata_json: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_link_key", ["link_key"])
+    .index("by_thread_id", ["thread_id"])
+    .index("by_run_id", ["run_id"])
+    .index("by_entity", ["entity_type", "entity_id"]),
 
   eboard_members: defineTable({
     userId: v.string(),             // Better Auth user._id (opaque string)

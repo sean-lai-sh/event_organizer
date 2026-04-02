@@ -1,0 +1,815 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  appendMessage,
+  getRunState,
+  getThreadState,
+  listPendingApprovals,
+  listThreads,
+  resolveApproval,
+  upsertApproval,
+  upsertArtifact,
+  upsertContextLink,
+  upsertRun,
+  upsertThread,
+} from "./agentState";
+
+type TableName =
+  | "agent_threads"
+  | "agent_runs"
+  | "agent_messages"
+  | "agent_artifacts"
+  | "agent_approvals"
+  | "agent_context_links";
+
+type TableRow = { _id: string } & Record<string, unknown>;
+type Tables = Record<TableName, TableRow[]>;
+
+class FakeIndexRangeBuilder {
+  readonly filters: Array<[string, unknown]> = [];
+
+  eq(field: string, value: unknown) {
+    this.filters.push([field, value]);
+    return this;
+  }
+}
+
+class FakeQuery {
+  constructor(
+    private readonly rows: TableRow[],
+    private readonly filters: Array<[string, unknown]> = []
+  ) {}
+
+  withIndex(_indexName: string, build: (builder: FakeIndexRangeBuilder) => unknown) {
+    const builder = new FakeIndexRangeBuilder();
+    build(builder);
+    return new FakeQuery(this.rows, builder.filters);
+  }
+
+  async collect() {
+    return this.rows.filter((row) =>
+      this.filters.every(([field, value]) => row[field] === value)
+    );
+  }
+
+  async first() {
+    const matches = await this.collect();
+    return matches[0] ?? null;
+  }
+
+  async unique() {
+    const matches = await this.collect();
+    return matches[0] ?? null;
+  }
+}
+
+class FakeDb {
+  private readonly counters: Record<TableName, number> = {
+    agent_threads: 0,
+    agent_runs: 0,
+    agent_messages: 0,
+    agent_artifacts: 0,
+    agent_approvals: 0,
+    agent_context_links: 0,
+  };
+
+  readonly tables: Tables = {
+    agent_threads: [],
+    agent_runs: [],
+    agent_messages: [],
+    agent_artifacts: [],
+    agent_approvals: [],
+    agent_context_links: [],
+  };
+
+  query(table: TableName) {
+    return new FakeQuery(this.tables[table]);
+  }
+
+  async get(id: string) {
+    const table = id.split(":")[0] as TableName;
+    return this.tables[table].find((row) => row._id === id) ?? null;
+  }
+
+  async insert(table: TableName, value: Record<string, unknown>) {
+    const id = `${table}:${++this.counters[table]}`;
+    this.tables[table].push({ _id: id, ...value });
+    return id;
+  }
+
+  async patch(id: string, value: Record<string, unknown>) {
+    const table = id.split(":")[0] as TableName;
+    const index = this.tables[table].findIndex((row) => row._id === id);
+    if (index === -1) {
+      throw new Error(`Missing row: ${id}`);
+    }
+
+    this.tables[table][index] = {
+      ...this.tables[table][index],
+      ...value,
+    };
+  }
+
+  rows(table: TableName) {
+    return [...this.tables[table]];
+  }
+}
+
+function installConvexHandlerAliases() {
+  for (const fn of [
+    appendMessage,
+    getRunState,
+    getThreadState,
+    listPendingApprovals,
+    listThreads,
+    resolveApproval,
+    upsertApproval,
+    upsertArtifact,
+    upsertContextLink,
+    upsertRun,
+    upsertThread,
+  ]) {
+    const wrapped = fn as typeof fn & { handler?: unknown; _handler?: unknown };
+    if (!wrapped.handler) {
+      wrapped.handler = wrapped._handler;
+    }
+  }
+}
+
+function getHandler<TArgs, TResult>(fn: unknown) {
+  const wrapped = fn as {
+    handler?: (ctx: unknown, args: TArgs) => Promise<TResult>;
+    _handler?: (ctx: unknown, args: TArgs) => Promise<TResult>;
+  };
+  const handler = wrapped.handler ?? wrapped._handler;
+  if (!handler) {
+    throw new Error("Convex handler is unavailable in test harness");
+  }
+  return handler;
+}
+
+function createHarness() {
+  installConvexHandlerAliases();
+
+  const db = new FakeDb();
+  const ctx = { db };
+
+  return { db, ctx };
+}
+
+describe("agent state persistence", () => {
+  test("stores and reads normalized thread state without raw runtime payloads", async () => {
+    const { ctx, db } = createHarness();
+
+    const threadId = await getHandler<
+      {
+        external_id: string;
+        channel: string;
+        status: string;
+        title?: string;
+        summary?: string;
+        created_by_user_id?: string;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertThread)(ctx as never, {
+      external_id: "thread_modal_1",
+      channel: "web",
+      status: "active",
+      title: "Agent workspace",
+      summary: "Initial planning thread",
+      created_by_user_id: "user_1",
+      created_at: 100,
+      updated_at: 100,
+    });
+
+    const runId = await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        status: string;
+        trigger_source: string;
+        started_at?: number;
+        updated_at?: number;
+        model?: string;
+      },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: threadId,
+      external_id: "run_modal_1",
+      status: "running",
+      trigger_source: "web",
+      started_at: 110,
+      updated_at: 110,
+      model: "claude-sonnet",
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      external_id: "msg_user_1",
+      role: "user",
+      status: "complete",
+      sequence_number: 1,
+      plain_text: "Find speakers for next week.",
+      content_blocks: [{ kind: "text", text: "Find speakers for next week." }],
+      created_at: 115,
+      updated_at: 115,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_1",
+      role: "assistant",
+      status: "complete",
+      sequence_number: 2,
+      plain_text: "Here are three candidates and a shortlist summary.",
+      content_blocks: [
+        { kind: "markdown", text: "Here are three candidates and a shortlist summary." },
+      ],
+      created_at: 120,
+      updated_at: 120,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        kind: string;
+        status: string;
+        sort_order: number;
+        title?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertArtifact)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "artifact_2",
+      kind: "checklist",
+      status: "ready",
+      sort_order: 2,
+      title: "Next actions",
+      content_blocks: [{ kind: "text", text: "Email top candidate." }],
+      created_at: 130,
+      updated_at: 130,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        kind: string;
+        status: string;
+        sort_order: number;
+        title?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertArtifact)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "artifact_1",
+      kind: "table",
+      status: "ready",
+      sort_order: 1,
+      title: "Candidate matrix",
+      content_blocks: [{ kind: "json", data_json: '{"rows":3}' }],
+      created_at: 125,
+      updated_at: 125,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        status: string;
+        action_type: string;
+        title: string;
+        risk_level: string;
+        summary?: string;
+        requested_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertApproval)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "approval_1",
+      status: "pending",
+      action_type: "send_email",
+      title: "Approve outreach draft",
+      summary: "Send outreach to the first candidate.",
+      risk_level: "medium",
+      requested_at: 140,
+      updated_at: 140,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        link_key: string;
+        relation: string;
+        entity_type: string;
+        entity_id: string;
+        label?: string;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertContextLink)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      link_key: "ctx_event_1",
+      relation: "scoped_to",
+      entity_type: "event",
+      entity_id: "evt_123",
+      label: "Launch event",
+      created_at: 105,
+      updated_at: 105,
+    });
+
+    const threadState = await getHandler<
+      { external_id?: string; thread_id?: string },
+      {
+        thread: Record<string, unknown>;
+        runs: Array<Record<string, unknown>>;
+        messages: Array<Record<string, unknown>>;
+        artifacts: Array<Record<string, unknown>>;
+        approvals: Array<Record<string, unknown>>;
+        context_links: Array<Record<string, unknown>>;
+      }
+    >(getThreadState)(ctx as never, { external_id: "thread_modal_1" });
+
+    expect(threadState.thread._id).toBe(threadId);
+    expect(threadState.runs.map((run) => run.external_id)).toEqual(["run_modal_1"]);
+    expect(threadState.messages.map((message) => message.sequence_number)).toEqual([1, 2]);
+    expect(threadState.artifacts.map((artifact) => artifact.external_id)).toEqual([
+      "artifact_1",
+      "artifact_2",
+    ]);
+    expect(threadState.approvals.map((approval) => approval.external_id)).toEqual(["approval_1"]);
+    expect(threadState.context_links.map((link) => link.link_key)).toEqual(["ctx_event_1"]);
+
+    const persistedThread = await db.get(threadId);
+    expect(persistedThread).toMatchObject({
+      last_message_at: 120,
+      last_run_started_at: 110,
+      updated_at: 120,
+    });
+
+    const runState = await getHandler<
+      { external_id?: string; run_id?: string },
+      {
+        run: Record<string, unknown>;
+        messages: Array<Record<string, unknown>>;
+        artifacts: Array<Record<string, unknown>>;
+        approvals: Array<Record<string, unknown>>;
+        context_links: Array<Record<string, unknown>>;
+      }
+    >(getRunState)(ctx as never, { external_id: "run_modal_1" });
+
+    expect(runState.run._id).toBe(runId);
+    expect(runState.messages).toHaveLength(1);
+    expect(runState.artifacts.map((artifact) => artifact.sort_order)).toEqual([1, 2]);
+    expect(runState.approvals).toHaveLength(1);
+    expect(runState.context_links).toHaveLength(1);
+  });
+
+  test("upserts stay idempotent on external ids and link keys", async () => {
+    const { ctx, db } = createHarness();
+
+    const threadId = await getHandler<
+      {
+        external_id: string;
+        channel: string;
+        status: string;
+        summary?: string;
+        updated_at?: number;
+      },
+      string
+    >(upsertThread)(ctx as never, {
+      external_id: "thread_modal_idempotent",
+      channel: "discord",
+      status: "active",
+      summary: "first summary",
+      updated_at: 10,
+    });
+
+    const threadIdAgain = await getHandler<
+      {
+        external_id: string;
+        channel: string;
+        status: string;
+        summary?: string;
+        updated_at?: number;
+      },
+      string
+    >(upsertThread)(ctx as never, {
+      external_id: "thread_modal_idempotent",
+      channel: "discord",
+      status: "active",
+      summary: "updated summary",
+      updated_at: 20,
+    });
+
+    const runId = await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        status: string;
+        trigger_source: string;
+        updated_at?: number;
+      },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: threadId,
+      external_id: "run_modal_idempotent",
+      status: "running",
+      trigger_source: "discord",
+      updated_at: 21,
+    });
+
+    const runIdAgain = await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        status: string;
+        trigger_source: string;
+        completed_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: threadId,
+      external_id: "run_modal_idempotent",
+      status: "completed",
+      trigger_source: "discord",
+      completed_at: 30,
+      updated_at: 30,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_modal_idempotent",
+      role: "assistant",
+      status: "streaming",
+      sequence_number: 1,
+      plain_text: "partial",
+      content_blocks: [{ kind: "text", text: "partial" }],
+      updated_at: 22,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_modal_idempotent",
+      role: "assistant",
+      status: "complete",
+      sequence_number: 1,
+      plain_text: "final body",
+      content_blocks: [{ kind: "markdown", text: "final body" }],
+      updated_at: 25,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        status: string;
+        action_type: string;
+        title: string;
+        risk_level: string;
+        summary?: string;
+        updated_at?: number;
+      },
+      string
+    >(upsertApproval)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "approval_modal_idempotent",
+      status: "pending",
+      action_type: "write_attio",
+      title: "Approve CRM update",
+      risk_level: "high",
+      summary: "first",
+      updated_at: 23,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        status: string;
+        action_type: string;
+        title: string;
+        risk_level: string;
+        summary?: string;
+        updated_at?: number;
+      },
+      string
+    >(upsertApproval)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "approval_modal_idempotent",
+      status: "pending",
+      action_type: "write_attio",
+      title: "Approve CRM update",
+      risk_level: "high",
+      summary: "second",
+      updated_at: 24,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        link_key: string;
+        relation: string;
+        entity_type: string;
+        entity_id: string;
+        label?: string;
+        updated_at?: number;
+      },
+      string
+    >(upsertContextLink)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      link_key: "ctx_modal_idempotent",
+      relation: "references",
+      entity_type: "speaker",
+      entity_id: "speaker_1",
+      label: "First label",
+      updated_at: 24,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        link_key: string;
+        relation: string;
+        entity_type: string;
+        entity_id: string;
+        label?: string;
+        updated_at?: number;
+      },
+      string
+    >(upsertContextLink)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      link_key: "ctx_modal_idempotent",
+      relation: "references",
+      entity_type: "speaker",
+      entity_id: "speaker_1",
+      label: "Updated label",
+      updated_at: 26,
+    });
+
+    expect(threadIdAgain).toBe(threadId);
+    expect(runIdAgain).toBe(runId);
+    expect(db.rows("agent_threads")).toHaveLength(1);
+    expect(db.rows("agent_runs")).toHaveLength(1);
+    expect(db.rows("agent_messages")).toHaveLength(1);
+    expect(db.rows("agent_approvals")).toHaveLength(1);
+    expect(db.rows("agent_context_links")).toHaveLength(1);
+
+    expect(db.rows("agent_threads")[0]).toMatchObject({ summary: "updated summary" });
+    expect(db.rows("agent_runs")[0]).toMatchObject({ status: "completed", completed_at: 30 });
+    expect(db.rows("agent_messages")[0]).toMatchObject({
+      status: "complete",
+      plain_text: "final body",
+    });
+    expect(db.rows("agent_approvals")[0]).toMatchObject({ summary: "second" });
+    expect(db.rows("agent_context_links")[0]).toMatchObject({ label: "Updated label" });
+  });
+
+  test("lists recent threads and resolves approvals", async () => {
+    const { ctx, db } = createHarness();
+
+    const olderThreadId = await getHandler<
+      { external_id: string; channel: string; status: string; updated_at?: number },
+      string
+    >(upsertThread)(ctx as never, {
+      external_id: "thread_old",
+      channel: "web",
+      status: "active",
+      updated_at: 10,
+    });
+
+    const newerThreadId = await getHandler<
+      { external_id: string; channel: string; status: string; updated_at?: number },
+      string
+    >(upsertThread)(ctx as never, {
+      external_id: "thread_new",
+      channel: "discord",
+      status: "active",
+      updated_at: 20,
+    });
+
+    const olderRunId = await getHandler<
+      { thread_id: string; external_id: string; status: string; trigger_source: string; updated_at?: number },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: olderThreadId,
+      external_id: "run_old",
+      status: "awaiting_approval",
+      trigger_source: "web",
+      updated_at: 30,
+    });
+
+    const newerRunId = await getHandler<
+      { thread_id: string; external_id: string; status: string; trigger_source: string; updated_at?: number },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: newerThreadId,
+      external_id: "run_new",
+      status: "awaiting_approval",
+      trigger_source: "discord",
+      updated_at: 40,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        content_blocks: Array<Record<string, string>>;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: newerThreadId,
+      external_id: "msg_new",
+      role: "assistant",
+      status: "complete",
+      sequence_number: 1,
+      content_blocks: [{ kind: "text", text: "latest message" }],
+      updated_at: 50,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        status: string;
+        action_type: string;
+        title: string;
+        risk_level: string;
+        requested_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertApproval)(ctx as never, {
+      thread_id: olderThreadId,
+      run_id: olderRunId,
+      external_id: "approval_old",
+      status: "pending",
+      action_type: "send_email",
+      title: "Approve old draft",
+      risk_level: "medium",
+      requested_at: 35,
+      updated_at: 35,
+    });
+
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        status: string;
+        action_type: string;
+        title: string;
+        risk_level: string;
+        requested_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertApproval)(ctx as never, {
+      thread_id: newerThreadId,
+      run_id: newerRunId,
+      external_id: "approval_new",
+      status: "pending",
+      action_type: "write_convex",
+      title: "Approve event update",
+      risk_level: "low",
+      requested_at: 45,
+      updated_at: 45,
+    });
+
+    const threads = await getHandler<
+      { status?: string; channel?: string; created_by_user_id?: string; limit?: number },
+      Array<Record<string, unknown>>
+    >(listThreads)(ctx as never, { limit: 2 });
+
+    expect(threads.map((thread) => thread.external_id)).toEqual(["thread_new", "thread_old"]);
+
+    const pendingBefore = await getHandler<
+      { thread_id?: string; limit?: number },
+      Array<Record<string, unknown>>
+    >(listPendingApprovals)(ctx as never, {});
+    expect(pendingBefore.map((approval) => approval.external_id)).toEqual([
+      "approval_new",
+      "approval_old",
+    ]);
+
+    await getHandler<
+      {
+        external_id: string;
+        status: string;
+        decision_note?: string;
+        decided_by_user_id?: string;
+        resolved_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(resolveApproval)(ctx as never, {
+      external_id: "approval_new",
+      status: "approved",
+      decision_note: "Looks good.",
+      decided_by_user_id: "user_approver",
+      resolved_at: 60,
+      updated_at: 60,
+    });
+
+    const pendingAfter = await getHandler<
+      { thread_id?: string; limit?: number },
+      Array<Record<string, unknown>>
+    >(listPendingApprovals)(ctx as never, {});
+
+    expect(pendingAfter.map((approval) => approval.external_id)).toEqual(["approval_old"]);
+    expect(db.rows("agent_approvals").find((approval) => approval.external_id === "approval_new")).toMatchObject({
+      status: "approved",
+      decided_by_user_id: "user_approver",
+      resolved_at: 60,
+    });
+  });
+});
