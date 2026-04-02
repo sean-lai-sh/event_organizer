@@ -74,12 +74,31 @@ export interface ChecklistData {
   items: ChecklistItem[];
 }
 
+export interface ReportBlock {
+  kind: string;
+  label?: string | null;
+  text?: string | null;
+  mimeType?: string | null;
+  dataJson?: string | null;
+  url?: string | null;
+}
+
+export interface ReportData {
+  summary?: string | null;
+  blocks: ReportBlock[];
+}
+
 export interface AgentArtifact {
   id: string;
   threadId: string;
   type: ArtifactType;
   title: string;
-  data: MetricGroupData | TableData | ChecklistData | Record<string, unknown>;
+  data:
+    | MetricGroupData
+    | TableData
+    | ChecklistData
+    | ReportData
+    | Record<string, unknown>;
   createdAt: number;
 }
 
@@ -107,4 +126,12 @@ export interface AgentRun {
   currentStep?: string;
   startedAt: number;
   finishedAt?: number;
+}
+
+export interface AgentThreadState {
+  thread: AgentThread;
+  runs: AgentRun[];
+  messages: AgentMessage[];
+  artifacts: AgentArtifact[];
+  approvals: AgentApproval[];
 }

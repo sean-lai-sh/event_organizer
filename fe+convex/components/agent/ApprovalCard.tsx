@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { AlertTriangle, Check, X } from "lucide-react";
 import type { AgentApproval, RiskLevel } from "./types";
-import { submitApproval } from "./adapters/mock";
+import { submitApproval } from "./adapters/runtime";
 
 interface ApprovalCardProps {
   approval: AgentApproval;
-  onDecision?: (decision: "approved" | "rejected") => void;
+  onDecision?: (decision: "approved" | "rejected") => void | Promise<void>;
 }
 
 const riskConfig: Record<RiskLevel, { label: string; color: string; border: string }> = {
@@ -40,7 +40,7 @@ export function ApprovalCard({ approval, onDecision }: ApprovalCardProps) {
     try {
       await submitApproval(approval.id, decision);
       setStatus(decision);
-      onDecision?.(decision);
+      await onDecision?.(decision);
     } finally {
       setLoading(false);
     }

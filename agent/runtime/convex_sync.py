@@ -239,6 +239,17 @@ class ConvexAgentStateSync:
             logger.warning("Convex thread fetch failed: %s", exc)
             return None
 
+    async def fetch_threads(self, *, limit: int = 50) -> list[dict] | None:
+        if not self._enabled:
+            return None
+        try:
+            async with ConvexClient() as sb:
+                rows = await sb.query("agentState:listThreads", {"limit": limit})
+            return rows if isinstance(rows, list) else []
+        except Exception as exc:
+            logger.warning("Convex thread list fetch failed: %s", exc)
+            return None
+
     async def _ensure_thread_convex_id(self, external_thread_id: str) -> str | None:
         cached = self._thread_id_map.get(external_thread_id)
         if cached:

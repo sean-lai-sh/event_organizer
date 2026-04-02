@@ -88,6 +88,20 @@ class AgentRuntimeService:
 
         return thread
 
+    async def list_threads(self, *, limit: int = 50) -> list[ThreadRecord]:
+        remote_threads = await self._sync.fetch_threads(limit=limit)
+        if remote_threads is not None:
+            threads = [
+                self._hydrate_thread_record(item)
+                for item in remote_threads
+                if isinstance(item, dict)
+            ]
+            for thread in threads:
+                await self._store.upsert_thread(thread)
+            return threads
+
+        return await self._store.list_threads(limit=limit)
+
     async def get_thread_state(self, thread_id: str) -> ThreadStateResponse:
         local = await self._store.list_thread_state(thread_id)
         if local:
@@ -460,19 +474,7 @@ class AgentRuntimeService:
         if not isinstance(thread_data, dict):
             raise HTTPException(status_code=404, detail="Thread state payload missing thread")
 
-        thread = ThreadRecord(
-            external_id=str(thread_data.get("external_id")),
-            channel=thread_data.get("channel", "web"),
-            status=thread_data.get("status", "active"),
-            title=thread_data.get("title"),
-            summary=thread_data.get("summary"),
-            created_by_user_id=thread_data.get("created_by_user_id"),
-            last_message_at=thread_data.get("last_message_at"),
-            last_run_started_at=thread_data.get("last_run_started_at"),
-            archived_at=thread_data.get("archived_at"),
-            created_at=thread_data.get("created_at") or _now_ms(),
-            updated_at=thread_data.get("updated_at") or _now_ms(),
-        )
+        thread = self._hydrate_thread_record(thread_data)
 
         runs = [
             RunRecord(
@@ -574,4 +576,19 @@ class AgentRuntimeService:
             artifacts=artifacts,
             approvals=approvals,
             context_links=context_links,
+        )
+
+    def _hydrate_thread_record(self, item: dict) -> ThreadRecord:
+        return ThreadRecord(
+            external_id=str(item.get("external_id")),
+            channel=item.get("channel", "web"),
+            status=item.get("status", "active"),
+            title=item.get("title"),
+            summary=item.get("summary"),
+            created_by_user_id=item.get("created_by_user_id"),
+            last_message_at=item.get("last_message_at"),
+            last_run_started_at=item.get("last_run_started_at"),
+            archived_at=item.get("archived_at"),
+            created_at=item.get("created_at") or _now_ms(),
+            updated_at=item.get("updated_at") or _now_ms(),
         )

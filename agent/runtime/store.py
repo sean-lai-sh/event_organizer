@@ -41,6 +41,14 @@ class InMemoryRuntimeStore:
     async def get_thread(self, thread_id: str) -> ThreadRecord | None:
         return self.threads.get(thread_id)
 
+    async def list_threads(self, *, limit: int | None = None) -> list[ThreadRecord]:
+        rows = list(self.threads.values())
+        rows.sort(
+            key=lambda row: row.last_message_at or row.last_run_started_at or row.updated_at,
+            reverse=True,
+        )
+        return rows[:limit] if limit else rows
+
     async def upsert_run(self, record: RunRecord) -> None:
         async with self._lock:
             self.runs[record.external_id] = record

@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, LayoutGrid, X } from "lucide-react";
-import type { AgentArtifact, TableData, MetricGroupData, ChecklistData } from "./types";
+import type {
+  AgentArtifact,
+  TableData,
+  MetricGroupData,
+  ChecklistData,
+  ReportData,
+} from "./types";
 
 interface ArtifactCanvasProps {
   artifacts: AgentArtifact[];
@@ -90,6 +96,8 @@ function ArtifactRenderer({ artifact }: { artifact: AgentArtifact }) {
       return <MetricGroupArtifact data={artifact.data as MetricGroupData} />;
     case "checklist":
       return <ChecklistArtifact data={artifact.data as ChecklistData} />;
+    case "report":
+      return <ReportArtifact data={artifact.data as ReportData} />;
     default:
       return (
         <div className="rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] p-4">
@@ -215,6 +223,26 @@ function ChecklistArtifact({ data }: { data: ChecklistData }) {
           </div>
         </button>
       ))}
+    </div>
+  );
+}
+
+function ReportArtifact({ data }: { data: ReportData }) {
+  const body = data.blocks
+    .filter((block) => block.kind === "text" && block.text)
+    .map((block) => block.text)
+    .join("\n\n");
+
+  return (
+    <div className="space-y-3 rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] p-4">
+      {data.summary && (
+        <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[#999999]">
+          {data.summary}
+        </p>
+      )}
+      <div className="whitespace-pre-wrap text-[13px] leading-[1.65] text-[#222222]">
+        {body || "No report content available."}
+      </div>
     </div>
   );
 }

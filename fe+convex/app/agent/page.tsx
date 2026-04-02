@@ -7,7 +7,7 @@ import { ThreadRail } from "@/components/agent/ThreadRail";
 import { ConversationTimeline } from "@/components/agent/ConversationTimeline";
 import { ArtifactCanvas } from "@/components/agent/ArtifactCanvas";
 import type { AgentThread, AgentArtifact } from "@/components/agent/types";
-import { getThreadArtifacts } from "@/components/agent/adapters/mock";
+import { getThreadArtifacts } from "@/components/agent/adapters/runtime";
 
 export default function AgentPage() {
   const [activeThread, setActiveThread] = useState<AgentThread | null>(null);
