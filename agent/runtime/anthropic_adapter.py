@@ -121,7 +121,7 @@ class AnthropicRuntimeAdapter:
         )
 
         last_text = ""
-        async for message in query(prompt=user_prompt, options=options):
+        async for message in query(prompt=self._prompt_stream(user_prompt), options=options):
             if isinstance(message, AssistantMessage):
                 text_fragments: list[str] = []
                 for block in message.content:
@@ -194,6 +194,16 @@ class AnthropicRuntimeAdapter:
 
         for chunk in _chunk_text(text):
             yield chunk
+
+    async def _prompt_stream(self, user_prompt: str) -> AsyncIterator[dict[str, Any]]:
+        yield {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": user_prompt,
+            },
+            "parent_tool_use_id": None,
+        }
 
 
 def _chunk_text(text: str, words_per_chunk: int = 12) -> list[str]:
