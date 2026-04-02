@@ -16,7 +16,7 @@ class FakeAdapter:
         yield f"Done: {user_prompt[:15]}"
 
 
-def test_runtime_api_thread_run_stream_and_approval_flow() -> None:
+def test_runtime_api_agent_thread_run_stream_and_approval_flow() -> None:
     service = AgentRuntimeService(store=InMemoryRuntimeStore(), adapter=FakeAdapter())
     app = build_app(service)
 
@@ -27,30 +27,31 @@ def test_runtime_api_thread_run_stream_and_approval_flow() -> None:
         json={"channel": "web", "title": "API Thread"},
     )
     assert thread_resp.status_code == 200
-    thread_id = thread_resp.json()["external_id"]
+    agent_thread_id = thread_resp.json()["external_id"]
 
     run_resp = client.post(
         "/agent/runs",
         json={
-            "thread_id": thread_id,
+            "thread_id": agent_thread_id,
             "input_text": "Send email to finalists",
             "trigger_source": "web",
         },
     )
     assert run_resp.status_code == 200
-    run_id = run_resp.json()["external_id"]
-    assert run_resp.json()["status"] == "paused_approval"
+    run_body = run_resp.json()
+    assert run_body["run"]["status"] == "paused_approval"
+    event_names = [e["event"] for e in run_body["events"]]
+    assert "approval.requested" in event_names
+    assert "provider_event" not in event_names
 
-    stream_resp = client.get(f"/agent/runs/{run_id}/stream")
-    assert stream_resp.status_code == 200
-    assert "approval.requested" in stream_resp.text
-    assert "provider_event" not in stream_resp.text
+    approval_id = next(
+        e["data"]["approval_id"]
+        for e in run_body["events"]
+        if e["event"] == "approval.requested"
+    )
 
-    state_resp = client.get(f"/agent/threads/{thread_id}")
+    state_resp = client.get(f"/agent/threads/{agent_thread_id}")
     assert state_resp.status_code == 200
-    approvals = state_resp.json()["approvals"]
-    assert len(approvals) == 1
-    approval_id = approvals[0]["external_id"]
 
     approval_resp = client.post(
         f"/agent/approvals/{approval_id}",
@@ -61,7 +62,7 @@ def test_runtime_api_thread_run_stream_and_approval_flow() -> None:
     assert approval_resp.json()["run"]["status"] == "completed"
 
 
-def test_runtime_api_lists_threads() -> None:
+def test_runtime_api_lists_agent_threads() -> None:
     service = AgentRuntimeService(store=InMemoryRuntimeStore(), adapter=FakeAdapter())
     app = build_app(service)
 

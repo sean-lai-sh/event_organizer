@@ -212,6 +212,13 @@ class ThreadStateResponse(BaseModel):
     context_links: list[ContextLinkRecord]
 
 
+class RunWithEventsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run: RunRecord
+    events: list[StreamEvent]
+
+
 class ApprovalDecisionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -57,32 +57,48 @@ async def handle_reply(payload: dict) -> dict:
     if not sender_email:
         return {"status": "ignored", "reason": "No sender email"}
 
+    receipt_claimed = False
     async with ConvexClient() as sb:
         if message_id:
-            is_duplicate = await sb.record_inbound_receipt(str(message_id), thread_id=thread_id)
-            if is_duplicate:
+            receipt_state = await sb.begin_inbound_receipt(str(message_id), thread_id=thread_id)
+            if receipt_state.get("is_duplicate"):
                 return {"status": "ignored", "reason": f"Duplicate message_id {message_id}"}
+            if receipt_state.get("in_progress"):
+                return {"status": "ignored", "reason": f"Message_id {message_id} is already processing"}
+            receipt_claimed = bool(receipt_state.get("should_process"))
         outreach = await sb.find_outreach_by_thread(thread_id) if thread_id else None
 
-    if outreach:
-        return await handle_known_thread(
-            outreach=outreach,
-            sender_email=sender_email,
-            body=body,
-            to_emails=to_emails,
-            cc_emails=cc_emails,
-            thread_id=thread_id,
-        )
+    try:
+        if outreach:
+            result = await handle_known_thread(
+                outreach=outreach,
+                sender_email=sender_email,
+                body=body,
+                to_emails=to_emails,
+                cc_emails=cc_emails,
+                thread_id=thread_id,
+            )
+        else:
+            result = await handle_net_new(
+                sender_email=sender_email,
+                sender_name=sender_name,
+                subject=subject,
+                body=body,
+                to_emails=to_emails,
+                cc_emails=cc_emails,
+                thread_id=thread_id,
+            )
+    except Exception:
+        if message_id and receipt_claimed:
+            async with ConvexClient() as sb:
+                await sb.release_inbound_receipt(str(message_id))
+        raise
 
-    return await handle_net_new(
-        sender_email=sender_email,
-        sender_name=sender_name,
-        subject=subject,
-        body=body,
-        to_emails=to_emails,
-        cc_emails=cc_emails,
-        thread_id=thread_id,
-    )
+    if message_id and receipt_claimed:
+        async with ConvexClient() as sb:
+            await sb.complete_inbound_receipt(str(message_id), thread_id=thread_id)
+
+    return result
 
 
 __all__ = ["app", "image", "handle_reply"]

@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-
 from fastapi import FastAPI, Query
-from fastapi.responses import StreamingResponse
 
 from .contracts import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
     RunCreateRequest,
-    RunRecord,
+    RunWithEventsResponse,
     ThreadCreateRequest,
     ThreadRecord,
     ThreadStateResponse,
 )
-from .normalize import as_sse
 from .service import AgentRuntimeService
 
 
@@ -39,21 +35,9 @@ def build_app(service: AgentRuntimeService | None = None) -> FastAPI:
     async def get_thread(thread_id: str) -> ThreadStateResponse:
         return await runtime.get_thread_state(thread_id)
 
-    @app.post("/agent/runs", response_model=RunRecord)
-    async def start_run(payload: RunCreateRequest) -> RunRecord:
+    @app.post("/agent/runs", response_model=RunWithEventsResponse)
+    async def start_run(payload: RunCreateRequest) -> RunWithEventsResponse:
         return await runtime.start_run(payload)
-
-    @app.get("/agent/runs/{run_id}/stream")
-    async def stream_run(
-        run_id: str,
-        after_sequence: int = Query(default=0, ge=0),
-    ) -> StreamingResponse:
-        async def event_source() -> AsyncIterator[str]:
-            events = await runtime.list_run_events(run_id, after_sequence=after_sequence)
-            for event in events:
-                yield as_sse(event)
-
-        return StreamingResponse(event_source(), media_type="text/event-stream")
 
     @app.post("/agent/approvals/{approval_id}", response_model=ApprovalDecisionResponse)
     async def submit_approval(approval_id: str, payload: ApprovalDecisionRequest) -> ApprovalDecisionResponse:

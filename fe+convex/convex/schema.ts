@@ -193,6 +193,11 @@ export default defineSchema({
     message_id: v.string(),
     thread_id: v.optional(v.string()),
     received_at: v.number(),
+    status: v.optional(v.string()),
+    lease_expires_at: v.optional(v.number()),
+    processing_started_at: v.optional(v.number()),
+    completed_at: v.optional(v.number()),
+    updated_at: v.optional(v.number()),
   }).index("by_message_id", ["message_id"]),
 
   invites: defineTable({

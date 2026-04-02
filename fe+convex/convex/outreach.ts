@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+const INBOUND_RECEIPT_LEASE_MS = 5 * 60 * 1000;
+
 export const insertOutreachRows = mutation({
   args: {
     rows: v.array(
@@ -142,26 +144,96 @@ export const upsertOutreachLink = mutation({
   },
 });
 
-export const recordInboundReceipt = mutation({
+export const beginInboundReceipt = mutation({
   args: {
     message_id: v.string(),
     thread_id: v.optional(v.string()),
   },
   handler: async (ctx, { message_id, thread_id }) => {
+    const now = Date.now();
     const existing = await ctx.db
       .query("inbound_receipts")
       .withIndex("by_message_id", (q) => q.eq("message_id", message_id))
       .first();
     if (existing) {
-      return { is_duplicate: true };
+      if (existing.status === "completed") {
+        return { should_process: false, is_duplicate: true, in_progress: false };
+      }
+      if (
+        existing.status === "processing" &&
+        typeof existing.lease_expires_at === "number" &&
+        existing.lease_expires_at > now
+      ) {
+        return { should_process: false, is_duplicate: false, in_progress: true };
+      }
+
+      await ctx.db.patch(existing._id, {
+        thread_id,
+        status: "processing",
+        processing_started_at: now,
+        lease_expires_at: now + INBOUND_RECEIPT_LEASE_MS,
+        updated_at: now,
+      });
+      return { should_process: true, is_duplicate: false, in_progress: false };
     }
 
     await ctx.db.insert("inbound_receipts", {
       message_id,
       thread_id,
-      received_at: Date.now(),
+      received_at: now,
+      status: "processing",
+      processing_started_at: now,
+      lease_expires_at: now + INBOUND_RECEIPT_LEASE_MS,
+      updated_at: now,
+    });
+    return { should_process: true, is_duplicate: false, in_progress: false };
+  },
+});
+
+export const completeInboundReceipt = mutation({
+  args: {
+    message_id: v.string(),
+    thread_id: v.optional(v.string()),
+  },
+  handler: async (ctx, { message_id, thread_id }) => {
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("inbound_receipts")
+      .withIndex("by_message_id", (q) => q.eq("message_id", message_id))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        thread_id,
+        status: "completed",
+        completed_at: now,
+        updated_at: now,
+      });
+      return { is_duplicate: existing.status === "completed" };
+    }
+
+    await ctx.db.insert("inbound_receipts", {
+      message_id,
+      thread_id,
+      received_at: now,
+      status: "completed",
+      completed_at: now,
+      updated_at: now,
     });
     return { is_duplicate: false };
+  },
+});
+
+export const releaseInboundReceipt = mutation({
+  args: { message_id: v.string() },
+  handler: async (ctx, { message_id }) => {
+    const row = await ctx.db
+      .query("inbound_receipts")
+      .withIndex("by_message_id", (q) => q.eq("message_id", message_id))
+      .first();
+    if (row && row.status === "processing") {
+      await ctx.db.delete(row._id);
+    }
   },
 });
 
