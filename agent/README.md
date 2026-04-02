@@ -6,6 +6,7 @@ Modal-based serverless agents for the event organizer pipeline.
 
 | File | Modal App Name | Purpose |
 |------|---------------|---------|
+| `runtime/modal_app.py` | `event-agent-runtime` | Shared conversational runtime (`/agent/threads`, `/agent/runs`, `/agent/approvals`) |
 | `match.py` | `event-matching` | Phase 2 — score and rank speaker candidates from Attio |
 | `outreach.py` | `event-outreach` | Phase 3 — send outreach emails via AgentMail |
 | `reply_handler.py` | `event-outreach-replies` | Phase 4 — webhook endpoint, classifies inbound emails and updates Convex + Attio |
@@ -19,6 +20,9 @@ bash tests/run_tests.sh
 
 # or directly with pytest
 doppler run -- python -m pytest tests/ -v
+
+# runtime-only tests
+python -m pytest tests/test_runtime_*.py -v
 ```
 
 ## Helper Modules (`helper/`)
