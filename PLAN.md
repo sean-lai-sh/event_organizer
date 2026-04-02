@@ -37,6 +37,8 @@ Existing business tables:
 
 - `events`
 - `event_outreach`
+- `attendance`
+- `attendance_insights`
 - `eboard_members`
 - `contact_assignments`
 - `inbound_receipts`
@@ -199,6 +201,34 @@ Current intended meaning:
 - `inbound_state` = internal processing state only
 
 `inbound_state` must never replace `speakers.status`.
+
+#### `attendance`
+
+Stores event-specific attendee check-ins.
+
+Current intended meaning:
+
+- `event_id` = Convex `events._id`
+- `email` = normalized attendee email
+- `name` = optional attendee display name from the import source
+- `checked_in_at` = write timestamp for the attendance record
+- `source` = optional ingest source such as `manual` or `csv_import`
+
+`attendance` is the source for attendee analytics on `/dashboard/data`. It must remain deduplicated by `(event_id, email)`.
+
+#### `attendance_insights`
+
+Stores generated attendance analysis snapshots for the dashboard data page.
+
+Current intended meaning:
+
+- `generated_at` = timestamp when the insight was written
+- `insight_text` = short analysis shown on the dashboard
+- `data_snapshot` = optional JSON payload used as model context
+- `event_count` = number of tracked events in the analyzed snapshot
+- `attendee_count` = unique attendee count in the analyzed snapshot
+
+`attendance_insights` is append-only history; the frontend reads the most recent row.
 
 #### `eboard_members`
 

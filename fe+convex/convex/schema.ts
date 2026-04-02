@@ -41,6 +41,25 @@ export default defineSchema({
     .index("by_attio_record_id", ["attio_record_id"])
     .index("by_event_attio", ["event_id", "attio_record_id"]),
 
+  attendance: defineTable({
+    event_id: v.id("events"),
+    email: v.string(),
+    name: v.optional(v.string()),
+    checked_in_at: v.number(),
+    source: v.optional(v.string()),
+  })
+    .index("by_event_id", ["event_id"])
+    .index("by_email", ["email"])
+    .index("by_event_email", ["event_id", "email"]),
+
+  attendance_insights: defineTable({
+    generated_at: v.number(),
+    insight_text: v.string(),
+    data_snapshot: v.optional(v.string()),
+    event_count: v.number(),
+    attendee_count: v.number(),
+  }).index("by_generated_at", ["generated_at"]),
+
   agent_threads: defineTable({
     external_id: v.string(),
     channel: v.string(),
