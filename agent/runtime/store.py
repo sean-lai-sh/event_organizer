@@ -4,7 +4,7 @@ import asyncio
 from collections import defaultdict
 from typing import Any
 
-from runtime.contracts import (
+from .contracts import (
     ApprovalRecord,
     ArtifactRecord,
     ContextLinkRecord,
@@ -14,7 +14,7 @@ from runtime.contracts import (
     ThreadRecord,
     ThreadStateResponse,
 )
-from runtime.policy import ToolAction
+from .policy import ToolAction
 
 
 class InMemoryRuntimeStore:

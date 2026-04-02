@@ -3,8 +3,11 @@ from __future__ import annotations
 import logging
 import os
 
-from helper.tools import ConvexClient
-from runtime.contracts import (
+try:
+    from core.clients.convex import ConvexClient
+except ModuleNotFoundError:  # pragma: no cover - package import fallback
+    from agent.core.clients.convex import ConvexClient
+from .contracts import (
     ApprovalRecord,
     ArtifactRecord,
     ContextLinkRecord,

@@ -1,8 +1,5 @@
 """
 Phase 1: Match — scan CRM contacts, LLM-rank them for event fit, write suggestions.
-
-Trigger: POST /outreach/match { event_id }
-Compute: Modal Function
 """
 from __future__ import annotations
 
@@ -10,19 +7,16 @@ import json
 
 import modal
 
-from helper.tools import (
-    ConvexClient,
-    fetch_enriched_contacts,
-    llm_call,
-)
+try:
+    from core.modal.config import build_image, secret
+    from helper.tools import ConvexClient, fetch_enriched_contacts, llm_call
+except ModuleNotFoundError:  # pragma: no cover - package import fallback
+    from agent.core.modal.config import build_image, secret
+    from agent.helper.tools import ConvexClient, fetch_enriched_contacts, llm_call
 
 app = modal.App("event-outreach-match")
 
-image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install("httpx>=0.27", "anthropic>=0.40", "python-dotenv", "pydantic>=2.0")
-    .add_local_python_source("helper")
-)
+image = build_image()
 
 
 MATCH_SYSTEM_PROMPT = """\
@@ -39,7 +33,6 @@ Sort by score descending. Only include contacts scoring 5 or above."""
 
 
 def _build_contact_summary(contact: dict) -> dict:
-    """Extract a concise summary from an Attio people record for LLM context."""
     props = contact.get("properties", {})
     return {
         "attio_record_id": contact["id"],
@@ -52,7 +45,6 @@ def _build_contact_summary(contact: dict) -> dict:
 
 
 def _build_event_summary(event: dict) -> dict:
-    """Extract event fields relevant for matching."""
     return {
         "title": event.get("title"),
         "description": event.get("description"),
@@ -66,33 +58,31 @@ def _build_event_summary(event: dict) -> dict:
 
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_name("event-outreach-secrets")],
+    secrets=[secret("match")],
     timeout=120,
 )
 async def match_contacts_for_event(event_id: str) -> dict:
-    """
-    Scan CRM for enriched contacts, LLM-rank them against the event,
-    and write suggestions to event_outreach.
-
-    Returns:
-        { "event_id": str, "suggestions": [...], "count": int }
-    """
-    # 1. Read event from Convex
     async with ConvexClient() as sb:
         event = await sb.get_event(event_id)
     if not event:
         return {"error": f"Event {event_id} not found"}
     if not event.get("needs_outreach", True):
-        return {"event_id": event_id, "suggestions": [], "count": 0,
-                "note": "Inbound event — no outreach needed"}
+        return {
+            "event_id": event_id,
+            "suggestions": [],
+            "count": 0,
+            "note": "Inbound event — no outreach needed",
+        }
 
-    # 2. Fetch enriched contacts from Attio
     contacts = await fetch_enriched_contacts()
     if not contacts:
-        return {"event_id": event_id, "suggestions": [], "count": 0,
-                "note": "No enriched contacts found"}
+        return {
+            "event_id": event_id,
+            "suggestions": [],
+            "count": 0,
+            "note": "No enriched contacts found",
+        }
 
-    # 3. LLM ranks contacts for event fit
     event_summary = _build_event_summary(event)
     contact_summaries = [_build_contact_summary(c) for c in contacts]
 
@@ -104,9 +94,7 @@ async def match_contacts_for_event(event_id: str) -> dict:
 
     raw = await llm_call(MATCH_SYSTEM_PROMPT, user_prompt, max_tokens=4096)
 
-    # Parse LLM response — extract JSON array
     try:
-        # Handle potential markdown code fences
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -114,7 +102,6 @@ async def match_contacts_for_event(event_id: str) -> dict:
     except json.JSONDecodeError:
         return {"error": "LLM returned invalid JSON", "raw_response": raw}
 
-    # 4. Write suggestions to event_outreach
     outreach_rows = [
         {
             "event_id": event_id,
@@ -129,12 +116,13 @@ async def match_contacts_for_event(event_id: str) -> dict:
     if outreach_rows:
         async with ConvexClient() as sb:
             await sb.insert_outreach_rows(outreach_rows)
-            # 5. Update event status
             await sb.update_event_status(event_id, "matching")
 
-    # Attach scores/reasoning to response for the human review UI
     return {
         "event_id": event_id,
         "suggestions": suggestions,
         "count": len(suggestions),
     }
+
+
+__all__ = ["app", "image", "match_contacts_for_event"]

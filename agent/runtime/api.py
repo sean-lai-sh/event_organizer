@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI, Query
 from fastapi.responses import StreamingResponse
 
-from runtime.contracts import (
+from .contracts import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
     RunCreateRequest,
@@ -14,8 +14,8 @@ from runtime.contracts import (
     ThreadRecord,
     ThreadStateResponse,
 )
-from runtime.normalize import as_sse
-from runtime.service import AgentRuntimeService
+from .normalize import as_sse
+from .service import AgentRuntimeService
 
 
 def build_app(service: AgentRuntimeService | None = None) -> FastAPI:
