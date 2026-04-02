@@ -35,6 +35,13 @@ def test_runtime_shims_target_root_runtime_service() -> None:
 
 def test_mcp_root_launcher_exposes_server_contract() -> None:
     assert hasattr(mcp_server, "mcp")
+    assert callable(mcp_server.list_events)
+    assert callable(mcp_server.get_event)
+    assert callable(mcp_server.get_event_inbound_status)
+    assert callable(mcp_server.get_event_outreach)
+    assert callable(mcp_server.get_attendance_dashboard)
+    assert callable(mcp_server.get_event_attendance)
+    assert callable(mcp_server.update_event_safe)
     assert callable(mcp_server.search_contacts)
     assert callable(mcp_server.get_contact)
     assert callable(mcp_server.create_contact)

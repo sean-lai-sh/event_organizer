@@ -58,7 +58,9 @@ Modal-hosted Python agent code coordinates the systems and is the authoritative 
 - `agent/match.py` handles candidate selection.
 - `agent/outreach.py` handles outbound sends.
 - `agent/reply_handler.py` handles inbound email processing.
-- `agent/mcp_server.py` exposes CRM tools to other agents.
+- `agent/apps/mcp/service.py` is the packaged FastMCP implementation used by the runtime.
+- `agent/apps/mcp/server.py` is the stdio launcher the runtime starts through the Claude agent SDK.
+- `agent/mcp_server.py` is a compatibility shim for local tooling and tests.
 - Modal-hosted conversational endpoints own thread runs, approvals, artifacts, and policy.
 - Anthropic Agent SDK is used inside Modal as the harness layer only.
 
@@ -290,6 +292,12 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 3. If a write or send action is required, Modal creates an approval record and pauses the run.
 4. The client renders the normalized run, message, artifact, and approval state from Convex.
 5. On approval, the client submits the decision back to Modal and the run resumes.
+
+Current MCP tool surface:
+
+- Attio reads/writes: `search_contacts`, `get_contact`, `create_contact`, `update_contact`
+- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
+- Approval-gated Convex writes: `update_event_safe`
 
 ### Outbound matching
 

@@ -68,6 +68,10 @@ class ConvexClient:
     async def get_event(self, event_id: str) -> dict | None:
         return await self.query("events:getEvent", {"event_id": event_id})
 
+    async def list_events(self, status: str | None = None, limit: int | None = None) -> list[dict]:
+        rows = await self.query("events:listEvents", {"status": status, "limit": limit})
+        return rows if isinstance(rows, list) else []
+
     async def update_event_status(self, event_id: str, status: str) -> None:
         await self.mutation("events:updateEventStatus", {"event_id": event_id, "status": status})
 
@@ -90,6 +94,36 @@ class ConvexClient:
             },
         )
 
+    async def update_event_safe(
+        self,
+        event_id: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        event_date: str | None = None,
+        event_time: str | None = None,
+        event_end_time: str | None = None,
+        location: str | None = None,
+        status: str | None = None,
+        speaker_confirmed: bool | None = None,
+        room_confirmed: bool | None = None,
+    ) -> dict | None:
+        return await self.mutation(
+            "events:updateEvent",
+            {
+                "event_id": event_id,
+                "title": title,
+                "description": description,
+                "event_date": event_date,
+                "event_time": event_time,
+                "event_end_time": event_end_time,
+                "location": location,
+                "status": status,
+                "speaker_confirmed": speaker_confirmed,
+                "room_confirmed": room_confirmed,
+            },
+        )
+
     # ── Event Outreach ──
 
     async def insert_outreach_rows(self, rows: list[dict]) -> list[str]:
@@ -102,6 +136,13 @@ class ConvexClient:
         if approved is not None:
             args["approved"] = approved
         return await self.query("outreach:getOutreachForEvent", args)
+
+    async def get_event_inbound_status(self, event_id: str | None = None) -> list[dict]:
+        args: dict[str, Any] = {}
+        if event_id is not None:
+            args["event_id"] = event_id
+        rows = await self.query("inboundDashboard:getEventInboundStatus", args)
+        return rows if isinstance(rows, list) else []
 
     async def update_outreach(
         self, event_id: str, attio_record_id: str, updates: dict
@@ -195,3 +236,11 @@ class ConvexClient:
             "contactAssignments:upsertAssignmentsByEmails",
             {"attio_record_id": attio_record_id, "emails": emails},
         )
+
+    async def get_attendance_dashboard(self) -> dict:
+        rows = await self.query("attendance:getAttendanceDashboard", {})
+        return rows if isinstance(rows, dict) else {}
+
+    async def get_event_attendance(self, event_id: str) -> dict:
+        rows = await self.query("attendance:listEventAttendance", {"event_id": event_id})
+        return rows if isinstance(rows, dict) else {}

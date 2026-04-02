@@ -366,6 +366,8 @@ export const listEventAttendance = query({
   },
 });
 
+export const getAttendanceForEvent = listEventAttendance;
+
 export const getAttendanceDashboard = query({
   args: {},
   handler: async (ctx) => {

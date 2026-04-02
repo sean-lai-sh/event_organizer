@@ -110,19 +110,25 @@ cd /Users/sean_lai/event_organizer/agent
 uv sync
 ```
 
-Run the local MCP server if you are working on tool adapters:
+Run the packaged local MCP server if you are working on tool adapters:
 
 ```bash
-cd /Users/sean_lai/event_organizer
-doppler run -- uv run python agent/mcp_server.py
+cd /Users/sean_lai/event_organizer/agent
+doppler run -- uv run python -m apps.mcp.server
 ```
 
 Inspect MCP tools interactively:
 
 ```bash
-cd /Users/sean_lai/event_organizer
-doppler run -- npx @modelcontextprotocol/inspector uv run python agent/mcp_server.py
+cd /Users/sean_lai/event_organizer/agent
+doppler run -- npx @modelcontextprotocol/inspector uv run python -m apps.mcp.server
 ```
+
+The Modal runtime starts that same MCP server over stdio through the Claude agent SDK. The current tool surface is:
+
+- Attio reads/writes: `search_contacts`, `get_contact`, `create_contact`, `update_contact`
+- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
+- Approval-gated Convex writes: `update_event_safe`
 
 Deploy or serve Modal functions from the `agent/` package as needed for runtime work.
 

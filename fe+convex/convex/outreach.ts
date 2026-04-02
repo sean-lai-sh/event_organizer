@@ -41,6 +41,8 @@ export const getOutreachForEvent = query({
   },
 });
 
+export const getEventOutreach = getOutreachForEvent;
+
 export const updateOutreach = mutation({
   args: {
     event_id: v.id("events"),

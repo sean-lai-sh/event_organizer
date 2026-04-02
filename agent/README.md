@@ -35,28 +35,27 @@ When a user interacts with the website agent:
 
 1. The UI starts/resumes a thread via `runtime_app.py`.
 2. A run is created and executed in Modal.
-3. The runtime can call tool surfaces (Attio/Convex/AgentMail workflows) through local modules.
+3. The runtime runs the Claude agent SDK harness and launches the packaged FastMCP server over stdio from `apps.mcp.server`.
 4. If an action is write/send/destructive, approval gating can pause the run until user decision.
 5. Streamed output, artifacts, and approval states are returned in normalized form for UI rendering.
 
 ## Tool Access Surface
 
-The agent stack can read/modify:
+The runtime's current MCP tool surface is:
 
 1. **Attio (CRM)**
-   - Read/search contacts.
-   - Create/update contacts.
-   - Append notes for action history.
+   - `search_contacts`
+   - `get_contact`
+   - `create_contact`
+   - `update_contact`
 2. **Convex (operational state)**
-   - Event lifecycle and milestone updates.
-   - Outreach links (`attio_record_id`, thread ids, inbound state metadata).
-   - Receipt dedupe and assignment resolution.
-   - Agent thread/run/message/artifact/approval normalized state (runtime path).
-3. **AgentMail (communications)**
-   - Send outreach messages.
-   - Read thread history for reply-context handling.
-4. **Anthropic**
-   - Classification and generation for matching, outreach drafting, and inbound interpretation.
+   - `list_events`
+   - `get_event`
+   - `get_event_inbound_status`
+   - `get_event_outreach`
+   - `get_attendance_dashboard`
+   - `get_event_attendance`
+   - approval-gated `update_event_safe`
 
 ## Supporting Services (Root Files)
 
@@ -67,7 +66,7 @@ These are additional root services used by workflow tooling:
 | `match.py` | `event-outreach-match` | Candidate scoring/matching workflow |
 | `outreach.py` | `event-outreach-send` | Outbound invite send workflow |
 | `reply_handler.py` | `event-outreach-replies` | AgentMail webhook ingest and thread routing |
-| `mcp_server.py` | — | FastMCP CRM tool server (`search_contacts`, `get_contact`, `create_contact`, `update_contact`) |
+| `mcp_server.py` | — | Compatibility shim to the packaged FastMCP server |
 
 ## Running Tests
 
