@@ -26,6 +26,7 @@ async def search_contacts(
     contact_source: str | None = None,
     limit: int = 20,
 ) -> list[dict]:
+    """Search Attio contacts by workflow filters such as source or outreach status."""
     conditions = []
     if outreach_status:
         conditions.append(
@@ -54,6 +55,7 @@ async def search_contacts(
 
 @mcp.tool()
 async def get_contact(record_id: str) -> dict:
+    """Fetch one Attio contact by record ID when the specific person is already known."""
     async with AttioClient() as attio:
         record = await attio.get_contact(record_id)
     return flatten_record(record)
@@ -70,6 +72,7 @@ async def create_contact(
     warm_intro_by: str | None = None,
     assigned_members: str | None = None,
 ) -> dict:
+    """Create a new Attio contact record with CRM workflow defaults for the agent."""
     values: dict[str, Any] = {
         "name": [{"first_name": firstname, "last_name": lastname}],
         "email_addresses": [{"email_address": email}],
@@ -99,6 +102,7 @@ async def update_contact(
     agent_notes: str | None = None,
     last_agent_action_at: str | None = None,
 ) -> dict:
+    """Update one Attio contact and optionally append an agent note for audit history."""
     values: dict[str, Any] = {}
 
     if outreach_status:
@@ -136,36 +140,42 @@ async def update_contact(
 
 @mcp.tool()
 async def list_events(status: str | None = None, limit: int = 50) -> list[dict]:
+    """List Convex events, typically to find the newest relevant event before a follow-up read."""
     async with ConvexClient() as convex:
         return await convex.list_events(status=status, limit=limit)
 
 
 @mcp.tool()
 async def get_event(event_id: str) -> dict | None:
+    """Fetch one Convex event when you already know the event ID."""
     async with ConvexClient() as convex:
         return await convex.get_event(event_id)
 
 
 @mcp.tool()
 async def get_event_inbound_status(event_id: str | None = None) -> list[dict]:
+    """Return inbound reply status summaries for one event or all tracked events."""
     async with ConvexClient() as convex:
         return await convex.get_event_inbound_status(event_id=event_id)
 
 
 @mcp.tool()
 async def get_event_outreach(event_id: str, approved: bool | None = None) -> list[dict]:
+    """Return per-event outreach rows and responses for a specific Convex event."""
     async with ConvexClient() as convex:
         return await convex.get_outreach_for_event(event_id, approved=approved)
 
 
 @mcp.tool()
 async def get_attendance_dashboard() -> dict:
+    """Return aggregate attendance dashboard totals and trends across events."""
     async with ConvexClient() as convex:
         return await convex.get_attendance_dashboard()
 
 
 @mcp.tool()
 async def get_event_attendance(event_id: str) -> dict:
+    """Return actual attendance details for one specific event, not aggregate dashboard stats."""
     async with ConvexClient() as convex:
         return await convex.get_event_attendance(event_id)
 
@@ -183,6 +193,7 @@ async def update_event_safe(
     speaker_confirmed: bool | None = None,
     room_confirmed: bool | None = None,
 ) -> dict | None:
+    """Safely patch approved event fields and milestone booleans for a Convex event."""
     async with ConvexClient() as convex:
         return await convex.update_event_safe(
             event_id,

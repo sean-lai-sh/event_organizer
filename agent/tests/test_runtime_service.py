@@ -24,12 +24,22 @@ class FakeAdapter:
 class FakeToolAwareAdapter:
     model = "fake-agent-sdk"
 
-    def __init__(self, result: AgentTurnResult) -> None:
-        self._result = result
+    def __init__(self, result: AgentTurnResult | list[AgentTurnResult]) -> None:
+        if isinstance(result, list):
+            self._results = list(result)
+        else:
+            self._results = [result]
+        self.calls: list[dict[str, object]] = []
 
     async def run_agent(self, *, user_prompt: str, system_prompt: str | None = None, max_turns: int = 6) -> AgentTurnResult:
-        _ = (user_prompt, system_prompt, max_turns)
-        return self._result
+        self.calls.append(
+            {
+                "user_prompt": user_prompt,
+                "system_prompt": system_prompt,
+                "max_turns": max_turns,
+            }
+        )
+        return self._results.pop(0)
 
     async def stream_text(
         self,
@@ -198,3 +208,149 @@ async def test_tool_aware_write_run_pauses_then_executes_exact_tool(monkeypatch:
 
     assert executed == [("update_event_safe", {"event_id": "evt_1", "status": "confirmed"})]
     assert decision.run.status.value == "completed"
+
+
+@pytest.mark.asyncio
+async def test_latest_event_attendance_retries_when_fake_limitation_skips_tools() -> None:
+    adapter = FakeToolAwareAdapter(
+        [
+            AgentTurnResult(
+                text_deltas=[
+                    "I apologize, but I'm unable to retrieve the most recent event stats right now."
+                ],
+                final_text=(
+                    "I apologize, but I'm unable to retrieve the most recent event stats right now. "
+                    "Access issues are blocking me."
+                ),
+            ),
+            AgentTurnResult(
+                text_deltas=["I found the latest event attendance."],
+                final_text="The latest event had 42 attendees.",
+                tool_traces=[
+                    ToolTrace(name="list_events", tool_input={"limit": 5}, tool_use_id="tool_1", result=[{"_id": "evt_1"}]),
+                    ToolTrace(
+                        name="get_event_attendance",
+                        tool_input={"event_id": "evt_1"},
+                        tool_use_id="tool_2",
+                        result={"event": {"_id": "evt_1"}, "attendees": [{"email": "a@example.com"}]},
+                    ),
+                ],
+            ),
+        ]
+    )
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=adapter,
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Attendance retry"))
+    response = await service.start_run(
+        RunCreateRequest(
+            thread_id=thread.external_id,
+            input_text="What were the latest event stats with actual attendance?",
+        )
+    )
+
+    assert response.run.status.value == "completed"
+    assert len(adapter.calls) == 2
+    assert any(event.event == "guardrail.retry" for event in response.events)
+    state = await service.get_thread_state(thread.external_id)
+    assert state.messages[-1].plain_text == "The latest event had 42 attendees."
+
+
+@pytest.mark.asyncio
+async def test_attendance_request_with_tool_usage_does_not_retry() -> None:
+    adapter = FakeToolAwareAdapter(
+        AgentTurnResult(
+            text_deltas=["I checked the event attendance."],
+            final_text="The event currently shows 17 attendees.",
+            tool_traces=[
+                ToolTrace(
+                    name="get_event_attendance",
+                    tool_input={"event_id": "evt_9"},
+                    tool_use_id="tool_1",
+                    result={"event": {"_id": "evt_9"}, "attendees": [{"email": "a@example.com"}]},
+                )
+            ],
+        )
+    )
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=adapter,
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Attendance direct"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="How many attendees does this event have?")
+    )
+
+    assert response.run.status.value == "completed"
+    assert len(adapter.calls) == 1
+    assert all(event.event != "guardrail.retry" for event in response.events)
+
+
+@pytest.mark.asyncio
+async def test_tool_failure_names_failed_tool_in_final_answer() -> None:
+    adapter = FakeToolAwareAdapter(
+        AgentTurnResult(
+            text_deltas=["I couldn't access that data."],
+            final_text="I couldn't access the data because of authentication.",
+            tool_traces=[
+                ToolTrace(
+                    name="list_events",
+                    tool_input={"limit": 5},
+                    tool_use_id="tool_1",
+                    result="convex timeout",
+                    is_error=True,
+                )
+            ],
+        )
+    )
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=adapter,
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Failure thread"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="What are the latest event stats?")
+    )
+
+    assert response.run.status.value == "completed"
+    state = await service.get_thread_state(thread.external_id)
+    assert "list_events" in (state.messages[-1].plain_text or "")
+    assert "convex timeout" in (state.messages[-1].plain_text or "")
+
+
+@pytest.mark.asyncio
+async def test_latest_event_request_with_no_events_returns_no_data_message() -> None:
+    adapter = FakeToolAwareAdapter(
+        AgentTurnResult(
+            final_text="I couldn't get the event stats.",
+            tool_traces=[
+                ToolTrace(
+                    name="list_events",
+                    tool_input={"limit": 5},
+                    tool_use_id="tool_1",
+                    result=[],
+                )
+            ],
+        )
+    )
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=adapter,
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="No events"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="What's the latest event attendance?")
+    )
+
+    assert response.run.status.value == "completed"
+    state = await service.get_thread_state(thread.external_id)
+    assert "couldn't find any events" in (state.messages[-1].plain_text or "").lower()

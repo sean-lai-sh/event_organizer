@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from .anthropic_adapter import AnthropicRuntimeAdapter
+from .anthropic_adapter import AnthropicRuntimeAdapter, DEFAULT_SYSTEM_PROMPT
 from .contracts import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
@@ -27,6 +27,12 @@ from .convex_sync import ConvexAgentStateSync
 from .normalize import make_report_artifact, text_block
 from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
 from .store import InMemoryRuntimeStore
+from .tool_expectations import (
+    RequestToolExpectation,
+    attempted_relevant_tools,
+    infer_request_tool_expectation,
+    looks_like_fake_limitation,
+)
 from .tool_executor import execute_tool_call
 
 
@@ -391,11 +397,39 @@ class AgentRuntimeService:
         await self._execute_text_run(run=run, user_input=user_input, max_tokens=max_tokens)
 
     async def _execute_tool_aware_run(self, *, run: RunRecord, user_input: str) -> None:
+        expectation = infer_request_tool_expectation(user_input)
         try:
             result = await self._adapter.run_agent(user_prompt=user_input)
         except Exception as exc:
             await self._mark_run_error(run=run, message=str(exc))
             return
+
+        retried = False
+        if self._should_retry_tool_aware_result(user_input=user_input, result_text=result.final_text, tool_traces=result.tool_traces, expectation=expectation):
+            retried = True
+            await self._store.append_stream_event(
+                run_id=run.external_id,
+                event="guardrail.retry",
+                created_at=_now_ms(),
+                data={
+                    "kind": expectation.kind if expectation else "unknown",
+                    "reason": "relevant_tools_not_used",
+                },
+            )
+            try:
+                result = await self._adapter.run_agent(
+                    user_prompt=user_input,
+                    system_prompt=self._retry_system_prompt(expectation),
+                )
+            except Exception as exc:
+                await self._mark_run_error(run=run, message=str(exc))
+                return
+
+        result = self._normalize_tool_aware_result(
+            result=result,
+            expectation=expectation,
+            was_retried=retried,
+        )
 
         latest_text = ""
         for partial_text in result.text_deltas:
@@ -692,3 +726,77 @@ class AgentRuntimeService:
         if isinstance(serialized, str):
             return serialized
         return json.dumps(serialized)
+
+    def _should_retry_tool_aware_result(
+        self,
+        *,
+        user_input: str,
+        result_text: str,
+        tool_traces: list,
+        expectation: RequestToolExpectation | None,
+    ) -> bool:
+        if expectation is None:
+            return False
+        if not looks_like_fake_limitation(result_text or ""):
+            return False
+        return not attempted_relevant_tools(
+            (trace.name for trace in tool_traces),
+            expectation,
+        )
+
+    def _retry_system_prompt(self, expectation: RequestToolExpectation | None) -> str:
+        instruction = (
+            expectation.retry_instruction
+            if expectation is not None
+            else "Relevant MCP tools are available. Use them before answering."
+        )
+        extra = (
+            "Relevant MCP tools are available for this request. "
+            "Use them before answering. "
+            "Do not claim access limitations unless a tool actually fails."
+        )
+        return f"{DEFAULT_SYSTEM_PROMPT}\n\n{extra}\n{instruction}"
+
+    def _normalize_tool_aware_result(
+        self,
+        *,
+        result,
+        expectation: RequestToolExpectation | None,
+        was_retried: bool,
+    ):
+        if expectation is None:
+            return result
+
+        relevant_names = set(expectation.relevant_tools)
+        relevant_traces = [trace for trace in result.tool_traces if trace.name in relevant_names]
+        failed_traces = [trace for trace in relevant_traces if trace.is_error]
+
+        if failed_traces:
+            first_failure = failed_traces[0]
+            failure_detail = self._tool_result_text(first_failure.result)
+            result.final_text = (
+                f"I couldn't complete this request because the MCP tool `{first_failure.name}` failed: "
+                f"{failure_detail}."
+            )
+            result.text_deltas = [result.final_text]
+            return result
+
+        if expectation.kind in {"latest_event_attendance", "latest_event_stats"}:
+            event_list_trace = next((trace for trace in relevant_traces if trace.name == "list_events"), None)
+            if event_list_trace and isinstance(event_list_trace.result, list) and not event_list_trace.result:
+                result.final_text = expectation.no_data_message or "I couldn't find any matching data."
+                result.text_deltas = [result.final_text]
+                return result
+
+        if was_retried and looks_like_fake_limitation(result.final_text or "") and not attempted_relevant_tools(
+            (trace.name for trace in result.tool_traces),
+            expectation,
+        ):
+            tools = ", ".join(f"`{tool}`" for tool in expectation.relevant_tools)
+            result.final_text = (
+                "I couldn't complete this request because the runtime did not successfully use the "
+                f"expected MCP tools ({tools}). Please retry after confirming the runtime MCP path is healthy."
+            )
+            result.text_deltas = [result.final_text]
+
+        return result
