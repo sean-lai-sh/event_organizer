@@ -500,3 +500,10 @@ async def test_update_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     ]
     assert updated == {"_id": "evt_9", "title": "Updated"}
+
+
+def test_mcp_tool_docstrings_describe_event_and_attendance_uses() -> None:
+    assert "newest relevant event" in (mcp_service.list_events.__doc__ or "")
+    assert "actual attendance" in (mcp_service.get_event_attendance.__doc__ or "")
+    assert "aggregate attendance dashboard" in (mcp_service.get_attendance_dashboard.__doc__ or "")
+    assert "specific Convex event" in (mcp_service.get_event_outreach.__doc__ or "")
