@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 
 const mockThreads = [
@@ -31,7 +31,16 @@ const mockThreads = [
     messages: 3,
     lastMessage: "2026-03-06",
   },
-];
+] as const;
+
+const communicationStatusOptions = [
+  { value: "all", label: "All statuses" },
+  { value: "needs_review", label: "Needs review" },
+  { value: "awaiting_reply", label: "Awaiting reply" },
+  { value: "resolved", label: "Resolved" },
+] as const;
+
+type CommunicationStatusFilter = (typeof communicationStatusOptions)[number]["value"];
 
 function formatStatus(status: string) {
   if (status === "awaiting_reply") return "Awaiting Reply";
@@ -40,24 +49,57 @@ function formatStatus(status: string) {
 }
 
 export default function CommunicationsPage() {
-  const [filter, setFilter] = useState<string>("all");
+  const closeFilterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [openFilter, setOpenFilter] = useState<null | "status">(null);
+  const [statusFilter, setStatusFilter] = useState<CommunicationStatusFilter>("all");
   const [search, setSearch] = useState("");
 
-  const filteredThreads = mockThreads.filter((thread) => {
-    const matchesFilter = filter === "all" || thread.status === filter;
-    const matchesSearch =
-      thread.subject.toLowerCase().includes(search.toLowerCase()) ||
-      thread.speaker.toLowerCase().includes(search.toLowerCase()) ||
-      thread.from.toLowerCase().includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const hasActiveFilters = search.length > 0 || statusFilter !== "all";
+
+  const filteredThreads = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return mockThreads.filter((thread) => {
+      const matchesFilter = statusFilter === "all" || thread.status === statusFilter;
+      const matchesSearch =
+        !query ||
+        thread.subject.toLowerCase().includes(query) ||
+        thread.speaker.toLowerCase().includes(query) ||
+        thread.from.toLowerCase().includes(query);
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [search, statusFilter]);
+
+  function openFilterMenu(filter: "status") {
+    if (closeFilterTimeoutRef.current) {
+      clearTimeout(closeFilterTimeoutRef.current);
+      closeFilterTimeoutRef.current = null;
+    }
+    setOpenFilter(filter);
+  }
+
+  function scheduleCloseFilter(filter: "status") {
+    if (closeFilterTimeoutRef.current) {
+      clearTimeout(closeFilterTimeoutRef.current);
+    }
+
+    closeFilterTimeoutRef.current = setTimeout(() => {
+      setOpenFilter((current) => (current === filter ? null : current));
+      closeFilterTimeoutRef.current = null;
+    }, 320);
+  }
+
+  function resetFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setOpenFilter(null);
+  }
 
   return (
-    <DashboardPageShell
-      title="Communications"
-    >
+    <DashboardPageShell title="Communications">
       <section className="rounded-[14px] border border-[#EBEBEB] bg-[#FFFFFF] p-4">
-        <div className="flex flex-col gap-3 xl:flex-row">
+        <div className="flex flex-col gap-3">
           <input
             type="text"
             placeholder="Search threads"
@@ -65,20 +107,48 @@ export default function CommunicationsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] font-normal tracking-[-0.01em] text-[#111111] placeholder:font-normal placeholder:tracking-normal placeholder:text-[#999999] outline-none transition focus:border-[#111111]"
           />
-          <div className="flex flex-wrap gap-2">
-            {["all", "needs_review", "awaiting_reply", "resolved"].map((status) => (
+          <div className="flex flex-wrap items-center gap-5">
+            <div
+              className="relative min-w-[120px]"
+              onMouseEnter={() => openFilterMenu("status")}
+              onMouseLeave={() => scheduleCloseFilter("status")}
+            >
               <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`h-10 rounded-[8px] px-3 text-[12px] font-medium uppercase tracking-[0.04em] transition ${
-                  filter === status
-                    ? "border border-[#111111] bg-[#111111] text-[#FFFFFF]"
-                    : "border border-[#E0E0E0] text-[#555555] hover:bg-[#F4F4F4]"
+                type="button"
+                className="text-[12px] font-medium text-[#555555] transition hover:text-[#111111]"
+              >
+                Status
+              </button>
+              <div
+                className={`absolute left-0 top-full z-20 mt-2 min-w-[170px] flex-col gap-1 rounded-[10px] border border-[#EBEBEB] bg-[#FFFFFF] p-2 shadow-sm ${
+                  openFilter === "status" ? "flex" : "hidden"
                 }`}
               >
-                {status === "all" ? "All" : formatStatus(status)}
-              </button>
-            ))}
+                {communicationStatusOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setStatusFilter(option.value)}
+                    className={`rounded-[6px] px-2 py-1 text-left text-[12px] transition ${
+                      statusFilter === option.value
+                        ? "bg-[#F4F4F4] font-semibold text-[#111111]"
+                        : "text-[#6B6B6B] hover:bg-[#FAFAFA]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={!hasActiveFilters}
+              className="text-[12px] font-medium text-[#000000] transition hover:text-[#000000] disabled:cursor-not-allowed disabled:text-[#BBBBBB]"
+            >
+              Reset
+            </button>
           </div>
         </div>
       </section>
