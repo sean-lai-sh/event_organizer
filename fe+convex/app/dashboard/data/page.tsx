@@ -327,9 +327,8 @@ export default function DataPage() {
         </section>
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="space-y-5">
-          <section className="flex h-[560px] flex-col overflow-hidden rounded-[24px] border border-[#E6E6E6] bg-[#FFFFFF]">
+      <section className="grid gap-6 xl:items-end xl:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="flex h-[440px] flex-col overflow-hidden rounded-[24px] border border-[#E6E6E6] bg-[#FFFFFF]">
             <div className="border-b border-[#EFEFEF] px-6 py-6">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9F9F9F]">
                 Distribution
@@ -418,9 +417,79 @@ export default function DataPage() {
                 description="Once events have check-ins, this module will show turnout and source mix by event."
               />
             )}
-          </section>
+        </section>
 
-          <section className="grid gap-5 xl:grid-cols-2">
+        <aside className="flex h-[440px] flex-col justify-end">
+          <form
+            onSubmit={handleAttendanceSubmit}
+            className="rounded-[20px] border border-[#ECECEC] bg-[#FAFAFA] p-4"
+          >
+            <div className="flex items-center gap-2">
+              <Users2 className="h-4 w-4 text-[#8A8A8A]" strokeWidth={1.8} />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
+                Manual Check-In
+              </p>
+            </div>
+            <h3 className="mt-2.5 text-[15px] font-semibold text-[#111111]">Log one attendee</h3>
+            <p className="mt-2 text-[12px] leading-5 text-[#6C6C6C]">
+              Use this for quick corrections, door updates, or one-off attendance capture.
+            </p>
+
+            <div className="mt-4 space-y-2.5">
+              <select
+                value={selectedEventId}
+                onChange={(event) => setSelectedEventId(event.target.value as Id<"events"> | "")}
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition focus:border-[#111111]"
+                disabled={!events || events.length === 0 || submittingAttendance}
+              >
+                <option value="">Select an event</option>
+                {(events ?? []).map((event) => (
+                  <option key={event._id} value={event._id}>
+                    {event.title}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={attendeeName}
+                onChange={(event) => setAttendeeName(event.target.value)}
+                placeholder="Attendee name"
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
+                disabled={submittingAttendance}
+              />
+
+              <input
+                value={attendeeEmail}
+                onChange={(event) => setAttendeeEmail(event.target.value)}
+                placeholder="Attendee email"
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
+                disabled={submittingAttendance}
+              />
+
+              <select
+                value={attendeeSource}
+                onChange={(event) => setAttendeeSource(event.target.value)}
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition focus:border-[#111111]"
+                disabled={submittingAttendance}
+              >
+                <option value="manual">manual</option>
+                <option value="csv_import">csv import</option>
+                <option value="door_list">door list</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={submittingAttendance || !events || events.length === 0}
+              className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-[12px] bg-[#111111] px-4 text-[12px] font-semibold text-[#FFFFFF] transition hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:bg-[#B5B5B5]"
+            >
+              {submittingAttendance ? "Logging..." : "Log attendance"}
+            </button>
+          </form>
+        </aside>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_300px]">
             <div className="flex h-[680px] flex-col overflow-hidden rounded-[22px] border border-[#E8E8E8] bg-[#FFFFFF]">
               <div className="border-b border-[#EFEFEF] px-5 py-5">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9F9F9F]">
@@ -621,88 +690,10 @@ export default function DataPage() {
                 />
               )}
             </div>
-          </section>
-        </div>
-
-        <aside className="space-y-4">
-          <div className="rounded-[16px] border border-[#ECECEC] bg-[#F8F8F8] px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9A9A9A]">
-              Operator Tools
-            </p>
-            <p className="mt-2 text-[12px] leading-5 text-[#727272]">
-              Logging and note-taking live here so the dashboard stays insight-first.
-            </p>
-          </div>
-          <form
-            onSubmit={handleAttendanceSubmit}
-            className="rounded-[20px] border border-[#ECECEC] bg-[#FAFAFA] p-4"
-          >
-            <div className="flex items-center gap-2">
-              <Users2 className="h-4 w-4 text-[#8A8A8A]" strokeWidth={1.8} />
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
-                Manual Check-In
-              </p>
-            </div>
-            <h3 className="mt-2.5 text-[15px] font-semibold text-[#111111]">Log one attendee</h3>
-            <p className="mt-2 text-[12px] leading-5 text-[#6C6C6C]">
-              Use this for quick corrections, door updates, or one-off attendance capture.
-            </p>
-
-            <div className="mt-4 space-y-2.5">
-              <select
-                value={selectedEventId}
-                onChange={(event) => setSelectedEventId(event.target.value as Id<"events"> | "")}
-                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition focus:border-[#111111]"
-                disabled={!events || events.length === 0 || submittingAttendance}
-              >
-                <option value="">Select an event</option>
-                {(events ?? []).map((event) => (
-                  <option key={event._id} value={event._id}>
-                    {event.title}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                value={attendeeName}
-                onChange={(event) => setAttendeeName(event.target.value)}
-                placeholder="Attendee name"
-                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
-                disabled={submittingAttendance}
-              />
-
-              <input
-                value={attendeeEmail}
-                onChange={(event) => setAttendeeEmail(event.target.value)}
-                placeholder="Attendee email"
-                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
-                disabled={submittingAttendance}
-              />
-
-              <select
-                value={attendeeSource}
-                onChange={(event) => setAttendeeSource(event.target.value)}
-                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition focus:border-[#111111]"
-                disabled={submittingAttendance}
-              >
-                <option value="manual">manual</option>
-                <option value="csv_import">csv import</option>
-                <option value="door_list">door list</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submittingAttendance || !events || events.length === 0}
-              className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-[12px] bg-[#111111] px-4 text-[12px] font-semibold text-[#FFFFFF] transition hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:bg-[#B5B5B5]"
-            >
-              {submittingAttendance ? "Logging..." : "Log attendance"}
-            </button>
-          </form>
 
           <form
             onSubmit={handleInsightSubmit}
-            className="rounded-[20px] border border-[#ECECEC] bg-[#FAFAFA] p-4"
+            className="flex h-[680px] flex-col rounded-[20px] border border-[#ECECEC] bg-[#FAFAFA] p-4"
           >
             <div className="flex items-center gap-2">
               <FileEdit className="h-4 w-4 text-[#8A8A8A]" strokeWidth={1.8} />
@@ -720,9 +711,8 @@ export default function DataPage() {
             <textarea
               value={insightText}
               onChange={(event) => setInsightText(event.target.value)}
-              rows={8}
               placeholder={latestInsight?.insight_text ?? "Write the latest attendance read..."}
-              className="mt-4 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 py-3 text-[13px] leading-6 text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
+              className="mt-4 min-h-0 flex-1 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 py-3 text-[13px] leading-6 text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
               disabled={submittingInsight}
             />
 
@@ -734,7 +724,6 @@ export default function DataPage() {
               {submittingInsight ? "Saving..." : "Save snapshot note"}
             </button>
           </form>
-        </aside>
       </section>
     </DashboardPageShell>
   );
