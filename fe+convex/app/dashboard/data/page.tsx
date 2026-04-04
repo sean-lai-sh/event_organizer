@@ -1,31 +1,125 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Activity, Clock3, FileEdit, Users2 } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-function formatDate(value?: string | null) {
+function formatShortDate(value?: string | null) {
   if (!value) return "TBD";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString();
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
-function formatTimestamp(value?: number | null) {
+function formatCompactTimestamp(value?: number | null) {
   if (!value) return "No activity yet";
-  return new Date(value).toLocaleString();
+  const date = new Date(value);
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-function formatSourceLabel(source: string) {
+function formatSourceLabel(source?: string | null) {
+  if (!source) return "unknown";
   return source.replace(/_/g, " ");
 }
 
-export default function DataInsightsPage() {
-  const events = useQuery(api.events.listEvents, {});
+function getInitials(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function formatRelativeCheckIns(count: number) {
+  return `${count} event${count === 1 ? "" : "s"} attended`;
+}
+
+function SourceMixBar({
+  label,
+  count,
+  maxCount,
+}: {
+  label: string;
+  count: number;
+  maxCount: number;
+}) {
+  const width = maxCount > 0 ? `${Math.max((count / maxCount) * 100, 6)}%` : "0%";
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-[13px]">
+        <span className="capitalize text-[#202020]">{label}</span>
+        <span className="text-[#727272]">{count}</span>
+      </div>
+      <div className="h-2 rounded-full bg-[#ECECEC]">
+        <div className="h-2 rounded-full bg-[#111111]" style={{ width }} />
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+  compact = false,
+}: {
+  label: string;
+  value: string | number;
+  hint: string;
+  compact?: boolean;
+}) {
+  return (
+    <div className="rounded-[22px] border border-[#E6E6E6] bg-[#FFFFFF] p-6">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9A9A9A]">
+        {label}
+      </p>
+      <p
+        className={`mt-3 tracking-[-0.06em] text-[#111111] ${
+          compact ? "text-[24px] font-semibold leading-tight" : "font-light text-[38px] leading-none"
+        }`}
+      >
+        {value}
+      </p>
+      <p className="mt-3 max-w-[18rem] text-[12px] leading-5 text-[#777777]">{hint}</p>
+    </div>
+  );
+}
+
+function EmptyModule({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center px-6 py-8">
+      <div className="max-w-[380px] text-center">
+        <h3 className="text-[16px] font-semibold text-[#151515]">{title}</h3>
+        <p className="mt-2 text-[13px] leading-6 text-[#747474]">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function DataPage() {
   const dashboard = useQuery(api.attendance.getAttendanceDashboard, {});
+  const events = useQuery(api.events.listEvents, {});
   const upsertAttendanceBatch = useMutation(api.attendance.upsertAttendanceBatch);
   const recordAttendanceInsight = useMutation(api.attendance.recordAttendanceInsight);
 
@@ -34,17 +128,9 @@ export default function DataInsightsPage() {
   const [attendeeEmail, setAttendeeEmail] = useState("");
   const [attendeeSource, setAttendeeSource] = useState("manual");
   const [insightText, setInsightText] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
   const [submittingAttendance, setSubmittingAttendance] = useState(false);
   const [submittingInsight, setSubmittingInsight] = useState(false);
-  const [attendanceMessage, setAttendanceMessage] = useState<string | null>(null);
-  const [insightMessage, setInsightMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!selectedEventId && events && events.length > 0) {
-      setSelectedEventId(events[0]._id);
-    }
-  }, [events, selectedEventId]);
 
   const totals = dashboard?.totals ?? {
     events_tracked: 0,
@@ -53,24 +139,30 @@ export default function DataInsightsPage() {
     latest_check_in_at: null,
     by_source: {},
   };
-  const trackedEvents = dashboard?.event_breakdown ?? [];
+
+  const latestInsight = dashboard?.latest_insight ?? null;
+  const eventBreakdown = dashboard?.event_breakdown ?? [];
   const repeatAttendees = dashboard?.repeat_attendees ?? [];
   const recentAttendance = dashboard?.recent_attendance ?? [];
-  const latestInsight = dashboard?.latest_insight ?? null;
-  const sourceEntries = Object.entries(totals.by_source).sort((a, b) => b[1] - a[1]);
+
+  const sourceEntries = useMemo(
+    () => Object.entries(totals.by_source).sort((a, b) => b[1] - a[1]),
+    [totals.by_source]
+  );
+  const maxSourceCount = sourceEntries[0]?.[1] ?? 0;
+
+  const narrativeText =
+    latestInsight?.insight_text ??
+    (totals.total_check_ins > 0
+      ? `Attendance is now recorded across ${totals.events_tracked} events and ${totals.unique_attendees} unique attendees. The strongest signal right now is coming from ${sourceEntries[0] ? formatSourceLabel(sourceEntries[0][0]) : "current check-ins"}, while repeat attendance is starting to show who keeps coming back.`
+      : "No attendance insight has been recorded yet. Once data is added, this panel becomes the quick readout for turnout, source quality, and returner behavior.");
 
   async function handleAttendanceSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorMessage(null);
-    setAttendanceMessage(null);
+    setMessage(null);
 
-    if (!selectedEventId) {
-      setErrorMessage("Create an event before logging attendance.");
-      return;
-    }
-
-    if (!attendeeEmail.trim()) {
-      setErrorMessage("Attendee email is required.");
+    if (!selectedEventId || !attendeeEmail.trim()) {
+      setMessage("Event and attendee email are required.");
       return;
     }
 
@@ -86,13 +178,13 @@ export default function DataInsightsPage() {
           },
         ],
       });
-      setAttendanceMessage(
+      setMessage(
         `Logged ${result.inserted_count + result.updated_count} attendee record for ${result.event_title}.`
       );
       setAttendeeName("");
       setAttendeeEmail("");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to log attendance.");
+      setMessage(error instanceof Error ? error.message : "Unable to log attendance.");
     } finally {
       setSubmittingAttendance(false);
     }
@@ -100,11 +192,10 @@ export default function DataInsightsPage() {
 
   async function handleInsightSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorMessage(null);
-    setInsightMessage(null);
+    setMessage(null);
 
     if (!insightText.trim()) {
-      setErrorMessage("Insight text is required.");
+      setMessage("Insight text is required.");
       return;
     }
 
@@ -113,10 +204,9 @@ export default function DataInsightsPage() {
       await recordAttendanceInsight({
         insight_text: insightText,
       });
-      setInsightMessage("Saved attendance snapshot.");
-      setInsightText("");
+      setMessage("Saved snapshot note.");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to save insight.");
+      setMessage(error instanceof Error ? error.message : "Unable to save snapshot note.");
     } finally {
       setSubmittingInsight(false);
     }
@@ -126,236 +216,443 @@ export default function DataInsightsPage() {
     <DashboardPageShell
       title="Data Insights"
       action={
-        <div className="rounded-[10px] border border-[#E5E5E5] bg-[#F6F6F6] px-3 py-2 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9A9A9A]">
+        <div className="rounded-[12px] border border-[#E8E8E8] bg-[#F7F7F7] px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9A9A9A]">
             Latest Snapshot
           </p>
           <p className="mt-1 text-[12px] font-medium text-[#111111]">
-            {latestInsight ? formatTimestamp(latestInsight.generated_at) : "No saved insight yet"}
+            {latestInsight
+              ? formatCompactTimestamp(latestInsight.generated_at)
+              : formatCompactTimestamp(totals.latest_check_in_at)}
           </p>
         </div>
       }
     >
-      <section className="overflow-hidden rounded-[22px] border border-[#E6E6E6] bg-[linear-gradient(135deg,#FFFFFF_0%,#F5F5F5_55%,#EEEEEE_100%)]">
-        <div className="grid gap-6 px-6 py-6 xl:grid-cols-[minmax(0,1.35fr)_320px]">
-          <div className="space-y-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8C8C8C]">
-              Attendance Ledger
+      <section className="rounded-[30px] border border-[#E8E8E8] bg-[#FCFCFC] px-8 py-8">
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8F8F8F]">
+              Attendance Intelligence
             </p>
-            <div className="max-w-3xl space-y-3">
-              <h2 className="font-[var(--font-outfit)] text-[42px] font-light leading-[0.95] tracking-[-0.05em] text-[#111111]">
-                Restore the operational record for who actually showed up.
-              </h2>
-              <p className="max-w-2xl text-[14px] leading-6 text-[#5F5F5F]">
-                Attendance is tracked in Convex again with event-scoped dedupe, recent check-ins,
-                repeat-attendee detection, and append-only insight snapshots for the dashboard.
-              </p>
-            </div>
+            <h2 className="max-w-[860px] text-[50px] font-semibold leading-[0.97] tracking-[-0.055em] text-[#111111] xl:text-[56px]">
+              See the story behind turnout before you touch the ledger.
+            </h2>
+            <p className="max-w-[760px] text-[16px] leading-8 text-[#616161]">
+              This page is tuned for quick readouts first: event momentum, repeat
+              attendance, source quality, and the latest signal worth sharing with the
+              team.
+            </p>
           </div>
 
-          <div className="rounded-[18px] border border-[#DADADA] bg-[#111111] p-5 text-[#FFFFFF]">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#BBBBBB]">
-              Source Mix
-            </p>
-            <div className="mt-4 space-y-3">
+          <div className="rounded-[24px] border border-[#ECECEC] bg-[#FFFFFF] p-5">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-[#8B8B8B]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#979797]">
+                Source Mix
+              </p>
+            </div>
+            <div className="mt-5 space-y-4">
               {sourceEntries.length > 0 ? (
-                sourceEntries.map(([source, count]) => (
-                  <div
+                sourceEntries.slice(0, 3).map(([source, count]) => (
+                  <SourceMixBar
                     key={source}
-                    className="flex items-center justify-between border-b border-[#2A2A2A] pb-3 last:border-b-0 last:pb-0"
-                  >
-                    <span className="text-[13px] capitalize text-[#D6D6D6]">
-                      {formatSourceLabel(source)}
-                    </span>
-                    <span className="font-[var(--font-outfit)] text-[28px] font-light tracking-[-0.04em]">
-                      {count}
-                    </span>
-                  </div>
+                    label={formatSourceLabel(source)}
+                    count={count}
+                    maxCount={maxSourceCount}
+                  />
                 ))
               ) : (
-                <p className="text-[13px] text-[#B5B5B5]">
-                  No attendance imports yet. Use the form below to start the ledger.
+                <p className="text-[13px] leading-6 text-[#666666]">
+                  No source data has been recorded yet.
                 </p>
               )}
             </div>
           </div>
         </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Tracked Events"
+            value={totals.events_tracked}
+            hint="events with at least one recorded attendee"
+          />
+          <StatCard
+            label="Unique Attendees"
+            value={totals.unique_attendees}
+            hint="deduped across the full attendance history"
+          />
+          <StatCard
+            label="Total Check-Ins"
+            value={totals.total_check_ins}
+            hint="all event attendance rows now in the system"
+          />
+          <StatCard
+            label="Latest Activity"
+            value={formatCompactTimestamp(totals.latest_check_in_at)}
+            hint="most recent attendance captured in Convex"
+            compact
+          />
+        </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: "tracked events",
-            value: totals.events_tracked,
-            hint: "events with at least one check-in",
-          },
-          {
-            label: "unique attendees",
-            value: totals.unique_attendees,
-            hint: "deduped by normalized email",
-          },
-          {
-            label: "total check-ins",
-            value: totals.total_check_ins,
-            hint: "all attendance rows across events",
-          },
-          {
-            label: "latest activity",
-            value: totals.latest_check_in_at ? formatTimestamp(totals.latest_check_in_at) : "No activity",
-            hint: "most recent recorded attendance",
-          },
-        ].map((card) => (
-          <div
-            key={card.label}
-            className="rounded-[18px] border border-[#EAEAEA] bg-[#FAFAFA] p-4"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9B9B9B]">
-              {card.label}
+      <section className="rounded-[24px] border border-[#151515] bg-[#111111] px-6 py-6 text-[#FFFFFF]">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#BEBEBE]">
+          Current Attendance Read
+        </p>
+        <p className="mt-3 max-w-[1040px] text-[15px] leading-7 text-[#F2F2F2]">
+          {narrativeText}
+        </p>
+      </section>
+
+      <section className="rounded-[22px] border border-[#ECECEC] bg-[#FFFFFF] px-6 py-5">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#A0A0A0]">
+              Data Details Below
             </p>
-            <p className="mt-3 font-[var(--font-outfit)] text-[32px] font-light tracking-[-0.05em] text-[#111111]">
-              {card.value}
-            </p>
-            <p className="mt-2 text-[12px] text-[#7D7D7D]">{card.hint}</p>
+            <h3 className="mt-2 text-[22px] font-semibold tracking-[-0.04em] text-[#111111]">
+              Dive into records and operations after the top-line read
+            </h3>
           </div>
-        ))}
+          <p className="max-w-[520px] text-[13px] leading-6 text-[#6E6E6E]">
+            The sections below move from detailed event breakdowns into attendee behavior,
+            recent activity, and the manual tools used to maintain the dataset.
+          </p>
+        </div>
       </section>
 
-      {(errorMessage || attendanceMessage || insightMessage) && (
-        <section className="rounded-[14px] border border-[#E5E5E5] bg-[#F7F7F7] px-4 py-3 text-[13px] text-[#444444]">
-          {errorMessage ?? attendanceMessage ?? insightMessage}
+      {message ? (
+        <section className="rounded-[16px] border border-[#E6E6E6] bg-[#F8F8F8] px-4 py-3 text-[13px] text-[#444444]">
+          {message}
         </section>
-      )}
+      ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-        <div className="overflow-hidden rounded-[18px] border border-[#E9E9E9] bg-[#FFFFFF]">
-          <div className="flex items-center justify-between border-b border-[#ECECEC] px-5 py-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
-                Event Breakdown
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="space-y-5">
+          <section className="flex h-[560px] flex-col overflow-hidden rounded-[24px] border border-[#E6E6E6] bg-[#FFFFFF]">
+            <div className="border-b border-[#EFEFEF] px-6 py-6">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9F9F9F]">
+                Distribution
               </p>
-              <h3 className="mt-1 text-[16px] font-semibold text-[#111111]">
+              <h3 className="mt-2 text-[24px] font-semibold tracking-[-0.045em] text-[#111111]">
                 Attendance by event
               </h3>
+              <p className="mt-2 text-[14px] leading-6 text-[#6C6C6C]">
+                Event-by-event turnout with recency and source mix visible in one scan.
+              </p>
             </div>
-            <p className="text-[12px] text-[#7A7A7A]">
-              Sorted by attendee volume, then latest activity
-            </p>
-          </div>
 
-          {dashboard === undefined ? (
-            <div className="p-6 text-[14px] text-[#6F6F6F]">Loading attendance data...</div>
-          ) : trackedEvents.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#ECECEC] bg-[#F8F8F8]">
-                    {["Event", "Date", "Attendees", "Latest check-in", "Sources"].map((heading) => (
-                      <th
-                        key={heading}
-                        className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-[#9B9B9B]"
-                      >
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F0F0F0]">
-                  {trackedEvents.map((event) => (
-                    <tr key={event.event_id} className="align-top hover:bg-[#FBFBFB]">
-                      <td className="px-5 py-4">
-                        <p className="text-[14px] font-medium text-[#111111]">{event.title}</p>
-                        <p className="mt-1 text-[12px] text-[#8A8A8A]">
-                          Convex event id: {event.event_id}
-                        </p>
-                      </td>
-                      <td className="px-5 py-4 text-[13px] text-[#5C5C5C]">
-                        {formatDate(event.event_date)}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="font-[var(--font-outfit)] text-[28px] font-light tracking-[-0.04em] text-[#111111]">
-                          {event.attendee_count}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-[13px] text-[#5C5C5C]">
-                        {formatTimestamp(event.latest_check_in_at)}
-                      </td>
-                      <td className="px-5 py-4 text-[12px] text-[#5F5F5F]">
-                        <div className="flex flex-wrap gap-2">
-                          {Object.entries(event.sources).map(([source, count]) => (
-                            <span
-                              key={source}
-                              className="rounded-full border border-[#DDDDDD] bg-[#F6F6F6] px-2.5 py-1 capitalize"
-                            >
-                              {formatSourceLabel(source)} {count}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
+            {dashboard === undefined ? (
+              <div className="space-y-3 px-5 py-5">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-[72px] animate-pulse rounded-[14px] border border-[#EFEFEF] bg-[#F7F7F7]"
+                  />
+                ))}
+              </div>
+            ) : eventBreakdown.length > 0 ? (
+              <div className="min-h-0 flex-1 overflow-auto">
+                <table className="w-full min-w-[880px]">
+                  <thead>
+                    <tr className="border-b border-[#F0F0F0] bg-[#FAFAFA]">
+                      {["Event", "Date", "Attendees", "Last Check-In", "Source Mix"].map(
+                        (heading) => (
+                          <th
+                            key={heading}
+                            className="sticky top-0 z-10 bg-[#FAFAFA] px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-[#A0A0A0]"
+                          >
+                            {heading}
+                          </th>
+                        )
+                      )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="p-6 text-[14px] text-[#6F6F6F]">
-              No attendance records yet. Log an attendee to start the event breakdown.
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-5">
-          <div className="rounded-[18px] border border-[#E9E9E9] bg-[#FFFFFF] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
-              Latest Insight
-            </p>
-            {latestInsight ? (
-              <div className="mt-3 space-y-3">
-                <p className="text-[15px] leading-6 text-[#1C1C1C]">
-                  {latestInsight.insight_text}
-                </p>
-                <div className="grid grid-cols-2 gap-3 text-[12px] text-[#707070]">
-                  <div className="rounded-[12px] border border-[#ECECEC] bg-[#FAFAFA] p-3">
-                    <p className="uppercase tracking-[0.12em] text-[#A0A0A0]">events</p>
-                    <p className="mt-2 text-[18px] font-semibold text-[#111111]">
-                      {latestInsight.event_count}
-                    </p>
-                  </div>
-                  <div className="rounded-[12px] border border-[#ECECEC] bg-[#FAFAFA] p-3">
-                    <p className="uppercase tracking-[0.12em] text-[#A0A0A0]">attendees</p>
-                    <p className="mt-2 text-[18px] font-semibold text-[#111111]">
-                      {latestInsight.attendee_count}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[12px] text-[#8A8A8A]">
-                  Saved {formatTimestamp(latestInsight.generated_at)}
-                </p>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1F1F1]">
+                    {eventBreakdown.map((event) => (
+                      <tr key={event.event_id} className="transition hover:bg-[#FCFCFC]">
+                        <td className="px-6 py-4">
+                          <p className="text-[14px] font-medium text-[#111111]">{event.title}</p>
+                          <p className="mt-1 text-[12px] text-[#8A8A8A]">
+                            {Object.entries(event.sources)
+                              .slice(0, 2)
+                              .map(([source, count]) => `${formatSourceLabel(source)} ${count}`)
+                              .join(" / ") || "No source data"}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 text-[13px] text-[#5E5E5E]">
+                          {formatShortDate(event.event_date)}
+                        </td>
+                        <td className="px-6 py-4 text-[34px] font-light tracking-[-0.06em] text-[#111111]">
+                          {event.attendee_count}
+                        </td>
+                        <td className="px-6 py-4 text-[13px] text-[#5E5E5E]">
+                          {formatCompactTimestamp(event.latest_check_in_at)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(event.sources).length > 0 ? (
+                              Object.entries(event.sources)
+                                .slice(0, 2)
+                                .map(([source, count]) => (
+                                  <span
+                                    key={source}
+                                    className="rounded-full border border-[#E1E1E1] bg-[#F7F7F7] px-2.5 py-1 text-[11px] font-medium text-[#585858]"
+                                  >
+                                    {formatSourceLabel(source)} {count}
+                                  </span>
+                                ))
+                            ) : (
+                              <span className="text-[12px] text-[#8A8A8A]">No sources yet</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : (
-              <p className="mt-3 text-[13px] leading-6 text-[#6B6B6B]">
-                No saved insight yet. Capture one after reviewing the attendance patterns below.
-              </p>
+              <EmptyModule
+                title="No attendance records yet"
+                description="Once events have check-ins, this module will show turnout and source mix by event."
+              />
             )}
-          </div>
+          </section>
 
-          <form
-            onSubmit={handleAttendanceSubmit}
-            className="rounded-[18px] border border-[#E9E9E9] bg-[#FFFFFF] p-5"
-          >
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
-                Manual Check-In
-              </p>
-              <h3 className="text-[16px] font-semibold text-[#111111]">Log one attendee</h3>
+          <section className="grid gap-5 xl:grid-cols-2">
+            <div className="flex h-[680px] flex-col overflow-hidden rounded-[22px] border border-[#E8E8E8] bg-[#FFFFFF]">
+              <div className="border-b border-[#EFEFEF] px-5 py-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9F9F9F]">
+                  Behavior
+                </p>
+                <h3 className="mt-2 text-[22px] font-semibold tracking-[-0.04em] text-[#111111]">
+                  Repeat attendees
+                </h3>
+                <p className="mt-2 text-[13px] leading-6 text-[#6C6C6C]">
+                  The people most likely to return and the names worth calling out in updates.
+                </p>
+              </div>
+
+              {dashboard === undefined ? (
+                <div className="space-y-3 px-5 py-5">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-[78px] animate-pulse rounded-[14px] border border-[#EFEFEF] bg-[#F7F7F7]"
+                    />
+                  ))}
+                </div>
+              ) : repeatAttendees.length > 0 ? (
+                <div className="flex min-h-0 flex-1 flex-col p-5">
+                  {repeatAttendees[0] ? (
+                    <div className="rounded-[20px] border border-[#E4E4E4] bg-[linear-gradient(180deg,#FCFCFC_0%,#F8F8F8_100%)] p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 items-start gap-4">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#DCDCDC] bg-[#111111] text-[13px] font-semibold tracking-[0.06em] text-[#FFFFFF]">
+                            {getInitials(repeatAttendees[0].name ?? repeatAttendees[0].email)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[16px] font-semibold tracking-[-0.03em] text-[#111111]">
+                              {repeatAttendees[0].name ?? repeatAttendees[0].email}
+                            </p>
+                            <span className="mt-2 inline-flex rounded-full border border-[#DDDDDD] bg-[#FFFFFF] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#666666]">
+                              Strongest returner
+                            </span>
+                            <p className="mt-3 text-[13px] font-medium text-[#5D5D5D]">
+                              Highest repeat attendance
+                            </p>
+                            <p className="mt-1 text-[12px] text-[#8A8A8A]">
+                              {repeatAttendees[0].email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="inline-flex rounded-full border border-[#D8D8D8] bg-[#FFFFFF] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#666666]">
+                            {repeatAttendees[0].event_count}x
+                          </span>
+                          <p className="mt-2 text-[12px] text-[#666666]">
+                            {formatRelativeCheckIns(repeatAttendees[0].event_count)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {repeatAttendees.slice(1, 5).length > 0 ? (
+                    <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-2">
+                      <div className="space-y-2 pb-1">
+                      {repeatAttendees.slice(1).map((attendee) => (
+                        <div
+                          key={attendee.email}
+                          className="flex items-center justify-between gap-3 rounded-[16px] border border-[#F0F0F0] bg-[#FCFCFC] px-4 py-3"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E4E4E4] bg-[#FFFFFF] text-[11px] font-semibold text-[#676767]">
+                              {getInitials(attendee.name ?? attendee.email)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-[14px] font-medium text-[#111111]">
+                                {attendee.name ?? attendee.email}
+                              </p>
+                              <p className="truncate text-[12px] text-[#858585]">{attendee.email}</p>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span className="inline-flex rounded-full border border-[#DFDFDF] bg-[#FFFFFF] px-2.5 py-1 text-[11px] font-semibold text-[#555555]">
+                              {attendee.event_count}x
+                            </span>
+                            <p className="mt-1 text-[11px] text-[#919191]">
+                              {formatRelativeCheckIns(attendee.event_count)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <EmptyModule
+                  title="No repeat attendance yet"
+                  description="As attendees return across events, this list will surface the strongest repeaters."
+                />
+              )}
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="flex h-[680px] flex-col overflow-hidden rounded-[22px] border border-[#E8E8E8] bg-[#FFFFFF]">
+              <div className="border-b border-[#EFEFEF] px-5 py-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9F9F9F]">
+                  Activity
+                </p>
+                <h3 className="mt-2 text-[22px] font-semibold tracking-[-0.04em] text-[#111111]">
+                  Recent check-ins
+                </h3>
+                <p className="mt-2 text-[13px] leading-6 text-[#6C6C6C]">
+                  The freshest attendance movement across events so the dataset always feels current.
+                </p>
+              </div>
+
+              {dashboard === undefined ? (
+                <div className="space-y-3 px-5 py-5">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-[82px] animate-pulse rounded-[14px] border border-[#EFEFEF] bg-[#F7F7F7]"
+                    />
+                  ))}
+                </div>
+              ) : recentAttendance.length > 0 ? (
+                <div className="flex min-h-0 flex-1 flex-col p-5">
+                  {recentAttendance[0] ? (
+                    <div className="rounded-[20px] border border-[#E4E4E4] bg-[linear-gradient(180deg,#FCFCFC_0%,#F8F8F8_100%)] p-5">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#DCDCDC] bg-[#111111]">
+                          <Clock3 className="h-4 w-4 text-[#FFFFFF]" strokeWidth={1.8} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[16px] font-semibold text-[#111111]">
+                              {recentAttendance[0].name ?? recentAttendance[0].email}
+                            </p>
+                            <span className="rounded-full border border-[#DDDDDD] bg-[#FFFFFF] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#666666]">
+                              Latest check-in
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[13px] font-medium text-[#5D5D5D]">
+                            {recentAttendance[0].event_title}
+                          </p>
+                          <p className="mt-1 text-[12px] text-[#8A8A8A]">
+                            {formatShortDate(recentAttendance[0].event_date)}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="inline-flex rounded-full border border-[#D8D8D8] bg-[#FFFFFF] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#666666]">
+                            {formatSourceLabel(recentAttendance[0].source)}
+                          </span>
+                          <p className="mt-2 text-[12px] text-[#666666]">
+                            {formatCompactTimestamp(recentAttendance[0].checked_in_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {recentAttendance.slice(1, 5).length > 0 ? (
+                    <div className="relative mt-4 min-h-0 flex-1 overflow-y-auto pr-2">
+                      <div className="absolute bottom-2 left-[15px] top-2 w-px bg-[#E8E8E8]" />
+                      <div className="space-y-3 pb-1 pl-6">
+                        {recentAttendance.slice(1).map((entry) => (
+                          <div key={entry._id} className="relative flex items-start gap-3">
+                            <div className="absolute left-[-17px] top-3 h-2.5 w-2.5 rounded-full border border-[#D8D8D8] bg-[#FFFFFF]" />
+                            <div className="flex-1 rounded-[16px] border border-[#F0F0F0] bg-[#FCFCFC] px-4 py-3">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <p className="text-[14px] font-medium text-[#111111]">
+                                    {entry.name ?? entry.email}
+                                  </p>
+                                  <p className="mt-1 text-[12px] font-medium text-[#666666]">
+                                    {entry.event_title}
+                                  </p>
+                                  <p className="mt-1 text-[12px] text-[#8A8A8A]">
+                                    {formatShortDate(entry.event_date)}
+                                  </p>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <span className="inline-flex rounded-full border border-[#E0E0E0] bg-[#FFFFFF] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6D6D6D]">
+                                    {formatSourceLabel(entry.source)}
+                                  </span>
+                                  <p className="mt-2 text-[11px] text-[#7A7A7A]">
+                                    {formatCompactTimestamp(entry.checked_in_at)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <EmptyModule
+                  title="No recent activity"
+                  description="Once attendance is recorded, this panel will show the freshest event movement."
+                />
+              )}
+            </div>
+          </section>
+        </div>
+
+        <aside className="space-y-4">
+          <div className="rounded-[16px] border border-[#ECECEC] bg-[#F8F8F8] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9A9A9A]">
+              Operator Tools
+            </p>
+            <p className="mt-2 text-[12px] leading-5 text-[#727272]">
+              Logging and note-taking live here so the dashboard stays insight-first.
+            </p>
+          </div>
+          <form
+            onSubmit={handleAttendanceSubmit}
+            className="rounded-[20px] border border-[#ECECEC] bg-[#FAFAFA] p-4"
+          >
+            <div className="flex items-center gap-2">
+              <Users2 className="h-4 w-4 text-[#8A8A8A]" strokeWidth={1.8} />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
+                Manual Check-In
+              </p>
+            </div>
+            <h3 className="mt-2.5 text-[15px] font-semibold text-[#111111]">Log one attendee</h3>
+            <p className="mt-2 text-[12px] leading-5 text-[#6C6C6C]">
+              Use this for quick corrections, door updates, or one-off attendance capture.
+            </p>
+
+            <div className="mt-4 space-y-2.5">
               <select
                 value={selectedEventId}
-                onChange={(event) =>
-                  setSelectedEventId(event.target.value as Id<"events"> | "")
-                }
-                className="h-11 w-full rounded-[10px] border border-[#E1E1E1] bg-transparent px-3 text-[14px] text-[#111111] outline-none focus:border-[#111111]"
+                onChange={(event) => setSelectedEventId(event.target.value as Id<"events"> | "")}
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition focus:border-[#111111]"
                 disabled={!events || events.length === 0 || submittingAttendance}
               >
                 <option value="">Select an event</option>
@@ -370,7 +667,7 @@ export default function DataInsightsPage() {
                 value={attendeeName}
                 onChange={(event) => setAttendeeName(event.target.value)}
                 placeholder="Attendee name"
-                className="h-11 w-full rounded-[10px] border border-[#E1E1E1] bg-transparent px-3 text-[14px] text-[#111111] outline-none placeholder:text-[#9A9A9A] focus:border-[#111111]"
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
                 disabled={submittingAttendance}
               />
 
@@ -378,14 +675,14 @@ export default function DataInsightsPage() {
                 value={attendeeEmail}
                 onChange={(event) => setAttendeeEmail(event.target.value)}
                 placeholder="Attendee email"
-                className="h-11 w-full rounded-[10px] border border-[#E1E1E1] bg-transparent px-3 text-[14px] text-[#111111] outline-none placeholder:text-[#9A9A9A] focus:border-[#111111]"
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
                 disabled={submittingAttendance}
               />
 
               <select
                 value={attendeeSource}
                 onChange={(event) => setAttendeeSource(event.target.value)}
-                className="h-11 w-full rounded-[10px] border border-[#E1E1E1] bg-transparent px-3 text-[14px] text-[#111111] outline-none focus:border-[#111111]"
+                className="h-10 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none transition focus:border-[#111111]"
                 disabled={submittingAttendance}
               >
                 <option value="manual">manual</option>
@@ -397,7 +694,7 @@ export default function DataInsightsPage() {
             <button
               type="submit"
               disabled={submittingAttendance || !events || events.length === 0}
-              className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-[10px] bg-[#111111] px-4 text-[13px] font-semibold text-[#FFFFFF] transition hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:bg-[#B5B5B5]"
+              className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-[12px] bg-[#111111] px-4 text-[12px] font-semibold text-[#FFFFFF] transition hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:bg-[#B5B5B5]"
             >
               {submittingAttendance ? "Logging..." : "Log attendance"}
             </button>
@@ -405,120 +702,39 @@ export default function DataInsightsPage() {
 
           <form
             onSubmit={handleInsightSubmit}
-            className="rounded-[18px] border border-[#E9E9E9] bg-[#FFFFFF] p-5"
+            className="rounded-[20px] border border-[#ECECEC] bg-[#FAFAFA] p-4"
           >
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
+            <div className="flex items-center gap-2">
+              <FileEdit className="h-4 w-4 text-[#8A8A8A]" strokeWidth={1.8} />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
                 Snapshot Note
               </p>
-              <h3 className="text-[16px] font-semibold text-[#111111]">
-                Persist the current read
-              </h3>
             </div>
+            <h3 className="mt-2.5 text-[15px] font-semibold text-[#111111]">
+              Save the latest narrative
+            </h3>
+            <p className="mt-2 text-[12px] leading-5 text-[#6C6C6C]">
+              Write the clean takeaway after reading turnout, source mix, and recent activity.
+            </p>
 
             <textarea
               value={insightText}
               onChange={(event) => setInsightText(event.target.value)}
-              rows={5}
-              placeholder="Example: Repeat attendance is clustering around workshop-format events."
-              className="mt-4 w-full rounded-[10px] border border-[#E1E1E1] bg-transparent px-3 py-3 text-[14px] leading-6 text-[#111111] outline-none placeholder:text-[#9A9A9A] focus:border-[#111111]"
+              rows={8}
+              placeholder={latestInsight?.insight_text ?? "Write the latest attendance read..."}
+              className="mt-4 w-full rounded-[12px] border border-[#E2E2E2] bg-[#FFFFFF] px-3 py-3 text-[13px] leading-6 text-[#111111] outline-none transition placeholder:text-[#9A9A9A] focus:border-[#111111]"
               disabled={submittingInsight}
             />
 
             <button
               type="submit"
               disabled={submittingInsight}
-              className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-[10px] border border-[#111111] bg-[#FFFFFF] px-4 text-[13px] font-semibold text-[#111111] transition hover:bg-[#F3F3F3] disabled:cursor-not-allowed disabled:border-[#D0D0D0] disabled:text-[#9A9A9A]"
+              className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-[12px] border border-[#111111] bg-[#FFFFFF] px-4 text-[12px] font-semibold text-[#111111] transition hover:bg-[#F3F3F3] disabled:cursor-not-allowed disabled:border-[#D0D0D0] disabled:text-[#9A9A9A]"
             >
-              {submittingInsight ? "Saving..." : "Save insight snapshot"}
+              {submittingInsight ? "Saving..." : "Save snapshot note"}
             </button>
           </form>
-        </div>
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-2">
-        <div className="rounded-[18px] border border-[#E9E9E9] bg-[#FFFFFF]">
-          <div className="border-b border-[#ECECEC] px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
-              Repeat Attendees
-            </p>
-            <h3 className="mt-1 text-[16px] font-semibold text-[#111111]">
-              People returning across events
-            </h3>
-          </div>
-
-          <div className="divide-y divide-[#F0F0F0]">
-            {repeatAttendees.length > 0 ? (
-              repeatAttendees.map((attendee) => (
-                <div
-                  key={attendee.email}
-                  className="flex items-center justify-between px-5 py-4"
-                >
-                  <div>
-                    <p className="text-[14px] font-medium text-[#111111]">
-                      {attendee.name ?? attendee.email}
-                    </p>
-                    <p className="mt-1 text-[12px] text-[#8A8A8A]">{attendee.email}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-[var(--font-outfit)] text-[28px] font-light tracking-[-0.04em] text-[#111111]">
-                      {attendee.event_count}
-                    </p>
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-[#9A9A9A]">
-                      events
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="px-5 py-6 text-[14px] text-[#6F6F6F]">
-                Repeat attendees will appear here once the same email checks into multiple events.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-[18px] border border-[#E9E9E9] bg-[#FFFFFF]">
-          <div className="border-b border-[#ECECEC] px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#999999]">
-              Recent Check-Ins
-            </p>
-            <h3 className="mt-1 text-[16px] font-semibold text-[#111111]">
-              Latest attendance activity
-            </h3>
-          </div>
-
-          <div className="divide-y divide-[#F0F0F0]">
-            {recentAttendance.length > 0 ? (
-              recentAttendance.map((entry) => (
-                <div key={entry._id} className="px-5 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[14px] font-medium text-[#111111]">
-                        {entry.name ?? entry.email}
-                      </p>
-                      <p className="mt-1 text-[12px] text-[#8A8A8A]">
-                        {entry.event_title} · {formatDate(entry.event_date)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-[#9A9A9A]">
-                        {entry.source ? formatSourceLabel(entry.source) : "unknown"}
-                      </p>
-                      <p className="mt-1 text-[12px] text-[#666666]">
-                        {formatTimestamp(entry.checked_in_at)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="px-5 py-6 text-[14px] text-[#6F6F6F]">
-                Recent attendance will populate as soon as check-ins are recorded.
-              </div>
-            )}
-          </div>
-        </div>
+        </aside>
       </section>
     </DashboardPageShell>
   );

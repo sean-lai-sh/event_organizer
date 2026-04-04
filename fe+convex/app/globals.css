@@ -5,6 +5,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --font-geist-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-geist-mono: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-outfit: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-inter: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --background: #fafafa;
   --foreground: #111111;
   --card: #ffffff;

@@ -92,6 +92,50 @@ function summarizeSourceCounts(rows: AttendanceRow[]) {
   }, {});
 }
 
+function formatSourceSummary(source: string) {
+  return source.replace(/_/g, " ");
+}
+
+function buildEventInsightSummary(args: {
+  eventTitle: string;
+  eventCountRank: number;
+  totalEvents: number;
+  totalCheckIns: number;
+  repeatAttendeeCount: number;
+  sourceCounts: Record<string, number>;
+}) {
+  const { eventTitle, eventCountRank, totalEvents, totalCheckIns, repeatAttendeeCount, sourceCounts } =
+    args;
+
+  if (totalCheckIns === 0) {
+    return `No attendance has been recorded for ${eventTitle} yet. Use Capture to log the first entries once attendance starts coming in.`;
+  }
+
+  const sourceEntries = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]);
+  const [topSource, topSourceCount] = sourceEntries[0] ?? [null, 0];
+  const topSourceShare = totalCheckIns > 0 ? topSourceCount / totalCheckIns : 0;
+
+  const turnoutLine =
+    eventCountRank === 1 && totalEvents > 1
+      ? "This event currently has the strongest turnout in the tracked dataset."
+      : eventCountRank <= 3 && totalEvents > 3
+        ? "This event sits in the stronger-attended tier of the current dataset."
+        : "This event has a more focused turnout footprint in the current dataset.";
+
+  const sourceLine = topSource
+    ? topSourceShare >= 0.6
+      ? `Most entries came through ${formatSourceSummary(topSource)}, suggesting that workflow is still the dominant capture path.`
+      : `${formatSourceSummary(topSource)} is the largest source, but attendance capture is still spread across multiple channels.`
+    : "Source mix will become clearer once more attendance is recorded.";
+
+  const repeatLine =
+    repeatAttendeeCount > 0
+      ? `${repeatAttendeeCount} attendee${repeatAttendeeCount === 1 ? "" : "s"} from this event also appear in other event records.`
+      : "No repeat-attendance signal is visible for this event yet.";
+
+  return `${turnoutLine} ${sourceLine} ${repeatLine}`;
+}
+
 async function buildAttendanceDashboard(ctx: AttendanceDashboardContext) {
   const [events, attendanceRows, insightRows] = await Promise.all([
     ctx.db.query("events").collect(),
@@ -326,6 +370,106 @@ export const getAttendanceDashboard = query({
   args: {},
   handler: async (ctx) => {
     return await buildAttendanceDashboard(ctx);
+  },
+});
+
+export const getEventAttendanceDetail = query({
+  args: { event_id: v.string() },
+  handler: async (ctx, { event_id }) => {
+    const [events, attendanceRows] = await Promise.all([
+      ctx.db.query("events").collect(),
+      ctx.db.query("attendance").collect(),
+    ]);
+
+    const event = events.find((candidate) => candidate._id === event_id) ?? null;
+
+    if (!event) {
+      return {
+        event: null,
+        summary: {
+          total_check_ins: 0,
+          unique_attendees: 0,
+          manual_entries: 0,
+          csv_imports: 0,
+          latest_check_in_at: null,
+          repeat_attendee_count: 0,
+          source_counts: {},
+        },
+        insight_summary:
+          "This detail link does not point to a current event record. Return to Data and reopen an event from the latest list.",
+        attendees: [],
+        recent_activity: [],
+      };
+    }
+
+    const eventRows = attendanceRows
+      .filter((row) => row.event_id === event_id)
+      .sort((a, b) => b.checked_in_at - a.checked_in_at);
+
+    const attendeeEventCounts = new Map<string, Set<Id<"events">>>();
+    for (const row of attendanceRows) {
+      const bucket = attendeeEventCounts.get(row.email) ?? new Set<Id<"events">>();
+      bucket.add(row.event_id);
+      attendeeEventCounts.set(row.email, bucket);
+    }
+
+    const uniqueAttendees = new Set(eventRows.map((row) => row.email)).size;
+    const sourceCounts = summarizeSourceCounts(eventRows);
+    const manualEntries = sourceCounts.manual ?? 0;
+    const csvImports = sourceCounts.csv_import ?? 0;
+    const repeatAttendeeCount = eventRows.filter(
+      (row) => (attendeeEventCounts.get(row.email)?.size ?? 0) > 1
+    ).length;
+
+    const eventCountById = new Map<Id<"events">, number>();
+    for (const row of attendanceRows) {
+      eventCountById.set(row.event_id, (eventCountById.get(row.event_id) ?? 0) + 1);
+    }
+    const rankedEventCounts = [...eventCountById.entries()].sort((a, b) => b[1] - a[1]);
+    const eventCountRank =
+      rankedEventCounts.findIndex(([rankedEventId]) => rankedEventId === event_id) + 1 || 1;
+
+    return {
+      event: {
+        _id: event._id,
+        title: event.title,
+        event_date: event.event_date ?? null,
+        event_type: event.event_type ?? null,
+        status: event.status ?? null,
+      },
+      summary: {
+        total_check_ins: eventRows.length,
+        unique_attendees: uniqueAttendees,
+        manual_entries: manualEntries,
+        csv_imports: csvImports,
+        latest_check_in_at: eventRows[0]?.checked_in_at ?? null,
+        repeat_attendee_count: repeatAttendeeCount,
+        source_counts: sourceCounts,
+      },
+      insight_summary: buildEventInsightSummary({
+        eventTitle: event.title,
+        eventCountRank,
+        totalEvents: rankedEventCounts.length,
+        totalCheckIns: eventRows.length,
+        repeatAttendeeCount,
+        sourceCounts,
+      }),
+      attendees: eventRows.map((row) => ({
+        _id: row._id,
+        email: row.email,
+        name: row.name ?? null,
+        checked_in_at: row.checked_in_at,
+        source: row.source ?? null,
+        repeat_event_count: attendeeEventCounts.get(row.email)?.size ?? 1,
+      })),
+      recent_activity: eventRows.slice(0, 12).map((row) => ({
+        _id: row._id,
+        email: row.email,
+        name: row.name ?? null,
+        checked_in_at: row.checked_in_at,
+        source: row.source ?? null,
+      })),
+    };
   },
 });
 
