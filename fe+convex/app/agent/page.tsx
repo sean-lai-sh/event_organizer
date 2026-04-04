@@ -3,52 +3,90 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { LayoutDashboard } from "lucide-react";
+import type { FunctionReference } from "convex/server";
+import { useMutation } from "convex/react";
 import { ThreadRail } from "@/components/agent/ThreadRail";
 import { ConversationTimeline } from "@/components/agent/ConversationTimeline";
 import { ArtifactCanvas } from "@/components/agent/ArtifactCanvas";
+import { AgentEmptyState } from "@/components/AgentEmptyState";
 import type { AgentThread, AgentArtifact } from "@/components/agent/types";
-import { getThreadArtifacts } from "@/components/agent/adapters/runtime";
+import { getThreadArtifacts } from "@/components/agent/adapters/mock";
 
 export default function AgentPage() {
+  const agentApi = (
+    api as unknown as {
+      agent: {
+        renameThread: FunctionReference<"mutation", "public">;
+        deleteThread: FunctionReference<"mutation", "public">;
+      };
+    }
+  ).agent;
+  const renameThreadMutation = useMutation(agentApi.renameThread);
+  const deleteThreadMutation = useMutation(agentApi.deleteThread);
   const [activeThread, setActiveThread] = useState<AgentThread | null>(null);
   const [artifacts, setArtifacts] = useState<AgentArtifact[]>([]);
   const [canvasOpen, setCanvasOpen] = useState(false);
+  const [draftValue, setDraftValue] = useState("");
 
   async function loadThread(thread: AgentThread) {
     setActiveThread(thread);
+    setDraftValue("");
     const arts = await getThreadArtifacts(thread.id);
     setArtifacts(arts);
     setCanvasOpen(arts.length > 0);
   }
 
-  const handleArtifactsChange = useCallback(async () => {
-    if (!activeThread) return;
-    const arts = await getThreadArtifacts(activeThread.id);
-    setArtifacts(arts);
-    if (arts.length > 0) setCanvasOpen(true);
-  }, [activeThread]);
+  const handleArtifactsChange = useCallback(
+    async (threadId?: string) => {
+      const resolvedThreadId = threadId ?? activeThread?.id;
+      if (!resolvedThreadId) return;
+      const arts = await getThreadArtifacts(resolvedThreadId);
+      setArtifacts(arts);
+      if (arts.length > 0) setCanvasOpen(true);
+    },
+    [activeThread],
+  );
 
   return (
     <div
       className="flex h-screen bg-[#FFFFFF] text-[#111111]"
       style={{ fontFamily: "var(--font-geist-sans)" }}
     >
-      {/* Left rail */}
       <ThreadRail
         activeThreadId={activeThread?.id ?? null}
+        activeThread={activeThread}
         onSelectThread={loadThread}
-        onNewThread={(thread) => {
-          setActiveThread(thread);
+        onStartNewConversation={() => {
+          setActiveThread(null);
           setArtifacts([]);
           setCanvasOpen(false);
+          setDraftValue("");
+        }}
+        onRenameThread={async (threadId, title) => {
+          await renameThread(threadId, title);
+          await renameThreadMutation({ external_id: threadId, title }).catch(
+            () => undefined,
+          );
+          setActiveThread((prev) =>
+            prev && prev.id === threadId ? { ...prev, title } : prev,
+          );
+        }}
+        onDeleteThread={async (threadId) => {
+          await deleteThread(threadId);
+          await deleteThreadMutation({ external_id: threadId }).catch(
+            () => undefined,
+          );
+          if (activeThread?.id === threadId) {
+            setActiveThread(null);
+            setArtifacts([]);
+            setCanvasOpen(false);
+            setDraftValue("");
+          }
         }}
       />
 
-      {/* Center — conversation */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
         <div className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#EBEBEB] px-5">
-          {/* Thread title (or logo when no thread selected) */}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {activeThread ? (
               <>
@@ -93,19 +131,32 @@ export default function AgentPage() {
           </div>
         </div>
 
-        {/* Timeline */}
         <ConversationTimeline
           thread={activeThread}
           onArtifactsChange={handleArtifactsChange}
+          onThreadCreated={(thread) => {
+            setActiveThread(thread);
+            setArtifacts([]);
+            setCanvasOpen(false);
+          }}
+          emptyState={
+            <AgentEmptyState
+              onPromptSelect={(prompt) => {
+                setDraftValue(prompt);
+              }}
+            />
+          }
+          draftValue={draftValue}
+          onDraftChange={setDraftValue}
         />
       </div>
 
-      {/* Right — artifact canvas */}
       {canvasOpen && (
         <div
           className="w-[320px] shrink-0"
           style={{
-            animation: "canvasSlideIn 180ms cubic-bezier(0.23, 1, 0.32, 1) both",
+            animation:
+              "canvasSlideIn 180ms cubic-bezier(0.23, 1, 0.32, 1) both",
           }}
         >
           <ArtifactCanvas
