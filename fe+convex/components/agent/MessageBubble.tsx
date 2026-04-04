@@ -2,6 +2,7 @@
 
 import { Wrench } from "lucide-react";
 import type { AgentMessage, ContentBlock } from "./types";
+import { RichAgentMarkdown } from "./RichAgentMarkdown";
 
 interface MessageBubbleProps {
   message: AgentMessage;
@@ -71,7 +72,11 @@ function ContentBlockView({
             : "rounded-tl-[4px] bg-[#F4F4F4] text-[#111111]"
         }`}
       >
-        {text}
+        {isUser || isStreaming ? (
+          text
+        ) : (
+          <RichAgentMarkdown markdown={text} variant="bubble" />
+        )}
         {isStreaming && <StreamingCursor />}
       </div>
     );
