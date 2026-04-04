@@ -9,6 +9,7 @@ import type {
   ChecklistData,
   ReportData,
 } from "./types";
+import { RichAgentMarkdown } from "./RichAgentMarkdown";
 
 interface ArtifactCanvasProps {
   artifacts: AgentArtifact[];
@@ -229,7 +230,7 @@ function ChecklistArtifact({ data }: { data: ChecklistData }) {
 
 function ReportArtifact({ data }: { data: ReportData }) {
   const body = data.blocks
-    .filter((block) => block.kind === "text" && block.text)
+    .filter((block) => (block.kind === "text" || block.kind === "markdown") && block.text)
     .map((block) => block.text)
     .join("\n\n");
 
@@ -240,9 +241,13 @@ function ReportArtifact({ data }: { data: ReportData }) {
           {data.summary}
         </p>
       )}
-      <div className="whitespace-pre-wrap text-[13px] leading-[1.65] text-[#222222]">
-        {body || "No report content available."}
-      </div>
+      {body ? (
+        <RichAgentMarkdown markdown={body} variant="canvas" />
+      ) : (
+        <div className="text-[13px] leading-[1.65] text-[#222222]">
+          No report content available.
+        </div>
+      )}
     </div>
   );
 }

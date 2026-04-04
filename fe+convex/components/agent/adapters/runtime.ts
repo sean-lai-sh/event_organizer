@@ -125,10 +125,11 @@ function mapThread(thread: BackendThread): AgentThread {
 }
 
 function mapContentBlock(block: BackendContentBlock): ContentBlock {
-  if (block.kind === "text") {
+  if (block.kind === "text" || block.kind === "markdown") {
     return {
       type: "text",
       text: block.text ?? "",
+      format: block.kind === "markdown" ? "markdown" : "plain",
     };
   }
 

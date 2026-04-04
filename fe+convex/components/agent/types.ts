@@ -24,6 +24,7 @@ export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
 export interface TextBlock {
   type: "text";
   text: string;
+  format?: "plain" | "markdown";
 }
 
 export interface ToolUseBlock {
