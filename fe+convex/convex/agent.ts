@@ -12,10 +12,11 @@ async function resolveThreadId(
     if (existing) return args.thread_id;
   }
 
-  if (args.external_id) {
+  const externalId = args.external_id;
+  if (externalId) {
     const existing = await ctx.db
       .query("agent_threads")
-      .withIndex("by_external_id", (q) => q.eq("external_id", args.external_id))
+      .withIndex("by_external_id", (q) => q.eq("external_id", externalId))
       .unique();
     if (existing) return existing._id as Id<"agent_threads">;
   }
@@ -47,44 +48,50 @@ export const renameThread = mutation({
 
 export const deleteThread = mutation({
   args: {
-    thread_id: v.optional(v.id("agent_threads")),
-    external_id: v.optional(v.string()),
+    id: v.id("agent_threads"),
   },
   handler: async (ctx, args) => {
-    const threadId = await resolveThreadId(ctx, args);
+    const messages = await ctx.db
+      .query("agent_messages")
+      .withIndex("by_thread_id", (q) => q.eq("thread_id", args.id))
+      .collect();
+    for (const message of messages) {
+      await ctx.db.delete(message._id);
+    }
 
-    const [runs, messages, artifacts, approvals, contextLinks] = await Promise.all([
-      ctx.db
-        .query("agent_runs")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", threadId))
-        .collect(),
-      ctx.db
-        .query("agent_messages")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", threadId))
-        .collect(),
-      ctx.db
-        .query("agent_artifacts")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", threadId))
-        .collect(),
-      ctx.db
-        .query("agent_approvals")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", threadId))
-        .collect(),
-      ctx.db
-        .query("agent_context_links")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", threadId))
-        .collect(),
-    ]);
+    const runs = await ctx.db
+      .query("agent_runs")
+      .withIndex("by_thread_id", (q) => q.eq("thread_id", args.id))
+      .collect();
+    for (const run of runs) {
+      await ctx.db.delete(run._id);
+    }
 
-    await Promise.all([
-      ...contextLinks.map((row) => ctx.db.delete(row._id)),
-      ...approvals.map((row) => ctx.db.delete(row._id)),
-      ...artifacts.map((row) => ctx.db.delete(row._id)),
-      ...messages.map((row) => ctx.db.delete(row._id)),
-      ...runs.map((row) => ctx.db.delete(row._id)),
-    ]);
+    const artifacts = await ctx.db
+      .query("agent_artifacts")
+      .withIndex("by_thread_id", (q) => q.eq("thread_id", args.id))
+      .collect();
+    for (const artifact of artifacts) {
+      await ctx.db.delete(artifact._id);
+    }
 
-    await ctx.db.delete(threadId);
-    return threadId;
+    const approvals = await ctx.db
+      .query("agent_approvals")
+      .withIndex("by_thread_id", (q) => q.eq("thread_id", args.id))
+      .collect();
+    for (const approval of approvals) {
+      await ctx.db.delete(approval._id);
+    }
+
+    const contextLinks = await ctx.db
+      .query("agent_context_links")
+      .withIndex("by_thread_id", (q) => q.eq("thread_id", args.id))
+      .collect();
+    for (const contextLink of contextLinks) {
+      await ctx.db.delete(contextLink._id);
+    }
+
+    await ctx.db.delete(args.id);
+    return args.id;
   },
 });

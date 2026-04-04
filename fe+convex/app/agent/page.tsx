@@ -5,24 +5,28 @@ import Link from "next/link";
 import { LayoutDashboard } from "lucide-react";
 import type { FunctionReference } from "convex/server";
 import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { ThreadRail } from "@/components/agent/ThreadRail";
 import { ConversationTimeline } from "@/components/agent/ConversationTimeline";
 import { ArtifactCanvas } from "@/components/agent/ArtifactCanvas";
 import { AgentEmptyState } from "@/components/AgentEmptyState";
 import type { AgentThread, AgentArtifact } from "@/components/agent/types";
-import { getThreadArtifacts } from "@/components/agent/adapters/mock";
+import {
+  createThread,
+  deleteThread,
+  getThreadArtifacts,
+  renameThread,
+} from "@/components/agent/adapters/mock";
 
 export default function AgentPage() {
   const agentApi = (
     api as unknown as {
       agent: {
         renameThread: FunctionReference<"mutation", "public">;
-        deleteThread: FunctionReference<"mutation", "public">;
       };
     }
   ).agent;
   const renameThreadMutation = useMutation(agentApi.renameThread);
-  const deleteThreadMutation = useMutation(agentApi.deleteThread);
   const [activeThread, setActiveThread] = useState<AgentThread | null>(null);
   const [artifacts, setArtifacts] = useState<AgentArtifact[]>([]);
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -73,9 +77,6 @@ export default function AgentPage() {
         }}
         onDeleteThread={async (threadId) => {
           await deleteThread(threadId);
-          await deleteThreadMutation({ external_id: threadId }).catch(
-            () => undefined,
-          );
           if (activeThread?.id === threadId) {
             setActiveThread(null);
             setArtifacts([]);
