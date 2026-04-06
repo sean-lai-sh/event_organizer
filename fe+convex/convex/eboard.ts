@@ -4,7 +4,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { authComponent, safeGetAuthUser } from "./auth";
 import { components } from "./_generated/api";
 
-async function requireAdminMember(ctx: MutationCtx | QueryCtx) {
+export async function requireAdminMember(ctx: MutationCtx | QueryCtx) {
   const authUser = await safeGetAuthUser(ctx);
   if (!authUser) throw new Error("Not authenticated");
 

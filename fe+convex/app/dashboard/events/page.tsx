@@ -89,14 +89,32 @@ export default function EventsPage() {
   const events = useQuery(api.events.listEvents, {
     status: statusFilter === "all" ? undefined : statusFilter,
   });
-  const deleteEvent = useMutation((api.events as typeof api.events & { deleteEvent: never }).deleteEvent);
+  const deleteEvent = useMutation(api.events.deleteEvent);
+  const hasActiveFilters =
+    search.length > 0 ||
+    statusFilter !== "all" ||
+    speakerFilter !== "all" ||
+    roomFilter !== "all" ||
+    semesterFilter !== "all" ||
+    customStartDate.length > 0 ||
+    customEndDate.length > 0;
 
   const filteredEvents = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = events ?? [];
-      const selectedSemester = semesterOptions.find((option) => option.value === semesterFilter);
-      const rangeStart = semesterFilter === "custom" ? customStartDate : selectedSemester?.start;
-      const rangeEnd = semesterFilter === "custom" ? customEndDate : selectedSemester?.end;
+    const selectedSemester = semesterOptions.find((option) => option.value === semesterFilter);
+    const rangeStart =
+      semesterFilter === "custom"
+        ? customStartDate
+        : selectedSemester && "start" in selectedSemester
+          ? selectedSemester.start
+          : undefined;
+    const rangeEnd =
+      semesterFilter === "custom"
+        ? customEndDate
+        : selectedSemester && "end" in selectedSemester
+          ? selectedSemester.end
+          : undefined;
 
     return rows.filter((event) => {
       const title = event.title.toLowerCase();
@@ -140,6 +158,17 @@ export default function EventsPage() {
     }, 320);
   }
 
+  function resetFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setSpeakerFilter("all");
+    setRoomFilter("all");
+    setSemesterFilter("all");
+    setCustomStartDate("");
+    setCustomEndDate("");
+    setOpenFilter(null);
+  }
+
   async function handleDelete(eventId: string, title: string) {
     const confirmed = window.confirm(`Delete "${title}"? This cannot be undone.`);
     if (!confirmed) return;
@@ -148,7 +177,7 @@ export default function EventsPage() {
     setDeleteError(null);
 
     try {
-      await deleteEvent({ event_id: eventId as never });
+      await deleteEvent({ event_id: eventId });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not delete event.";
       setDeleteError(message);
@@ -179,7 +208,7 @@ export default function EventsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-[14px] text-[14px] font-normal tracking-[-0.01em] text-[#111111] placeholder:font-normal placeholder:tracking-normal placeholder:text-[#999999] outline-none transition focus:border-[#111111]"
           />
-          <div className="flex flex-wrap items-start gap-5">
+          <div className="flex flex-wrap items-center gap-5">
             <div
               className="relative min-w-[120px]"
               onMouseEnter={() => openFilterMenu("status")}
@@ -343,6 +372,15 @@ export default function EventsPage() {
                 </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={!hasActiveFilters}
+              className="text-[12px] font-medium text-[#000000] transition hover:text-[#000000] disabled:cursor-not-allowed disabled:text-[#BBBBBB]"
+            >
+              Reset
+            </button>
           </div>
         </div>
       </section>

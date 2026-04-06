@@ -224,8 +224,8 @@ function EventDetailEditor({
   eventId: Id<"events">;
 }) {
   const router = useRouter();
-  const updateEvent = useMutation((api.events as typeof api.events & { updateEvent: never }).updateEvent);
-  const deleteEvent = useMutation((api.events as typeof api.events & { deleteEvent: never }).deleteEvent);
+  const updateEvent = useMutation(api.events.updateEvent);
+  const deleteEvent = useMutation(api.events.deleteEvent);
 
   const [form, setForm] = useState<FormState>(() => eventToForm(event));
   const [saveError, setSaveError] = useState<string | null>(null);

@@ -88,11 +88,15 @@ function SignUpForm() {
     if (validateResult?.valid !== true) return;
 
     autoAdvanced.current = true;
-    const inviteEmail = validateResult.invited_email ?? null;
-    setLockedInviteEmail(inviteEmail);
-    if (inviteEmail) setEmail(inviteEmail);
-    setInviteGrantsRole(validateResult.grants_role ?? null);
-    setStep("register");
+    const timeoutId = window.setTimeout(() => {
+      const inviteEmail = validateResult.invited_email ?? null;
+      setLockedInviteEmail(inviteEmail);
+      if (inviteEmail) setEmail(inviteEmail);
+      setInviteGrantsRole(validateResult.grants_role ?? null);
+      setStep("register");
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [codeFromUrl, step, validateResult]);
 
   function markTouched(field: string) {

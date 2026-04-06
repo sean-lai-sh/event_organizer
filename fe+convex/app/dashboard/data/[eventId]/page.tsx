@@ -173,7 +173,7 @@ export default function EventDataDetailPage() {
 
   return (
     <DashboardPageShell
-      title={matchedEvent?.title ?? detail?.event.title ?? "Event Data"}
+      title={matchedEvent?.title ?? detail?.event?.title ?? "Event Data"}
       action={
         <Link
           href="/dashboard/data"

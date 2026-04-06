@@ -116,7 +116,9 @@ function buildEventInsightSummary(args: {
   const topSourceShare = totalCheckIns > 0 ? topSourceCount / totalCheckIns : 0;
 
   const turnoutLine =
-    eventCountRank === 1 && totalEvents > 1
+    totalEvents <= 1
+      ? "This event detail reflects the currently captured attendance for this event."
+      : eventCountRank === 1 && totalEvents > 1
       ? "This event currently has the strongest turnout in the tracked dataset."
       : eventCountRank <= 3 && totalEvents > 3
         ? "This event sits in the stronger-attended tier of the current dataset."
@@ -378,12 +380,8 @@ export const getAttendanceDashboard = query({
 export const getEventAttendanceDetail = query({
   args: { event_id: v.string() },
   handler: async (ctx, { event_id }) => {
-    const [events, attendanceRows] = await Promise.all([
-      ctx.db.query("events").collect(),
-      ctx.db.query("attendance").collect(),
-    ]);
-
-    const event = events.find((candidate) => candidate._id === event_id) ?? null;
+    const typedEventId = event_id as Id<"events">;
+    const event = await ctx.db.get(typedEventId);
 
     if (!event) {
       return {
@@ -404,32 +402,33 @@ export const getEventAttendanceDetail = query({
       };
     }
 
-    const eventRows = attendanceRows
-      .filter((row) => row.event_id === event_id)
-      .sort((a, b) => b.checked_in_at - a.checked_in_at);
+    const eventRows = (
+      await ctx.db
+        .query("attendance")
+        .withIndex("by_event_id", (q) => q.eq("event_id", typedEventId))
+        .collect()
+    ).sort((a, b) => b.checked_in_at - a.checked_in_at);
 
-    const attendeeEventCounts = new Map<string, Set<Id<"events">>>();
-    for (const row of attendanceRows) {
-      const bucket = attendeeEventCounts.get(row.email) ?? new Set<Id<"events">>();
-      bucket.add(row.event_id);
-      attendeeEventCounts.set(row.email, bucket);
-    }
+    const attendeeEmails = [...new Set(eventRows.map((row) => row.email))];
+    const attendeeEventCounts = new Map<string, number>();
+
+    await Promise.all(
+      attendeeEmails.map(async (email) => {
+        const rows = await ctx.db
+          .query("attendance")
+          .withIndex("by_email", (q) => q.eq("email", email))
+          .collect();
+        attendeeEventCounts.set(email, new Set(rows.map((row) => row.event_id)).size);
+      })
+    );
 
     const uniqueAttendees = new Set(eventRows.map((row) => row.email)).size;
     const sourceCounts = summarizeSourceCounts(eventRows);
     const manualEntries = sourceCounts.manual ?? 0;
     const csvImports = sourceCounts.csv_import ?? 0;
     const repeatAttendeeCount = eventRows.filter(
-      (row) => (attendeeEventCounts.get(row.email)?.size ?? 0) > 1
+      (row) => (attendeeEventCounts.get(row.email) ?? 0) > 1
     ).length;
-
-    const eventCountById = new Map<Id<"events">, number>();
-    for (const row of attendanceRows) {
-      eventCountById.set(row.event_id, (eventCountById.get(row.event_id) ?? 0) + 1);
-    }
-    const rankedEventCounts = [...eventCountById.entries()].sort((a, b) => b[1] - a[1]);
-    const eventCountRank =
-      rankedEventCounts.findIndex(([rankedEventId]) => rankedEventId === event_id) + 1 || 1;
 
     return {
       event: {
@@ -450,8 +449,8 @@ export const getEventAttendanceDetail = query({
       },
       insight_summary: buildEventInsightSummary({
         eventTitle: event.title,
-        eventCountRank,
-        totalEvents: rankedEventCounts.length,
+        eventCountRank: 1,
+        totalEvents: 1,
         totalCheckIns: eventRows.length,
         repeatAttendeeCount,
         sourceCounts,
@@ -462,7 +461,7 @@ export const getEventAttendanceDetail = query({
         name: row.name ?? null,
         checked_in_at: row.checked_in_at,
         source: row.source ?? null,
-        repeat_event_count: attendeeEventCounts.get(row.email)?.size ?? 1,
+        repeat_event_count: attendeeEventCounts.get(row.email) ?? 1,
       })),
       recent_activity: eventRows.slice(0, 12).map((row) => ({
         _id: row._id,
