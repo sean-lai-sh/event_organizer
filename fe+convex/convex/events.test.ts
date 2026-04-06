@@ -148,8 +148,24 @@ async function seedEvent(db: FakeDb, overrides: Record<string, unknown> = {}) {
 const eventsModulePromise = import("./events");
 
 beforeAll(async () => {
-  const { deleteEvent, getEvent, listEvents, updateEvent } = await eventsModulePromise;
-  installConvexHandlerAliases([getEvent, listEvents, updateEvent, deleteEvent]);
+  const {
+    applyInboundMilestones,
+    createEvent,
+    deleteEvent,
+    getEvent,
+    listEvents,
+    updateEvent,
+    updateEventStatus,
+  } = await eventsModulePromise;
+  installConvexHandlerAliases([
+    applyInboundMilestones,
+    createEvent,
+    deleteEvent,
+    getEvent,
+    listEvents,
+    updateEvent,
+    updateEventStatus,
+  ]);
 });
 
 beforeEach(() => {
@@ -160,6 +176,81 @@ beforeEach(() => {
 });
 
 describe("events", () => {
+  test("createEvent requires admin auth and sets default fields", async () => {
+    const { createEvent } = await eventsModulePromise;
+    const { db, ctx } = createHarness();
+
+    requireAdminMemberImpl = async () => {
+      throw new Error("Admin access required");
+    };
+
+    await expect(
+      getHandler<
+        {
+          title: string;
+          description?: string;
+          event_date?: string;
+          event_time?: string;
+          event_end_time?: string;
+          location?: string;
+          event_type?: string;
+          target_profile?: string;
+          needs_outreach: boolean;
+          status: string;
+          created_by?: string;
+        },
+        string
+      >(createEvent)(ctx as never, {
+        title: "Blocked Event",
+        needs_outreach: true,
+        status: "draft",
+      })
+    ).rejects.toThrow("Admin access required");
+
+    requireAdminMemberImpl = async () => ({
+      authUser: { _id: "user:1" },
+      member: { role: "admin" },
+    });
+
+    const eventId = await getHandler<
+      {
+        title: string;
+        description?: string;
+        event_date?: string;
+        event_time?: string;
+        event_end_time?: string;
+        location?: string;
+        event_type?: string;
+        target_profile?: string;
+        needs_outreach: boolean;
+        status: string;
+        created_by?: string;
+      },
+      string
+    >(createEvent)(ctx as never, {
+      title: "Admin Event",
+      description: "Created by admin",
+      event_date: "2026-05-05",
+      event_time: "6:30 PM",
+      event_end_time: "8:00 PM",
+      location: "Main Hall",
+      event_type: "panel",
+      target_profile: "Builders",
+      needs_outreach: true,
+      status: "draft",
+      created_by: "admin@example.com",
+    });
+
+    const created = await db.get(eventId);
+    expect(created).toMatchObject({
+      _id: eventId,
+      title: "Admin Event",
+      speaker_confirmed: false,
+      room_confirmed: false,
+    });
+    expect(created?.created_at).toBeNumber();
+  });
+
   test("lists events with optional filtering and limit", async () => {
     const { listEvents } = await eventsModulePromise;
     const { db, ctx } = createHarness();
@@ -278,6 +369,53 @@ describe("events", () => {
     ).rejects.toThrow("Admin access required");
   });
 
+  test("updateEvent throws when the event does not exist", async () => {
+    const { updateEvent } = await eventsModulePromise;
+    const { ctx } = createHarness();
+
+    await expect(
+      getHandler<{ event_id: string; title?: string }, unknown>(updateEvent)(ctx as never, {
+        event_id: "events:999",
+        title: "Missing Event",
+      })
+    ).rejects.toThrow("Event not found: events:999");
+  });
+
+  test("updateEventStatus requires admin auth and patches status", async () => {
+    const { updateEventStatus } = await eventsModulePromise;
+    const { db, ctx } = createHarness();
+    const eventId = await seedEvent(db, { status: "draft" });
+
+    requireAdminMemberImpl = async () => {
+      throw new Error("Admin access required");
+    };
+
+    await expect(
+      getHandler<{ event_id: string; status: string }, void>(updateEventStatus)(ctx as never, {
+        event_id: eventId,
+        status: "outreach",
+      })
+    ).rejects.toThrow("Admin access required");
+
+    requireAdminMemberImpl = async () => ({
+      authUser: { _id: "user:1" },
+      member: { role: "admin" },
+    });
+
+    await getHandler<{ event_id: string; status: string }, void>(updateEventStatus)(
+      ctx as never,
+      {
+        event_id: eventId,
+        status: "outreach",
+      }
+    );
+
+    expect(await db.get(eventId)).toMatchObject({
+      _id: eventId,
+      status: "outreach",
+    });
+  });
+
   test("requires admin auth and cascades event deletion", async () => {
     const { deleteEvent } = await eventsModulePromise;
     const { db, ctx } = createHarness();
@@ -352,5 +490,90 @@ describe("events", () => {
         event_id: otherEventId,
       })
     ).rejects.toThrow("Admin access required");
+  });
+
+  test("deleteEvent throws when the event does not exist", async () => {
+    const { deleteEvent } = await eventsModulePromise;
+    const { ctx } = createHarness();
+
+    await expect(
+      getHandler<{ event_id: string }, unknown>(deleteEvent)(ctx as never, {
+        event_id: "events:999",
+      })
+    ).rejects.toThrow("Event not found.");
+  });
+
+  test("applyInboundMilestones requires admin auth and keeps sticky true semantics", async () => {
+    const { applyInboundMilestones } = await eventsModulePromise;
+    const { db, ctx } = createHarness();
+    const eventId = await seedEvent(db, {
+      speaker_confirmed: false,
+      room_confirmed: false,
+    });
+
+    requireAdminMemberImpl = async () => {
+      throw new Error("Admin access required");
+    };
+
+    await expect(
+      getHandler<
+        { event_id: string; speaker_confirmed?: boolean; room_confirmed?: boolean },
+        void
+      >(applyInboundMilestones)(ctx as never, {
+        event_id: eventId,
+        speaker_confirmed: true,
+        room_confirmed: true,
+      })
+    ).rejects.toThrow("Admin access required");
+
+    requireAdminMemberImpl = async () => ({
+      authUser: { _id: "user:1" },
+      member: { role: "admin" },
+    });
+
+    await getHandler<
+      { event_id: string; speaker_confirmed?: boolean; room_confirmed?: boolean },
+      void
+    >(applyInboundMilestones)(ctx as never, {
+      event_id: eventId,
+      speaker_confirmed: true,
+      room_confirmed: true,
+    });
+
+    expect(await db.get(eventId)).toMatchObject({
+      _id: eventId,
+      speaker_confirmed: true,
+      room_confirmed: true,
+    });
+
+    await getHandler<
+      { event_id: string; speaker_confirmed?: boolean; room_confirmed?: boolean },
+      void
+    >(applyInboundMilestones)(ctx as never, {
+      event_id: eventId,
+      speaker_confirmed: false,
+      room_confirmed: false,
+    });
+
+    expect(await db.get(eventId)).toMatchObject({
+      _id: eventId,
+      speaker_confirmed: true,
+      room_confirmed: true,
+    });
+  });
+
+  test("applyInboundMilestones throws when the event does not exist", async () => {
+    const { applyInboundMilestones } = await eventsModulePromise;
+    const { ctx } = createHarness();
+
+    await expect(
+      getHandler<
+        { event_id: string; speaker_confirmed?: boolean; room_confirmed?: boolean },
+        void
+      >(applyInboundMilestones)(ctx as never, {
+        event_id: "events:999",
+        speaker_confirmed: true,
+      })
+    ).rejects.toThrow("Event not found: events:999");
   });
 });
