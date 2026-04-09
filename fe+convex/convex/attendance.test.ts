@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getAttendanceDashboard,
+  getEventAttendanceDetail,
   getAttendanceForEvent,
   recordAttendanceInsight,
   upsertAttendanceBatch,
@@ -63,17 +64,20 @@ class FakeIndexRangeBuilder {
 
 class FakeQuery {
   constructor(
+    private readonly table: TableName,
     private readonly rows: TableRow[],
-    private readonly filters: Array<[string, unknown]> = []
+    private readonly filters: Array<[string, unknown]> = [],
+    private readonly onCollect?: (table: TableName, filters: Array<[string, unknown]>) => void
   ) {}
 
   withIndex(_indexName: string, build: (builder: FakeIndexRangeBuilder) => unknown) {
     const builder = new FakeIndexRangeBuilder();
     build(builder);
-    return new FakeQuery(this.rows, builder.filters);
+    return new FakeQuery(this.table, this.rows, builder.filters, this.onCollect);
   }
 
   async collect() {
+    this.onCollect?.(this.table, this.filters);
     return this.rows.filter((row) =>
       this.filters.every(([field, value]) => row[field] === value)
     );
@@ -98,8 +102,10 @@ class FakeDb {
     attendance_insights: [],
   };
 
+  onCollect?: (table: TableName, filters: Array<[string, unknown]>) => void;
+
   query(table: TableName) {
-    return new FakeQuery(this.tables[table]);
+    return new FakeQuery(table, this.tables[table], [], this.onCollect);
   }
 
   async get(id: string) {
@@ -134,6 +140,7 @@ class FakeDb {
 function installConvexHandlerAliases() {
   for (const fn of [
     getAttendanceDashboard,
+    getEventAttendanceDetail,
     getAttendanceForEvent,
     recordAttendanceInsight,
     upsertAttendanceBatch,
@@ -383,6 +390,86 @@ describe("attendance state", () => {
       event_count: 2,
       attendee_count: 2,
     });
+  });
+
+  test("builds event detail without full-table event or attendance scans", async () => {
+    const { db, ctx } = createHarness();
+    const eventA = await seedEvent(db, {
+      title: "Founder Summit",
+      event_date: "2026-04-01",
+    });
+    const eventB = await seedEvent(db, {
+      title: "AI Fireside",
+      event_date: "2026-04-20",
+    });
+
+    await db.insert("attendance", {
+      event_id: eventA,
+      email: "sam@example.com",
+      name: "Sam Rivera",
+      checked_in_at: 100,
+      source: "manual",
+    });
+    await db.insert("attendance", {
+      event_id: eventA,
+      email: "lee@example.com",
+      name: "Lee Chen",
+      checked_in_at: 110,
+      source: "csv_import",
+    });
+    await db.insert("attendance", {
+      event_id: eventB,
+      email: "sam@example.com",
+      name: "Sam Rivera",
+      checked_in_at: 220,
+      source: "manual",
+    });
+
+    db.onCollect = (table, filters) => {
+      const isFullTableScan = filters.length === 0;
+      if (isFullTableScan && (table === "events" || table === "attendance")) {
+        throw new Error(`Unexpected full-table scan on ${table}`);
+      }
+    };
+
+    const detail = await getHandler<{ event_id: string }, unknown>(getEventAttendanceDetail)(
+      ctx as never,
+      { event_id: eventA }
+    );
+
+    expect(detail).toMatchObject({
+      event: {
+        _id: eventA,
+        title: "Founder Summit",
+        event_date: "2026-04-01",
+      },
+      summary: {
+        total_check_ins: 2,
+        unique_attendees: 2,
+        manual_entries: 1,
+        csv_imports: 1,
+        repeat_attendee_count: 1,
+      },
+    });
+    expect(
+      (
+        detail as {
+          attendees: Array<{ email: string; repeat_event_count: number }>;
+        }
+      ).attendees.map((attendee) => ({
+        email: attendee.email,
+        repeat_event_count: attendee.repeat_event_count,
+      }))
+    ).toEqual([
+      {
+        email: "lee@example.com",
+        repeat_event_count: 1,
+      },
+      {
+        email: "sam@example.com",
+        repeat_event_count: 2,
+      },
+    ]);
   });
 
   test("records append-only attendance insights from current dashboard counts", async () => {

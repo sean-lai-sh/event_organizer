@@ -86,6 +86,124 @@ function TextAreaInput({
   );
 }
 
+function DateInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <input
+      type="date"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 text-[13px] text-[#111111] outline-none transition focus:border-[#111111]"
+    />
+  );
+}
+
+function TimeInput({
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  listId,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+  placeholder: string;
+  listId: string;
+}) {
+  return (
+    <>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        list={listId}
+        autoComplete="off"
+        className="h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 text-[13px] text-[#111111] placeholder:text-[#CCCCCC] outline-none transition focus:border-[#111111]"
+      />
+      <datalist id={listId}>
+        {TIME_OPTIONS.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
+function normalizeTimeInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const normalized = trimmed.toUpperCase().replace(/\./g, "").replace(/\s+/g, "");
+  const match = normalized.match(/^(\d{1,2})(?::?(\d{2}))?([AP]M)$/);
+  if (!match) return trimmed;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2] ?? "0");
+  const meridiem = match[3];
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+    return trimmed;
+  }
+
+  return `${hour}:${String(minute).padStart(2, "0")} ${meridiem}`;
+}
+
+function parseTimeToMinutes(value: string) {
+  const normalized = normalizeTimeInput(value);
+  const match = normalized.match(/^(\d{1,2}):(\d{2}) ([AP]M)$/);
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const meridiem = match[3];
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return null;
+
+  const normalizedHour = hour % 12 + (meridiem === "PM" ? 12 : 0);
+  return normalizedHour * 60 + minute;
+}
+
+function formatMinutesToTime(totalMinutes: number) {
+  const clampedMinutes = Math.max(0, Math.min(totalMinutes, 23 * 60 + 45));
+  const hours24 = Math.floor(clampedMinutes / 60);
+  const minutes = clampedMinutes % 60;
+  const meridiem = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+}
+
+function normalizeEndTime(endTime: string) {
+  const normalizedEnd = normalizeTimeInput(endTime);
+  return normalizedEnd;
+}
+
+function isEndTimeEarlier(startTime: string, endTime: string) {
+  const startMinutes = parseTimeToMinutes(startTime);
+  const endMinutes = parseTimeToMinutes(endTime);
+  return startMinutes !== null && endMinutes !== null && endMinutes < startMinutes;
+}
+
+function formatPreviewDate(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "Mar 28, 2026";
+
+  const parsed = new Date(`${trimmed}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return trimmed;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
+
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => formatMinutesToTime(index * 15));
+
 function buildEventTypeChecklist(eventType: EventType, hasSignals: boolean): ChecklistItem[] {
   const byType: Record<EventType, Array<{ key: string; label: string }>> = {
     "Speaker Panel": [
@@ -125,13 +243,20 @@ export default function NewEventPage() {
   const [form, setForm] = useState<FormState>(defaultState);
   const [submittingAction, setSubmittingAction] = useState<null | "create" | "matching">(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [endTimeTouched, setEndTimeTouched] = useState(false);
 
   const titleReady = form.title.trim().length > 0;
   const dateReady = form.date.trim().length > 0;
   const hasSignals = form.targetingNotes.trim().length > 0;
+  const startTimeLabel = normalizeTimeInput(form.startTime);
+  const endTimeLabel = normalizeEndTime(form.endTime);
+  const endTimeBeforeStart = isEndTimeEarlier(startTimeLabel, endTimeLabel);
+  const timeValidationError = endTimeBeforeStart
+    ? "End time cannot be earlier than start time. Please pick another time."
+    : null;
 
-  const canCreateEvent = titleReady && dateReady;
-  const canStartMatching = titleReady;
+  const canCreateEvent = titleReady && dateReady && !timeValidationError;
+  const canStartMatching = titleReady && !timeValidationError;
 
   const checklistItems = useMemo(() => {
     const requiredItems: ChecklistItem[] = [
@@ -151,11 +276,48 @@ export default function NewEventPage() {
 
   const laterMissingItems = checklistItems.filter((item) => item.phase === "later" && !item.done);
 
-  const previewDate = form.date.trim() || "Mar 28, 2026";
+  const previewDate = formatPreviewDate(form.date);
   const previewTime =
-    form.startTime.trim() || form.endTime.trim()
-      ? `${form.startTime.trim() || "TBD"} - ${form.endTime.trim() || "TBD"}`
+    startTimeLabel || endTimeLabel
+      ? `${startTimeLabel || "TBD"} - ${endTimeLabel || "TBD"}`
       : "TBD";
+
+  function handleStartTimeChange(value: string) {
+    setForm((prev) => ({ ...prev, startTime: value }));
+  }
+
+  function handleStartTimeBlur() {
+    setForm((prev) => {
+      const normalizedStart = normalizeTimeInput(prev.startTime);
+      const nextEndTime = normalizeEndTime(prev.endTime);
+
+      if (!normalizedStart) {
+        return {
+          ...prev,
+          startTime: "",
+          endTime: normalizeTimeInput(prev.endTime),
+        };
+      }
+
+      return {
+        ...prev,
+        startTime: normalizedStart,
+        endTime: endTimeTouched ? nextEndTime : prev.endTime,
+      };
+    });
+  }
+
+  function handleEndTimeChange(value: string) {
+    setEndTimeTouched(true);
+    setForm((prev) => ({ ...prev, endTime: value }));
+  }
+
+  function handleEndTimeBlur() {
+    setForm((prev) => ({
+      ...prev,
+      endTime: normalizeEndTime(prev.endTime),
+    }));
+  }
 
   async function handleCreate(mode: "create" | "matching") {
     if ((mode === "create" && !canCreateEvent) || (mode === "matching" && !canStartMatching)) {
@@ -170,8 +332,8 @@ export default function NewEventPage() {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         event_date: form.date.trim() || undefined,
-        event_time: form.startTime.trim() || undefined,
-        event_end_time: form.endTime.trim() || undefined,
+        event_time: startTimeLabel || undefined,
+        event_end_time: endTimeLabel || undefined,
         location: form.location.trim() || undefined,
         event_type: form.eventType,
         target_profile: form.targetingNotes.trim() || undefined,
@@ -207,7 +369,7 @@ export default function NewEventPage() {
             disabled={!canCreateEvent || submittingAction !== null}
             onClick={() => void handleCreate("create")}
             className="inline-flex h-8 items-center rounded-[8px] border border-[#E0E0E0] px-3 text-[12px] font-medium text-[#3B3B3B] transition hover:bg-[#F4F4F4] disabled:cursor-not-allowed disabled:border-[#E6E6E6] disabled:bg-[#F4F4F4] disabled:text-[#A0A0A0]"
-            title="Requires title + date"
+            title={timeValidationError ?? "Requires title + date"}
           >
             {submittingAction === "create" ? "Creating..." : "Create Event"}
           </button>
@@ -216,7 +378,7 @@ export default function NewEventPage() {
             disabled={!canStartMatching || submittingAction !== null}
             onClick={() => void handleCreate("matching")}
             className="inline-flex h-8 items-center rounded-[8px] bg-[#0A0A0A] px-3 text-[12px] font-semibold text-[#FFFFFF] transition hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:bg-[#8A8A8A] disabled:text-[#F4F4F4]"
-            title="Starts the matching flow"
+            title={timeValidationError ?? "Starts the matching flow"}
           >
             {submittingAction === "matching" ? "Starting..." : "Start Matching"}
           </button>
@@ -277,32 +439,38 @@ export default function NewEventPage() {
           <div className="grid gap-3 md:grid-cols-3 md:gap-2 xl:grid-cols-[340px_220px_220px]">
             <div className="space-y-2">
               <FieldLabel>Date (required)</FieldLabel>
-              <div className="relative">
-                <TextInput
-                  value={form.date}
-                  onChange={(value) => setForm((prev) => ({ ...prev, date: value }))}
-                  placeholder="Select date"
-                />
-                <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#AAAAAA]" />
-              </div>
+              <DateInput value={form.date} onChange={(value) => setForm((prev) => ({ ...prev, date: value }))} />
             </div>
             <div className="space-y-2">
               <FieldLabel>Start Time (optional)</FieldLabel>
-              <TextInput
+              <TimeInput
                 value={form.startTime}
-                onChange={(value) => setForm((prev) => ({ ...prev, startTime: value }))}
-                placeholder="TBD"
+                onChange={handleStartTimeChange}
+                onBlur={handleStartTimeBlur}
+                placeholder="6:30 PM"
+                listId="event-start-time-options"
               />
             </div>
             <div className="space-y-2">
               <FieldLabel>End Time (optional)</FieldLabel>
-              <TextInput
+              <TimeInput
                 value={form.endTime}
-                onChange={(value) => setForm((prev) => ({ ...prev, endTime: value }))}
-                placeholder="TBD"
+                onChange={handleEndTimeChange}
+                onBlur={handleEndTimeBlur}
+                placeholder="7:30 PM"
+                listId="event-end-time-options"
               />
             </div>
           </div>
+
+          {timeValidationError ? (
+            <div
+              role="alert"
+              className="rounded-[8px] border border-[#F3C7CC] bg-[#FFF4F5] px-3 py-2 text-[12px] font-medium text-[#C2182B]"
+            >
+              {timeValidationError}
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <FieldLabel>Location</FieldLabel>
@@ -381,6 +549,13 @@ export default function NewEventPage() {
                     <li key={warning}>{warning}</li>
                   ))}
                 </ul>
+              </div>
+            ) : null}
+
+            {timeValidationError ? (
+              <div className="mt-3 rounded-[8px] border border-[#F3C7CC] bg-[#FFF4F5] p-2">
+                <p className="text-[11px] font-semibold text-[#C2182B]">Time needs attention</p>
+                <p className="mt-1 text-[11px] text-[#C2182B]">{timeValidationError}</p>
               </div>
             ) : null}
 

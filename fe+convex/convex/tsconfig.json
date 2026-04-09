@@ -8,7 +8,6 @@
     "allowJs": true,
     "strict": true,
     "moduleResolution": "Bundler",
-    "types": ["bun-types"],
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
@@ -22,5 +21,5 @@
     "noEmit": true
   },
   "include": ["./**/*"],
-  "exclude": ["./_generated"]
+  "exclude": ["./_generated", "./**/*.test.ts"]
 }

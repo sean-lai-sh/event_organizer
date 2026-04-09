@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAdminMember } from "./eboard";
 
 export const getEvent = query({
   args: { event_id: v.id("events") },
@@ -23,6 +24,8 @@ export const createEvent = mutation({
     created_by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAdminMember(ctx);
+
     return await ctx.db.insert("events", {
       ...args,
       speaker_confirmed: false,
@@ -35,19 +38,9 @@ export const createEvent = mutation({
 export const updateEventStatus = mutation({
   args: { event_id: v.id("events"), status: v.string() },
   handler: async (ctx, { event_id, status }) => {
-    await ctx.db.patch(event_id, { status });
-  },
-});
+    await requireAdminMember(ctx);
 
-export const listEvents = query({
-  args: {
-    status: v.optional(v.string()),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, { status, limit }) => {
-    const all = await ctx.db.query("events").order("desc").collect();
-    const filtered = status ? all.filter((e) => e.status === status) : all;
-    return limit === undefined ? filtered : filtered.slice(0, Math.max(0, limit));
+    await ctx.db.patch(event_id, { status });
   },
 });
 
@@ -61,6 +54,9 @@ export const updateEvent = mutation({
     event_end_time: v.optional(v.string()),
     location: v.optional(v.string()),
     status: v.optional(v.string()),
+    event_type: v.optional(v.string()),
+    target_profile: v.optional(v.string()),
+    needs_outreach: v.optional(v.boolean()),
     speaker_confirmed: v.optional(v.boolean()),
     room_confirmed: v.optional(v.boolean()),
   },
@@ -75,10 +71,15 @@ export const updateEvent = mutation({
       event_end_time,
       location,
       status,
+      event_type,
+      target_profile,
+      needs_outreach,
       speaker_confirmed,
       room_confirmed,
     }
   ) => {
+    await requireAdminMember(ctx);
+
     const event = await ctx.db.get(event_id);
     if (!event) {
       throw new Error(`Event not found: ${event_id}`);
@@ -92,6 +93,9 @@ export const updateEvent = mutation({
     if (event_end_time !== undefined) patch.event_end_time = event_end_time;
     if (location !== undefined) patch.location = location;
     if (status !== undefined) patch.status = status;
+    if (event_type !== undefined) patch.event_type = event_type;
+    if (target_profile !== undefined) patch.target_profile = target_profile;
+    if (needs_outreach !== undefined) patch.needs_outreach = needs_outreach;
 
     // Sticky milestone semantics: only allow these booleans to turn on.
     if (speaker_confirmed === true && event.speaker_confirmed !== true) {
@@ -109,13 +113,48 @@ export const updateEvent = mutation({
   },
 });
 
-// ⚠️ Test-only — requires ALLOW_TEST_MUTATIONS=true in Convex env vars (dev only, never prod).
+export const listEvents = query({
+  args: {
+    status: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { status, limit }) => {
+    const all = await ctx.db.query("events").order("desc").collect();
+    const filtered = status ? all.filter((e) => e.status === status) : all;
+    return limit === undefined ? filtered : filtered.slice(0, Math.max(0, limit));
+  },
+});
+
 export const deleteEvent = mutation({
   args: { event_id: v.id("events") },
   handler: async (ctx, { event_id }) => {
-    if (process.env.ALLOW_TEST_MUTATIONS !== "true") {
-      throw new Error("deleteEvent is only callable in test environments");
+    await requireAdminMember(ctx);
+
+    const event = await ctx.db.get(event_id);
+    if (!event) {
+      throw new Error("Event not found.");
     }
+
+    const [outreachRows, attendanceRows, contextLinks] = await Promise.all([
+      ctx.db
+        .query("event_outreach")
+        .withIndex("by_event_id", (q) => q.eq("event_id", event_id))
+        .collect(),
+      ctx.db
+        .query("attendance")
+        .withIndex("by_event_id", (q) => q.eq("event_id", event_id))
+        .collect(),
+      ctx.db
+        .query("agent_context_links")
+        .withIndex("by_entity", (q) => q.eq("entity_type", "event").eq("entity_id", event_id))
+        .collect(),
+    ]);
+
+    await Promise.all([
+      ...outreachRows.map((row) => ctx.db.delete(row._id)),
+      ...attendanceRows.map((row) => ctx.db.delete(row._id)),
+      ...contextLinks.map((row) => ctx.db.delete(row._id)),
+    ]);
     await ctx.db.delete(event_id);
   },
 });
@@ -127,6 +166,8 @@ export const applyInboundMilestones = mutation({
     room_confirmed: v.optional(v.boolean()),
   },
   handler: async (ctx, { event_id, speaker_confirmed, room_confirmed }) => {
+    await requireAdminMember(ctx);
+
     const event = await ctx.db.get(event_id);
     if (!event) throw new Error(`Event not found: ${event_id}`);
 

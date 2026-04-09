@@ -218,8 +218,7 @@ export const revoke = mutation({
     if (!invite) throw new Error("Invite not found");
     // For single-use: cannot revoke if already used
     const isSingleUse = invite.max_uses === undefined;
-    const isUsed =
-      !!invite.used_at || !!(invite as any).used_by || !!(invite as any).used_email;
+    const isUsed = !!invite.used_at || !!invite.used_by || !!invite.used_email;
     if (isSingleUse && isUsed) {
       throw new Error("Cannot revoke a used invite");
     }
