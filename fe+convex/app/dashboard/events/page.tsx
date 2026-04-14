@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { CalendarDays } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
 const statusOptions = ["all", "draft", "matching", "outreach", "completed"] as const;
 const readinessOptions = ["all", "unstarted", "searching", "confirmed"] as const;
@@ -84,7 +85,7 @@ export default function EventsPage() {
   const [customEndDate, setCustomEndDate] = useState("");
   const [search, setSearch] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [deletingEventId, setDeletingEventId] = useState<Id<"events"> | null>(null);
 
   const events = useQuery(api.events.listEvents, {
     status: statusFilter === "all" ? undefined : statusFilter,
@@ -169,7 +170,7 @@ export default function EventsPage() {
     setOpenFilter(null);
   }
 
-  async function handleDelete(eventId: string, title: string) {
+  async function handleDelete(eventId: Id<"events">, title: string) {
     const confirmed = window.confirm(`Delete "${title}"? This cannot be undone.`);
     if (!confirmed) return;
 
