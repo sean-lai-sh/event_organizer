@@ -23,6 +23,7 @@ from helper.tools import append_attio_note, upsert_inbound_contact
 
 SEAN_EMAIL = "seanlai@nyu.edu"
 SEAN_NAME = "Sean Lai"
+pytestmark = pytest.mark.integration
 
 
 # ── Async helpers for setup / teardown ────────────────────────────────────────
