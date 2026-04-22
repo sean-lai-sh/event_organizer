@@ -121,6 +121,31 @@ export interface ContextLink {
   label: string;
 }
 
+export type TraceStepKind =
+  | "planning"
+  | "tool_selection"
+  | "tool_start"
+  | "tool_completion"
+  | "tool_failure"
+  | "approval_pause"
+  | "approval_resolution"
+  | "artifact_generation"
+  | "thinking"
+  | "guardrail_retry"
+  | "run_completed"
+  | "run_error";
+
+export interface AgentTraceStep {
+  id: string;
+  runId: string;
+  kind: TraceStepKind;
+  sequenceNumber: number;
+  summary: string;
+  detailJson?: string | null;
+  status: string;
+  createdAt: number;
+}
+
 export interface AgentRun {
   id: string;
   threadId: string;
@@ -136,4 +161,5 @@ export interface AgentThreadState {
   messages: AgentMessage[];
   artifacts: AgentArtifact[];
   approvals: AgentApproval[];
+  traces: AgentTraceStep[];
 }

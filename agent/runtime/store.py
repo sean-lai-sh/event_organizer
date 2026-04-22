@@ -13,6 +13,7 @@ from .contracts import (
     StreamEvent,
     ThreadRecord,
     ThreadStateResponse,
+    TraceStepRecord,
 )
 from .policy import ToolAction
 
@@ -33,6 +34,8 @@ class InMemoryRuntimeStore:
         self._run_event_sequences: dict[str, int] = defaultdict(int)
         self._run_events: dict[str, list[StreamEvent]] = defaultdict(list)
         self._pending_actions: dict[str, ToolAction] = {}
+        self._trace_sequences: dict[str, int] = defaultdict(int)
+        self.traces: dict[str, TraceStepRecord] = {}
         self._thread_insert_counter = 0
         self._thread_insert_order: dict[str, int] = {}
 
@@ -122,6 +125,25 @@ class InMemoryRuntimeStore:
         events = self._run_events.get(run_id, [])
         return [event for event in events if event.sequence > after_sequence]
 
+    async def append_trace(self, record: TraceStepRecord) -> None:
+        async with self._lock:
+            self.traces[record.external_id] = record
+
+    async def next_trace_sequence(self, run_id: str) -> int:
+        async with self._lock:
+            self._trace_sequences[run_id] += 1
+            return self._trace_sequences[run_id]
+
+    async def list_traces_for_run(self, run_id: str) -> list[TraceStepRecord]:
+        traces = [t for t in self.traces.values() if t.run_external_id == run_id]
+        traces.sort(key=lambda t: t.sequence_number)
+        return traces
+
+    async def list_traces_for_thread(self, thread_id: str) -> list[TraceStepRecord]:
+        traces = [t for t in self.traces.values() if t.thread_external_id == thread_id]
+        traces.sort(key=lambda t: (t.run_external_id, t.sequence_number))
+        return traces
+
     async def list_thread_state(self, thread_id: str) -> ThreadStateResponse | None:
         thread = self.threads.get(thread_id)
         if not thread:
@@ -139,6 +161,9 @@ class InMemoryRuntimeStore:
         approvals.sort(key=lambda row: row.requested_at, reverse=True)
         context_links.sort(key=lambda row: row.created_at)
 
+        traces = [row for row in self.traces.values() if row.thread_external_id == thread_id]
+        traces.sort(key=lambda row: (row.run_external_id, row.sequence_number))
+
         return ThreadStateResponse(
             thread=thread,
             runs=runs,
@@ -146,4 +171,5 @@ class InMemoryRuntimeStore:
             artifacts=artifacts,
             approvals=approvals,
             context_links=context_links,
+            traces=traces,
         )

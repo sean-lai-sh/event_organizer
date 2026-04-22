@@ -155,6 +155,23 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_thread_status", ["thread_id", "status"]),
 
+  agent_traces: defineTable({
+    thread_id: v.id("agent_threads"),
+    run_id: v.id("agent_runs"),
+    external_id: v.string(),
+    kind: v.string(),
+    sequence_number: v.number(),
+    summary: v.string(),
+    detail_json: v.optional(v.string()),
+    status: v.string(),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_external_id", ["external_id"])
+    .index("by_thread_id", ["thread_id"])
+    .index("by_run_id", ["run_id"])
+    .index("by_run_sequence", ["run_id", "sequence_number"]),
+
   agent_context_links: defineTable({
     thread_id: v.id("agent_threads"),
     run_id: v.optional(v.id("agent_runs")),

@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { AgentMessage, AgentApproval, AgentThread } from "./types";
+import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from "./types";
 import { MessageBubble } from "./MessageBubble";
 import { ApprovalCard } from "./ApprovalCard";
 import { AgentInput } from "./AgentInput";
+import { TraceRail } from "./TraceRail";
 import {
   createThread,
   getThreadState,
@@ -33,6 +34,8 @@ export function ConversationTimeline({
 }: ConversationTimelineProps) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [approvals, setApprovals] = useState<AgentApproval[]>([]);
+  const [traces, setTraces] = useState<AgentTraceStep[]>([]);
+  const [traceCollapsed, setTraceCollapsed] = useState(true);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -44,6 +47,7 @@ export function ConversationTimeline({
     if (threadIdRef.current !== threadId) return;
     setMessages(state.messages);
     setApprovals(state.approvals);
+    setTraces(state.traces ?? []);
     setLoaded(true);
   }
 
@@ -52,6 +56,7 @@ export function ConversationTimeline({
       threadIdRef.current = null;
       setMessages([]);
       setApprovals([]);
+      setTraces([]);
       setLoaded(true);
       return;
     }
@@ -61,6 +66,7 @@ export function ConversationTimeline({
     setLoaded(false);
     setMessages([]);
     setApprovals([]);
+    setTraces([]);
     setStreamingText(null);
 
     void refreshThreadState(thread.id);
@@ -81,10 +87,12 @@ export function ConversationTimeline({
       setLoaded(true);
       setMessages([]);
       setApprovals([]);
+      setTraces([]);
     }
 
     setIsRunning(true);
     setStreamingText("");
+    setTraceCollapsed(true);
 
     const optimisticUser: AgentMessage = {
       id: `opt-user-${Date.now()}`,
@@ -96,22 +104,10 @@ export function ConversationTimeline({
     setMessages((prev) => [...prev, optimisticUser]);
 
     try {
-      await startRun(
-        thread.id,
-        text,
-        (chunk) => setStreamingText(chunk),
-        (done) => {
-          setStreamingText(null);
-          // Replace optimistic user message with real messages from adapter
-          setMessages((prev) => {
-            const withoutOptimistic = prev.filter(
-              (m) => m.id !== optimisticUser.id,
-            );
-            return [...withoutOptimistic, optimisticUser, done];
-          });
-          onArtifactsChange?.();
-        },
-      );
+      await startRun(workingThread.id, text, (chunk) => setStreamingText(chunk));
+      // After run completes, refresh full state to get traces, messages, approvals
+      await refreshThreadState(workingThread.id);
+      onArtifactsChange?.(workingThread.id);
     } finally {
       setIsRunning(false);
       setStreamingText(null);
@@ -179,6 +175,16 @@ export function ConversationTimeline({
             ))}
 
             <div ref={bottomRef} />
+          </div>
+        )}
+
+        {traces.length > 0 && (
+          <div className="border-t border-[#F0F0F0] py-3">
+            <TraceRail
+              traces={traces}
+              collapsed={traceCollapsed}
+              onToggle={() => setTraceCollapsed((prev) => !prev)}
+            />
           </div>
         )}
       </div>

@@ -5,8 +5,10 @@ import type {
   AgentRun,
   AgentThread,
   AgentThreadState,
+  AgentTraceStep,
   ContentBlock,
   ReportBlock,
+  TraceStepKind,
 } from "../types";
 
 type BackendThread = {
@@ -66,12 +68,24 @@ type BackendApproval = {
   requested_at: number;
 };
 
+type BackendTrace = {
+  external_id: string;
+  run_external_id: string;
+  kind: string;
+  sequence_number: number;
+  summary: string;
+  detail_json?: string | null;
+  status: string;
+  created_at: number;
+};
+
 type BackendThreadState = {
   thread: BackendThread;
   runs: BackendRun[];
   messages: BackendMessage[];
   artifacts: BackendArtifact[];
   approvals: BackendApproval[];
+  traces?: BackendTrace[];
 };
 
 type RunStreamEvent = {
@@ -82,6 +96,7 @@ type RunStreamEvent = {
 type RunWithEventsResponse = {
   run: BackendRun & { error_message?: string | null };
   events: RunStreamEvent[];
+  traces?: BackendTrace[];
 };
 
 const API_BASE = "/api/agent";
@@ -201,6 +216,19 @@ function mapApproval(approval: BackendApproval): AgentApproval {
   };
 }
 
+function mapTrace(trace: BackendTrace): AgentTraceStep {
+  return {
+    id: trace.external_id,
+    runId: trace.run_external_id,
+    kind: trace.kind as TraceStepKind,
+    sequenceNumber: trace.sequence_number,
+    summary: trace.summary,
+    detailJson: trace.detail_json,
+    status: trace.status,
+    createdAt: trace.created_at,
+  };
+}
+
 function mapRun(run: BackendRun): AgentRun {
   return {
     id: run.external_id,
@@ -249,6 +277,7 @@ export async function getThreadState(threadId: string): Promise<AgentThreadState
     messages: state.messages.map(mapMessage),
     artifacts: state.artifacts.map(mapArtifact),
     approvals: state.approvals.map(mapApproval),
+    traces: (state.traces ?? []).map(mapTrace),
   };
 }
 

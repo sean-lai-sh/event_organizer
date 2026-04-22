@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Iterable
 
-from .contracts import ArtifactKind, ArtifactRecord, ContentBlock, StreamEvent
+from .contracts import ArtifactKind, ArtifactRecord, ContentBlock, StreamEvent, TraceStepKind, TraceStepRecord
 
 
 def now_ms() -> int:
@@ -49,6 +49,32 @@ def make_report_artifact(
             text_block(report_text, label="body"),
             json_block("report_meta", {"source": "modal_runtime"}, label="meta"),
         ],
+        created_at=created_at,
+        updated_at=created_at,
+    )
+
+
+def make_trace_step(
+    *,
+    external_id: str,
+    thread_id: str,
+    run_id: str,
+    kind: TraceStepKind,
+    sequence_number: int,
+    summary: str,
+    detail_json: str | None = None,
+    status: str = "completed",
+) -> TraceStepRecord:
+    created_at = now_ms()
+    return TraceStepRecord(
+        external_id=external_id,
+        thread_external_id=thread_id,
+        run_external_id=run_id,
+        kind=kind,
+        sequence_number=sequence_number,
+        summary=summary,
+        detail_json=detail_json,
+        status=status,
         created_at=created_at,
         updated_at=created_at,
     )
