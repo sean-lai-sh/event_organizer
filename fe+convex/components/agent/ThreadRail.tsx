@@ -7,13 +7,9 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import type { Id } from "@/convex/_generated/dataModel";
-import type { FunctionReference } from "convex/server";
-import { useMutation } from "convex/react";
 import { MessageSquare, MoreHorizontal, Plus, Zap } from "lucide-react";
-import { api } from "@/convex/_generated/api";
 import type { AgentThread } from "./types";
-import { listThreads, createThread } from "./adapters/runtime";
+import { listThreads } from "./adapters/runtime";
 
 interface ThreadRailProps {
   activeThreadId: string | null;
@@ -42,14 +38,6 @@ export function ThreadRail({
   onRenameThread,
   onDeleteThread,
 }: ThreadRailProps) {
-  const agentApi = (
-    api as unknown as {
-      agent: {
-        deleteThread: FunctionReference<"mutation", "public">;
-      };
-    }
-  ).agent;
-  const deleteThreadMutation = useMutation(agentApi.deleteThread);
   const [threads, setThreads] = useState<AgentThread[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [openMenuThreadId, setOpenMenuThreadId] = useState<string | null>(null);
@@ -163,10 +151,6 @@ export function ThreadRail({
   async function handleDelete(threadId: string) {
     setBusyThreadId(threadId);
     try {
-      const thread = displayedThreads.find((t) => t.id === threadId);
-      if (thread?._id) {
-        await deleteThreadMutation({ id: thread._id as Id<"agent_threads"> });
-      }
       await onDeleteThread(threadId);
       setThreads((prev) => prev.filter((thread) => thread.id !== threadId));
       if (editingThreadId === threadId) {
