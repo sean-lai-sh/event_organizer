@@ -372,7 +372,7 @@ class AgentRuntimeService:
             raise HTTPException(status_code=500, detail="Run state missing after approval execution")
         return ApprovalDecisionResponse(approval=approval, run=resolved_run)
 
-    async def _pause_for_approval(self, *, run: RunRecord, action: ToolAction) -> RunRecord:
+    async def _pause_for_approval(self, *, run: RunRecord, action: ToolAction, streaming_message: MessageRecord | None = None) -> RunRecord:
         decision = self._policy.evaluate(action)
         now = _now_ms()
         approval = ApprovalRecord(
@@ -402,13 +402,14 @@ class AgentRuntimeService:
         await self._store.upsert_run(run)
         await self._sync.upsert_run(run)
 
-        await self._append_message(
-            thread_id=run.thread_external_id,
-            run_id=run.external_id,
-            role="assistant",
-            status="final",
-            blocks=[text_block("This action requires approval before execution.")],
-        )
+        if not streaming_message:
+            await self._append_message(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                role="assistant",
+                status="final",
+                blocks=[text_block("This action requires approval before execution.")],
+            )
         await self._store.append_stream_event(
             run_id=run.external_id,
             event="approval.requested",
@@ -599,7 +600,7 @@ class AgentRuntimeService:
             await self._patch_streaming_assistant_message(
                 assistant_msg, final_text, status="final"
             )
-            await self._pause_for_approval(run=run, action=result.blocked_action)
+            await self._pause_for_approval(run=run, action=result.blocked_action, streaming_message=assistant_msg)
             return
 
         final_text = result.final_text or latest_text or "I finished the run but produced no text output."
