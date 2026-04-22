@@ -312,6 +312,27 @@ export async function startRun(
   }
 }
 
+export async function renameThread(
+  threadId: string,
+  title: string
+): Promise<AgentThread> {
+  const thread = await request<BackendThread>(
+    `/threads/${encodeURIComponent(threadId)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title }),
+    }
+  );
+  return mapThread(thread);
+}
+
+export async function deleteThread(threadId: string): Promise<void> {
+  await request<void>(`/threads/${encodeURIComponent(threadId)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function submitApproval(
   approvalId: string,
   decision: "approved" | "rejected"

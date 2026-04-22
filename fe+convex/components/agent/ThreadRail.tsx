@@ -13,7 +13,7 @@ import { useMutation } from "convex/react";
 import { MessageSquare, MoreHorizontal, Plus, Zap } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { AgentThread } from "./types";
-import { listThreads, createThread } from "./adapters/mock";
+import { listThreads, createThread } from "./adapters/runtime";
 
 interface ThreadRailProps {
   activeThreadId: string | null;

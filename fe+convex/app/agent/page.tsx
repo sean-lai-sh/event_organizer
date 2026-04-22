@@ -16,7 +16,7 @@ import {
   deleteThread,
   getThreadArtifacts,
   renameThread,
-} from "@/components/agent/adapters/mock";
+} from "@/components/agent/adapters/runtime";
 
 export default function AgentPage() {
   const agentApi = (
