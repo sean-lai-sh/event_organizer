@@ -26,7 +26,15 @@ from .contracts import (
     TraceStepRecord,
 )
 from .convex_sync import ConvexAgentStateSync
-from .normalize import make_report_artifact, make_trace_step, text_block
+from .normalize import (
+    extract_action_items,
+    make_checklist_artifact,
+    make_report_artifact,
+    make_trace_step,
+    summarize_text_for_run,
+    summarize_text_for_thread,
+    text_block,
+)
 from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
 from .store import InMemoryRuntimeStore
 from .tool_expectations import (
@@ -697,6 +705,10 @@ class AgentRuntimeService:
         text: str,
         streaming_message: MessageRecord | None = None,
     ) -> None:
+        run_summary = summarize_text_for_run(text)
+        thread_summary = summarize_text_for_thread(text)
+        action_items = extract_action_items(text)
+
         if streaming_message is not None:
             # Patch the existing streaming message to final status instead of
             # creating a new assistant message row.
@@ -717,8 +729,8 @@ class AgentRuntimeService:
             external_id=f"artifact_{uuid4().hex}",
             thread_id=run.thread_external_id,
             run_id=run.external_id,
-            title="Run Summary",
-            summary="Normalized runtime output",
+            title="Response",
+            summary=run_summary,
             report_text=text,
             sort_order=1,
         )
@@ -740,11 +752,30 @@ class AgentRuntimeService:
             detail_json=json.dumps({"artifact_id": artifact.external_id, "kind": artifact.kind.value}),
         )
 
+        if action_items:
+            checklist = make_checklist_artifact(
+                external_id=f"artifact_{uuid4().hex}",
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                title="Next Steps",
+                summary=f"{len(action_items)} action items",
+                items=action_items,
+                sort_order=2,
+            )
+            await self._store.upsert_artifact(checklist)
+            await self._sync.upsert_artifact(checklist)
+            await self._store.append_stream_event(
+                run_id=run.external_id,
+                event="artifact.created",
+                created_at=_now_ms(),
+                data={"artifact_id": checklist.external_id, "kind": checklist.kind.value},
+            )
+
         now = _now_ms()
         completed = run.model_copy(
             update={
                 "status": RunStatus.COMPLETED,
-                "summary": "Run completed successfully.",
+                "summary": run_summary,
                 "completed_at": now,
                 "updated_at": now,
                 "latest_message_sequence": assistant_message.sequence_number,
@@ -752,6 +783,11 @@ class AgentRuntimeService:
         )
         await self._store.upsert_run(completed)
         await self._sync.upsert_run(completed)
+        await self._update_thread_summary(
+            thread_id=run.thread_external_id,
+            summary=thread_summary,
+            updated_at=now,
+        )
         await self._store.append_stream_event(
             run_id=run.external_id,
             event="run.completed",
@@ -764,7 +800,7 @@ class AgentRuntimeService:
             thread_id=run.thread_external_id,
             run_id=run.external_id,
             kind=TraceStepKind.RUN_COMPLETED,
-            summary="Run completed successfully.",
+            summary=run_summary,
         )
 
     async def _mark_run_error(self, *, run: RunRecord, message: str) -> None:
@@ -872,6 +908,15 @@ class AgentRuntimeService:
             await self._sync.upsert_thread(updated_thread)
 
         return message
+
+    async def _update_thread_summary(self, *, thread_id: str, summary: str, updated_at: int) -> None:
+        thread = await self._store.get_thread(thread_id)
+        if not thread:
+            return
+
+        updated_thread = thread.model_copy(update={"summary": summary, "updated_at": updated_at})
+        await self._store.upsert_thread(updated_thread)
+        await self._sync.upsert_thread(updated_thread)
 
     def _hydrate_thread_state(self, state: dict) -> ThreadStateResponse:
         thread_data = state.get("thread")

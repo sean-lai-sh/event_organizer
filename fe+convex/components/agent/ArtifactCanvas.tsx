@@ -189,6 +189,14 @@ function ChecklistArtifact({ data }: { data: ChecklistData }) {
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] p-4 text-[13px] text-[#555555]">
+        No action items available.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5">
       {items.map((item) => (

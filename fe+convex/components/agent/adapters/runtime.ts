@@ -121,10 +121,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function parseJson(value?: string | null) {
+function parseJson<T>(value?: string | null): T | null {
   if (!value) return null;
   try {
-    return JSON.parse(value) as Record<string, unknown>;
+    return JSON.parse(value) as T;
   } catch {
     return null;
   }
@@ -201,8 +201,48 @@ function mapArtifact(artifact: BackendArtifact): AgentArtifact {
             summary: artifact.summary ?? null,
             blocks,
           }
+        : artifact.kind === "checklist"
+          ? mapChecklistArtifact(blocks)
         : { blocks },
     createdAt: artifact.created_at,
+  };
+}
+
+function mapChecklistArtifact(blocks: ReportBlock[]) {
+  const payload = blocks.find((block) => block.kind === "checklist_data")?.dataJson;
+  const parsed = parseJson<{ items?: Array<Record<string, unknown>> }>(payload);
+  if (parsed?.items && Array.isArray(parsed.items)) {
+    return {
+      items: parsed.items
+        .map((item, index) => normalizeChecklistItem(item, index))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    };
+  }
+
+  const items = blocks
+    .filter((block) => block.kind === "text" && block.text)
+    .flatMap((block) => (block.text ?? "").split("\n"))
+    .map((line) => line.replace(/^\s*[-*+]\s+/, "").trim())
+    .filter(Boolean)
+    .map((label, index) => ({
+      id: `todo_${index + 1}`,
+      label,
+      checked: false,
+    }));
+
+  return { items };
+}
+
+function normalizeChecklistItem(item: Record<string, unknown>, index: number) {
+  if (typeof item.label !== "string" || item.label.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    id: typeof item.id === "string" && item.id.trim().length > 0 ? item.id : `todo_${index + 1}`,
+    label: item.label.trim(),
+    checked: item.checked === true,
+    notes: typeof item.notes === "string" ? item.notes : undefined,
   };
 }
 

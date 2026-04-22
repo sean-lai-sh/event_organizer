@@ -15,10 +15,16 @@ from runtime.store import InMemoryRuntimeStore
 class FakeAdapter:
     model = "fake-model"
 
+    def __init__(self, chunks: list[str] | None = None) -> None:
+        self._chunks = chunks or [
+            "Processed: fallback",
+            "Processed: fallback complete",
+        ]
+
     async def stream_text(self, *, user_prompt: str, system_prompt: str | None = None, max_tokens: int = 900) -> AsyncIterator[str]:
-        _ = (system_prompt, max_tokens)
-        yield f"Processed: {user_prompt[:20]}"
-        yield f"Processed: {user_prompt[:20]} complete"
+        _ = (user_prompt, system_prompt, max_tokens)
+        for chunk in self._chunks:
+            yield chunk
 
 
 class FakeToolAwareAdapter:
@@ -57,7 +63,12 @@ class FakeToolAwareAdapter:
 async def test_start_run_without_approval_completes() -> None:
     service = AgentRuntimeService(
         store=InMemoryRuntimeStore(),
-        adapter=FakeAdapter(),
+        adapter=FakeAdapter(
+            [
+                "## Attendance Update",
+                "## Attendance Update\n\nThe latest event had 42 attendees.\n\n- Attendance rose from last week.",
+            ]
+        ),
         policy=ApprovalPolicy(),
     )
 
@@ -65,12 +76,79 @@ async def test_start_run_without_approval_completes() -> None:
     response = await service.start_run(RunCreateRequest(thread_id=thread.external_id, input_text="Summarize the agenda"))
 
     assert response.run.status.value == "completed"
+    assert response.run.summary == "Attendance Update"
 
     state = await service.get_thread_state(thread.external_id)
     assert len(state.messages) >= 2
     assert any(message.role == "assistant" for message in state.messages)
     assert len(state.artifacts) == 1
     assert not state.approvals
+    assert state.thread.summary == "Attendance Update"
+    assert state.artifacts[0].title == "Response"
+    assert state.artifacts[0].summary == "Attendance Update"
+
+
+@pytest.mark.asyncio
+async def test_actionable_response_creates_checklist_artifact() -> None:
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeAdapter(
+            [
+                "## Outreach Status",
+                (
+                    "## Outreach Status\n\nThe draft is ready for review.\n\n"
+                    "### Next steps\n"
+                    "1. Send the draft to Alex for approval.\n"
+                    "2. Confirm the speaker availability window."
+                ),
+            ]
+        ),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Actionable thread"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Summarize the current status")
+    )
+
+    assert response.run.status.value == "completed"
+    assert response.run.summary == "Outreach Status"
+
+    state = await service.get_thread_state(thread.external_id)
+    assert state.thread.summary == "Outreach Status"
+    assert [artifact.kind.value for artifact in state.artifacts] == ["report", "checklist"]
+    assert state.artifacts[0].title == "Response"
+    assert state.artifacts[0].summary == "Outreach Status"
+    assert state.artifacts[1].title == "Next Steps"
+    assert state.artifacts[1].summary == "2 action items"
+    assert state.artifacts[1].content_blocks[0].kind == "checklist_data"
+
+
+@pytest.mark.asyncio
+async def test_sentence_summary_is_used_when_no_heading_exists() -> None:
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeAdapter(
+            [
+                "The room is confirmed.",
+                "The room is confirmed. Speaker confirmation is still pending.",
+            ]
+        ),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Sentence summary thread"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Explain the current event status")
+    )
+
+    assert response.run.status.value == "completed"
+    assert response.run.summary == "The room is confirmed."
+
+    state = await service.get_thread_state(thread.external_id)
+    assert state.thread.summary == "The room is confirmed."
+    assert len(state.artifacts) == 1
+    assert state.artifacts[0].summary == "The room is confirmed."
 
 
 @pytest.mark.asyncio
