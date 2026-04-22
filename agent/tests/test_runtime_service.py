@@ -354,3 +354,158 @@ async def test_latest_event_request_with_no_events_returns_no_data_message() -> 
     assert response.run.status.value == "completed"
     state = await service.get_thread_state(thread.external_id)
     assert "couldn't find any events" in (state.messages[-1].plain_text or "").lower()
+
+
+# ──────────────────────────────────────────────────────────────────────
+# New streaming-persistence tests for issue #33
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_streaming_placeholder_created_before_first_delta() -> None:
+    """Assistant placeholder is created before the first delta and patched in
+    place during streaming (text run path)."""
+    store = InMemoryRuntimeStore()
+    service = AgentRuntimeService(
+        store=store,
+        adapter=FakeAdapter(),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Streaming test"))
+    await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Hello world")
+    )
+
+    state = await service.get_thread_state(thread.external_id)
+    assistant_msgs = [m for m in state.messages if m.role == "assistant"]
+
+    # There should be exactly one assistant message (the placeholder that was
+    # patched to final), not two separate rows.
+    assert len(assistant_msgs) == 1
+    assert assistant_msgs[0].status == "final"
+    assert assistant_msgs[0].plain_text  # non-empty final text
+
+
+@pytest.mark.asyncio
+async def test_streaming_finalization_patches_same_message_not_new_row() -> None:
+    """Finalization updates the same assistant message to status='final'
+    instead of adding a second assistant message."""
+    store = InMemoryRuntimeStore()
+    service = AgentRuntimeService(
+        store=store,
+        adapter=FakeAdapter(),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Finalize test"))
+    await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Summarize something")
+    )
+
+    # Count all messages in the store keyed by external_id.
+    all_msgs = list(store.messages.values())
+    assistant_msgs = [m for m in all_msgs if m.role == "assistant" and m.thread_external_id == thread.external_id]
+
+    # Only one assistant message row should exist.
+    assert len(assistant_msgs) == 1
+    assert assistant_msgs[0].status == "final"
+
+    # The sequence_number should not have been advanced during streaming.
+    seq = assistant_msgs[0].sequence_number
+    user_msgs = [m for m in all_msgs if m.role == "user" and m.thread_external_id == thread.external_id]
+    assert len(user_msgs) == 1
+    assert user_msgs[0].sequence_number < seq
+
+
+@pytest.mark.asyncio
+async def test_tool_aware_streaming_placeholder_patched_in_place() -> None:
+    """For tool-aware runs, the assistant placeholder is created before the
+    first delta and patched in place during streaming."""
+    store = InMemoryRuntimeStore()
+    service = AgentRuntimeService(
+        store=store,
+        adapter=FakeToolAwareAdapter(
+            AgentTurnResult(
+                text_deltas=["Partial text", "Full answer ready"],
+                final_text="Full answer ready",
+                tool_traces=[
+                    ToolTrace(
+                        name="get_attendance_dashboard",
+                        tool_input={},
+                        tool_use_id="tool_1",
+                        result={"totals": {"events_tracked": 1}},
+                    )
+                ],
+            )
+        ),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Tool streaming"))
+    await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Show attendance")
+    )
+
+    state = await service.get_thread_state(thread.external_id)
+    assistant_msgs = [m for m in state.messages if m.role == "assistant"]
+
+    # Exactly one assistant message, patched to final.
+    assert len(assistant_msgs) == 1
+    assert assistant_msgs[0].status == "final"
+    assert assistant_msgs[0].plain_text == "Full answer ready"
+
+
+@pytest.mark.asyncio
+async def test_completed_run_shows_final_assistant_bubble() -> None:
+    """A completed run still shows the final assistant bubble (visible after
+    the run completes and after a simulated page refresh via get_thread_state)."""
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeAdapter(),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Bubble test"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Tell me something")
+    )
+
+    assert response.run.status.value == "completed"
+
+    # Simulate a "page refresh" by fetching thread state again.
+    state = await service.get_thread_state(thread.external_id)
+    assistant_msgs = [m for m in state.messages if m.role == "assistant"]
+    assert len(assistant_msgs) == 1
+    assert assistant_msgs[0].status == "final"
+    assert assistant_msgs[0].plain_text  # non-empty
+
+
+@pytest.mark.asyncio
+async def test_sequence_number_not_advanced_during_streaming() -> None:
+    """The sequence_number of the assistant message must be assigned once at
+    placeholder creation and must not change during streaming patches."""
+    store = InMemoryRuntimeStore()
+    service = AgentRuntimeService(
+        store=store,
+        adapter=FakeAdapter(),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Seq test"))
+    await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Check sequence")
+    )
+
+    all_msgs = list(store.messages.values())
+    assistant_msgs = [m for m in all_msgs if m.role == "assistant" and m.thread_external_id == thread.external_id]
+    assert len(assistant_msgs) == 1
+
+    # The user message gets sequence 1, assistant gets sequence 2.
+    user_msg = next(m for m in all_msgs if m.role == "user" and m.thread_external_id == thread.external_id)
+    assert user_msg.sequence_number == 1
+    assert assistant_msgs[0].sequence_number == 2
+
+    # The thread sequence counter should be exactly 2 (not higher from
+    # streaming patches).
+    assert store._thread_sequences[thread.external_id] == 2
