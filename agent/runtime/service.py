@@ -372,7 +372,7 @@ class AgentRuntimeService:
             raise HTTPException(status_code=500, detail="Run state missing after approval execution")
         return ApprovalDecisionResponse(approval=approval, run=resolved_run)
 
-    async def _pause_for_approval(self, *, run: RunRecord, action: ToolAction) -> RunRecord:
+    async def _pause_for_approval(self, *, run: RunRecord, action: ToolAction, streaming_message: MessageRecord | None = None) -> RunRecord:
         decision = self._policy.evaluate(action)
         now = _now_ms()
         approval = ApprovalRecord(
@@ -402,13 +402,14 @@ class AgentRuntimeService:
         await self._store.upsert_run(run)
         await self._sync.upsert_run(run)
 
-        await self._append_message(
-            thread_id=run.thread_external_id,
-            run_id=run.external_id,
-            role="assistant",
-            status="final",
-            blocks=[text_block("This action requires approval before execution.")],
-        )
+        if not streaming_message:
+            await self._append_message(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                role="assistant",
+                status="final",
+                blocks=[text_block("This action requires approval before execution.")],
+            )
         await self._store.append_stream_event(
             run_id=run.external_id,
             event="approval.requested",
@@ -533,9 +534,15 @@ class AgentRuntimeService:
             was_retried=retried,
         )
 
+        # Create a streaming assistant placeholder before first delta
+        assistant_msg = await self._begin_streaming_assistant_message(run=run)
+
         latest_text = ""
         for partial_text in result.text_deltas:
             latest_text = partial_text
+            assistant_msg = await self._patch_streaming_assistant_message(
+                assistant_msg, latest_text
+            )
             await self._store.append_stream_event(
                 run_id=run.external_id,
                 event="assistant.delta",
@@ -588,13 +595,23 @@ class AgentRuntimeService:
                 )
 
         if result.blocked_action:
-            await self._pause_for_approval(run=run, action=result.blocked_action)
+            # Finalize the streaming message before pausing
+            final_text = latest_text or "This action requires approval before execution."
+            await self._patch_streaming_assistant_message(
+                assistant_msg, final_text, status="final"
+            )
+            await self._pause_for_approval(run=run, action=result.blocked_action, streaming_message=assistant_msg)
             return
 
         final_text = result.final_text or latest_text or "I finished the run but produced no text output."
-        await self._finalize_successful_run(run=run, text=final_text)
+        await self._finalize_successful_run(
+            run=run, text=final_text, streaming_message=assistant_msg
+        )
 
     async def _execute_text_run(self, *, run: RunRecord, user_input: str, max_tokens: int) -> None:
+        # Create a streaming assistant placeholder before first delta
+        assistant_msg = await self._begin_streaming_assistant_message(run=run)
+
         latest_text = ""
         try:
             async for partial_text in self._adapter.stream_text(
@@ -602,6 +619,9 @@ class AgentRuntimeService:
                 max_tokens=max_tokens,
             ):
                 latest_text = partial_text
+                assistant_msg = await self._patch_streaming_assistant_message(
+                    assistant_msg, latest_text
+                )
                 await self._store.append_stream_event(
                     run_id=run.external_id,
                     event="assistant.delta",
@@ -609,6 +629,12 @@ class AgentRuntimeService:
                     data={"text": partial_text},
                 )
         except Exception as exc:
+            # Finalize the streaming message as error before marking run error
+            await self._patch_streaming_assistant_message(
+                assistant_msg,
+                latest_text or f"Error: {exc}",
+                status="final",
+            )
             await self._emit_trace(
                 thread_id=run.thread_external_id,
                 run_id=run.external_id,
@@ -618,16 +644,74 @@ class AgentRuntimeService:
             await self._mark_run_error(run=run, message=str(exc))
             return
 
-        await self._finalize_successful_run(run=run, text=latest_text)
-
-    async def _finalize_successful_run(self, *, run: RunRecord, text: str) -> None:
-        assistant_message = await self._append_message(
-            thread_id=run.thread_external_id,
-            run_id=run.external_id,
-            role="assistant",
-            status="final",
-            blocks=[text_block(text)],
+        await self._finalize_successful_run(
+            run=run, text=latest_text, streaming_message=assistant_msg
         )
+
+    async def _begin_streaming_assistant_message(
+        self, *, run: RunRecord
+    ) -> MessageRecord:
+        """Create an empty assistant message placeholder before the first delta."""
+        now = _now_ms()
+        sequence = await self._store.next_sequence(run.thread_external_id)
+        message = MessageRecord(
+            external_id=f"msg_{uuid4().hex}",
+            thread_external_id=run.thread_external_id,
+            run_external_id=run.external_id,
+            role="assistant",
+            status="streaming",
+            sequence_number=sequence,
+            plain_text="",
+            content_blocks=[text_block("")],
+            created_at=now,
+            updated_at=now,
+        )
+        await self._store.append_message(message)
+        await self._sync.append_message(message)
+        return message
+
+    async def _patch_streaming_assistant_message(
+        self,
+        message: MessageRecord,
+        text: str,
+        *,
+        status: str = "streaming",
+    ) -> MessageRecord:
+        """Patch the existing streaming assistant message in place by external_id."""
+        updated = message.model_copy(
+            update={
+                "status": status,
+                "plain_text": text,
+                "content_blocks": [text_block(text)],
+                "updated_at": _now_ms(),
+            }
+        )
+        await self._store.append_message(updated)
+        await self._sync.append_message(updated)
+        return updated
+
+    async def _finalize_successful_run(
+        self,
+        *,
+        run: RunRecord,
+        text: str,
+        streaming_message: MessageRecord | None = None,
+    ) -> None:
+        if streaming_message is not None:
+            # Patch the existing streaming message to final status instead of
+            # creating a new assistant message row.
+            assistant_message = await self._patch_streaming_assistant_message(
+                streaming_message, text, status="final"
+            )
+        else:
+            # Legacy path: create a new final assistant message (e.g. rejection).
+            assistant_message = await self._append_message(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                role="assistant",
+                status="final",
+                blocks=[text_block(text)],
+            )
 
         artifact = make_report_artifact(
             external_id=f"artifact_{uuid4().hex}",

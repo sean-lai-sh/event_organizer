@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   appendMessage,
+  appendTrace,
   getRunState,
   getThreadState,
   listPendingApprovals,
@@ -121,6 +122,7 @@ class FakeDb {
 function installConvexHandlerAliases() {
   for (const fn of [
     appendMessage,
+    appendTrace,
     getRunState,
     getThreadState,
     listPendingApprovals,
@@ -814,5 +816,514 @@ describe("agent state persistence", () => {
       decided_by_user_id: "user_approver",
       resolved_at: 60,
     });
+  });
+
+  test("streaming assistant message patches one row by external_id and preserves sequence", async () => {
+    const { ctx, db } = createHarness();
+
+    const threadId = await getHandler<
+      {
+        external_id: string;
+        channel: string;
+        status: string;
+        title?: string;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertThread)(ctx as never, {
+      external_id: "thread_streaming_1",
+      channel: "web",
+      status: "active",
+      title: "Streaming thread",
+      created_at: 100,
+      updated_at: 100,
+    });
+
+    const runId = await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        status: string;
+        trigger_source: string;
+        started_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: threadId,
+      external_id: "run_streaming_1",
+      status: "running",
+      trigger_source: "web",
+      started_at: 110,
+      updated_at: 110,
+    });
+
+    // 1. User message
+    await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      external_id: "msg_user_streaming",
+      role: "user",
+      status: "complete",
+      sequence_number: 1,
+      plain_text: "Show attendance",
+      content_blocks: [{ kind: "text", text: "Show attendance" }],
+      created_at: 115,
+      updated_at: 115,
+    });
+
+    // 2. Streaming placeholder (empty text, status=streaming)
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_streaming",
+      role: "assistant",
+      status: "streaming",
+      sequence_number: 2,
+      plain_text: "",
+      content_blocks: [{ kind: "text", text: "" }],
+      created_at: 120,
+      updated_at: 120,
+    });
+
+    // 3. First streaming delta patch (same external_id)
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_streaming",
+      role: "assistant",
+      status: "streaming",
+      sequence_number: 2,
+      plain_text: "Partial text",
+      content_blocks: [{ kind: "text", text: "Partial text" }],
+      updated_at: 125,
+    });
+
+    // 4. Second streaming delta patch (same external_id)
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_streaming",
+      role: "assistant",
+      status: "streaming",
+      sequence_number: 2,
+      plain_text: "Partial text extended",
+      content_blocks: [{ kind: "text", text: "Partial text extended" }],
+      updated_at: 130,
+    });
+
+    // 5. Finalization patch (same external_id, status=complete)
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_streaming",
+      role: "assistant",
+      status: "complete",
+      sequence_number: 2,
+      plain_text: "Full answer ready",
+      content_blocks: [{ kind: "markdown", text: "Full answer ready" }],
+      updated_at: 135,
+    });
+
+    // Assertions: only one assistant message row should exist
+    const messageRows = db.rows("agent_messages");
+    const assistantRows = messageRows.filter(
+      (row) => row.role === "assistant" && row.thread_id === threadId
+    );
+    expect(assistantRows).toHaveLength(1);
+    expect(assistantRows[0]).toMatchObject({
+      external_id: "msg_assistant_streaming",
+      status: "complete",
+      plain_text: "Full answer ready",
+      sequence_number: 2,
+    });
+
+    // Total messages: 1 user + 1 assistant = 2
+    const threadMessages = messageRows.filter((row) => row.thread_id === threadId);
+    expect(threadMessages).toHaveLength(2);
+
+    // Sequence ordering preserved via getThreadState
+    const threadState = await getHandler<
+      { external_id?: string; thread_id?: string },
+      {
+        thread: Record<string, unknown>;
+        runs: Array<Record<string, unknown>>;
+        messages: Array<Record<string, unknown>>;
+        artifacts: Array<Record<string, unknown>>;
+        approvals: Array<Record<string, unknown>>;
+        context_links: Array<Record<string, unknown>>;
+      }
+    >(getThreadState)(ctx as never, { external_id: "thread_streaming_1" });
+
+    expect(threadState.messages).toHaveLength(2);
+    expect(threadState.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(threadState.messages.map((m) => m.sequence_number)).toEqual([1, 2]);
+    expect(threadState.messages[1]).toMatchObject({
+      status: "complete",
+      plain_text: "Full answer ready",
+    });
+  });
+
+  test("getThreadState returns both streaming-upserted message and ordered traces together", async () => {
+    const { ctx, db } = createHarness();
+
+    // 1. Create thread
+    const threadId = await getHandler<
+      { external_id: string; channel: string; status: string; title?: string; updated_at?: number },
+      string
+    >(upsertThread)(ctx as never, {
+      external_id: "thread_combined_1",
+      channel: "web",
+      status: "active",
+      title: "Combined test",
+      updated_at: 100,
+    });
+
+    // 2. Create run
+    const runId = await getHandler<
+      { thread_id: string; external_id: string; status: string; trigger_source: string; updated_at?: number },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: threadId,
+      external_id: "run_combined_1",
+      status: "running",
+      trigger_source: "web",
+      updated_at: 110,
+    });
+
+    // 3. User message
+    await getHandler<
+      {
+        thread_id: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      external_id: "msg_user_combined",
+      role: "user",
+      status: "complete",
+      sequence_number: 1,
+      plain_text: "How is attendance?",
+      content_blocks: [{ kind: "text", text: "How is attendance?" }],
+      created_at: 115,
+      updated_at: 115,
+    });
+
+    // 4. Planning trace
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        kind: string;
+        sequence_number: number;
+        summary: string;
+        status: string;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendTrace)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "trace_combined_planning",
+      kind: "planning",
+      sequence_number: 1,
+      summary: "Analyzing request.",
+      status: "completed",
+      created_at: 116,
+      updated_at: 116,
+    });
+
+    // 5. Streaming assistant placeholder
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_combined",
+      role: "assistant",
+      status: "streaming",
+      sequence_number: 2,
+      plain_text: "",
+      content_blocks: [{ kind: "text", text: "" }],
+      created_at: 120,
+      updated_at: 120,
+    });
+
+    // 6. Thinking trace (emitted during streaming)
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        kind: string;
+        sequence_number: number;
+        summary: string;
+        status: string;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendTrace)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "trace_combined_thinking",
+      kind: "thinking",
+      sequence_number: 2,
+      summary: "Generating response.",
+      status: "completed",
+      created_at: 121,
+      updated_at: 121,
+    });
+
+    // 7. Streaming delta patch
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_combined",
+      role: "assistant",
+      status: "streaming",
+      sequence_number: 2,
+      plain_text: "Partial answer",
+      content_blocks: [{ kind: "text", text: "Partial answer" }],
+      updated_at: 125,
+    });
+
+    // 8. Artifact generation trace
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        kind: string;
+        sequence_number: number;
+        summary: string;
+        detail_json?: string;
+        status: string;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendTrace)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "trace_combined_artifact",
+      kind: "artifact_generation",
+      sequence_number: 3,
+      summary: "Generated artifact: Run Summary",
+      detail_json: '{"artifact_id":"art_1","kind":"report"}',
+      status: "completed",
+      created_at: 128,
+      updated_at: 128,
+    });
+
+    // 9. Finalization patch (same external_id, status=complete)
+    await getHandler<
+      {
+        thread_id: string;
+        run_id?: string;
+        external_id: string;
+        role: string;
+        status: string;
+        sequence_number: number;
+        plain_text?: string;
+        content_blocks: Array<Record<string, string>>;
+        updated_at?: number;
+      },
+      string
+    >(appendMessage)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "msg_assistant_combined",
+      role: "assistant",
+      status: "complete",
+      sequence_number: 2,
+      plain_text: "Full answer ready",
+      content_blocks: [{ kind: "markdown", text: "Full answer ready" }],
+      updated_at: 130,
+    });
+
+    // 10. Run completed trace
+    await getHandler<
+      {
+        thread_id: string;
+        run_id: string;
+        external_id: string;
+        kind: string;
+        sequence_number: number;
+        summary: string;
+        status: string;
+        created_at?: number;
+        updated_at?: number;
+      },
+      string
+    >(appendTrace)(ctx as never, {
+      thread_id: threadId,
+      run_id: runId,
+      external_id: "trace_combined_completed",
+      kind: "run_completed",
+      sequence_number: 4,
+      summary: "Run completed successfully.",
+      status: "completed",
+      created_at: 135,
+      updated_at: 135,
+    });
+
+    // 11. Mark run completed
+    await getHandler<
+      { thread_id: string; external_id: string; status: string; trigger_source: string; completed_at?: number; updated_at?: number },
+      string
+    >(upsertRun)(ctx as never, {
+      thread_id: threadId,
+      external_id: "run_combined_1",
+      status: "completed",
+      trigger_source: "web",
+      completed_at: 140,
+      updated_at: 140,
+    });
+
+    // ---- Assertions: getThreadState returns both messages and traces ----
+    const threadState = await getHandler<
+      { external_id?: string; thread_id?: string },
+      {
+        thread: Record<string, unknown>;
+        runs: Array<Record<string, unknown>>;
+        messages: Array<Record<string, unknown>>;
+        traces: Array<Record<string, unknown>>;
+      }
+    >(getThreadState)(ctx as never, { external_id: "thread_combined_1" });
+
+    // Messages: exactly 2 (user + single upserted assistant)
+    expect(threadState.messages).toHaveLength(2);
+    expect(threadState.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(threadState.messages.map((m) => m.sequence_number)).toEqual([1, 2]);
+    expect(threadState.messages[1]).toMatchObject({
+      external_id: "msg_assistant_combined",
+      status: "complete",
+      plain_text: "Full answer ready",
+    });
+
+    // Traces: 4 traces in correct order
+    expect(threadState.traces).toHaveLength(4);
+    expect(threadState.traces.map((t) => t.kind)).toEqual([
+      "planning",
+      "thinking",
+      "artifact_generation",
+      "run_completed",
+    ]);
+    expect(threadState.traces.map((t) => t.sequence_number)).toEqual([1, 2, 3, 4]);
+
+    // Run is completed
+    expect(threadState.runs).toHaveLength(1);
+    expect(threadState.runs[0]).toMatchObject({ status: "completed" });
+
+    // Raw DB: only 1 assistant message row (not duplicated by streaming patches)
+    const assistantRows = db.rows("agent_messages").filter(
+      (row) => row.role === "assistant" && row.thread_id === threadId
+    );
+    expect(assistantRows).toHaveLength(1);
   });
 });

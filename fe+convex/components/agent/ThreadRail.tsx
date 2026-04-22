@@ -8,8 +8,9 @@ import {
   type KeyboardEvent,
 } from "react";
 import { MessageSquare, MoreHorizontal, Plus, Zap } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import type { AgentThread } from "./types";
-import { listThreads } from "./adapters/runtime";
 
 interface ThreadRailProps {
   activeThreadId: string | null;
@@ -30,6 +31,27 @@ function timeAgo(ts: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+type ConvexThread = {
+  external_id: string;
+  channel: string;
+  title?: string | null;
+  summary?: string | null;
+  last_message_at?: number | null;
+  last_run_started_at?: number | null;
+  updated_at: number;
+};
+
+function mapConvexThread(t: ConvexThread): AgentThread {
+  return {
+    id: t.external_id,
+    title: t.title ?? "New conversation",
+    channel: t.channel as AgentThread["channel"],
+    lastMessage: t.summary ?? undefined,
+    lastActivityAt:
+      t.last_message_at ?? t.last_run_started_at ?? t.updated_at,
+  };
+}
+
 export function ThreadRail({
   activeThreadId,
   activeThread,
@@ -38,8 +60,17 @@ export function ThreadRail({
   onRenameThread,
   onDeleteThread,
 }: ThreadRailProps) {
-  const [threads, setThreads] = useState<AgentThread[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  // Reactive Convex query replaces the one-shot listThreads() fetch.
+  const rawThreads = useQuery(api.agentState.listThreads, { limit: 50 });
+  const threads: AgentThread[] = useMemo(
+    () =>
+      rawThreads
+        ? (rawThreads as unknown as ConvexThread[]).map(mapConvexThread)
+        : [],
+    [rawThreads],
+  );
+  const loaded = rawThreads !== undefined;
+
   const [openMenuThreadId, setOpenMenuThreadId] = useState<string | null>(null);
   const [openMenuPosition, setOpenMenuPosition] = useState<{
     top: number;
@@ -51,22 +82,8 @@ export function ThreadRail({
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [busyThreadId, setBusyThreadId] = useState<string | null>(null);
-  const mounted = useRef(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    mounted.current = true;
-    listThreads().then((data) => {
-      if (mounted.current) {
-        setThreads(data);
-        setLoaded(true);
-      }
-    });
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -137,11 +154,7 @@ export function ThreadRail({
     setBusyThreadId(threadId);
     try {
       await onRenameThread(threadId, nextTitle);
-      setThreads((prev) =>
-        prev.map((thread) =>
-          thread.id === threadId ? { ...thread, title: nextTitle } : thread,
-        ),
-      );
+      // Thread list will update reactively via Convex query.
       cancelRename();
     } finally {
       setBusyThreadId(null);
@@ -152,7 +165,7 @@ export function ThreadRail({
     setBusyThreadId(threadId);
     try {
       await onDeleteThread(threadId);
-      setThreads((prev) => prev.filter((thread) => thread.id !== threadId));
+      // Thread list will update reactively via Convex query.
       if (editingThreadId === threadId) {
         cancelRename();
       }
@@ -317,14 +330,14 @@ export function ThreadRail({
                       }
                       setOpenMenuThreadId(nextOpen ? thread.id : null);
                     }}
-                    className={`absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-[6px] border border-transparent text-[#888888] transition-colors hover:bg-[#EDEDED] hover:text-[#222222] ${
+                    className={`absolute right-2 top-3 flex h-6 w-6 items-center justify-center rounded-[5px] text-[#BBBBBB] transition-all duration-100 ${
                       menuOpen
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100"
+                        ? "bg-[#E0E0E0] text-[#555555]"
+                        : "opacity-0 hover:bg-[#E0E0E0] hover:text-[#555555] group-hover:opacity-100"
                     }`}
-                    aria-label="Thread actions"
+                    aria-label="Thread options"
                   >
-                    <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.9} />
+                    <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
                   </button>
                 </li>
               );
@@ -333,42 +346,42 @@ export function ThreadRail({
         )}
       </div>
 
-      {openMenuThread && editingThreadId !== openMenuThread.id ? (
+      {openMenuThread && (
         <div
           ref={menuRef}
-          className="fixed z-[9999] w-[132px] overflow-hidden rounded-[8px] border border-[#E5E5E5] bg-[#FFFFFF] py-1 shadow-[0_8px_20px_rgba(0,0,0,0.08)]"
-          style={{ top: openMenuPosition.top, left: openMenuPosition.left }}
+          className="fixed z-50 w-[132px] overflow-hidden rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] py-1 shadow-[0_4px_12px_rgba(0,0,0,0.08)]"
+          style={{
+            top: openMenuPosition.top,
+            left: openMenuPosition.left,
+            animation: "menuFadeIn 120ms ease-out both",
+          }}
         >
           <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              startRename(openMenuThread);
-            }}
-            className="block w-full px-4 py-2 text-left text-[12px] text-[#222222] transition-colors hover:bg-[#F4F4F4]"
+            onClick={() => startRename(openMenuThread)}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-[#333333] transition-colors duration-75 hover:bg-[#F4F4F4]"
           >
             Rename
           </button>
           <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleDelete(openMenuThread.id);
-            }}
-            className="block w-full px-4 py-2 text-left text-[12px] text-red-600 transition-colors hover:bg-[#F4F4F4]"
+            onClick={() => void handleDelete(openMenuThread.id)}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] text-[#CC3333] transition-colors duration-75 hover:bg-[#FFF0F0]"
           >
             Delete
           </button>
         </div>
-      ) : null}
+      )}
 
       <style>{`
-        @keyframes threadItemIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to   { opacity: 1; transform: translateY(0); }
+        @keyframes menuFadeIn {
+          from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes threadItemEnter {
+          from { opacity: 0; transform: translateX(-6px); }
+          to   { opacity: 1; transform: translateX(0); }
         }
         .thread-item-enter {
-          animation: threadItemIn 200ms cubic-bezier(0.23, 1, 0.32, 1) both;
+          animation: threadItemEnter 200ms ease-out;
         }
       `}</style>
     </aside>
@@ -377,15 +390,12 @@ export function ThreadRail({
 
 function ThreadSkeletons() {
   return (
-    <div className="space-y-px px-2 py-1">
-      {[80, 65, 72].map((w, i) => (
-        <div key={i} className="rounded-[8px] px-3 py-2.5">
-          <div className="h-2.5 w-3/4 animate-pulse rounded-full bg-[#E8E8E8]" />
-          <div
-            className="mt-1.5 animate-pulse rounded-full bg-[#EFEFEF]"
-            style={{ height: 9, width: `${w}%` }}
-          />
-        </div>
+    <div className="space-y-1 px-2">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="h-[52px] animate-pulse rounded-[8px] bg-[#F0F0F0]"
+        />
       ))}
     </div>
   );
@@ -393,13 +403,13 @@ function ThreadSkeletons() {
 
 function EmptyState({ onNew }: { onNew: () => void }) {
   return (
-    <div className="px-4 py-8 text-center">
-      <p className="text-[12px] text-[#BBBBBB]">No conversations yet.</p>
+    <div className="flex flex-col items-center gap-3 px-4 pt-8 text-center">
+      <p className="text-[12.5px] text-[#BBBBBB]">No conversations yet.</p>
       <button
         onClick={onNew}
-        className="mt-3 text-[12px] font-medium text-[#555555] underline-offset-2 hover:underline"
+        className="rounded-[6px] border border-[#E0E0E0] px-3 py-1.5 text-[12px] font-medium text-[#555555] transition-colors duration-100 hover:bg-[#F4F4F4]"
       >
-        Start one
+        Start a conversation
       </button>
     </div>
   );

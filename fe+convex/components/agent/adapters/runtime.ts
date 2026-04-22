@@ -42,6 +42,7 @@ type BackendMessage = {
   external_id: string;
   thread_external_id: string;
   role: string;
+  status?: string | null;
   plain_text?: string | null;
   content_blocks: BackendContentBlock[];
   created_at: number;
@@ -93,6 +94,7 @@ type RunStreamEvent = {
   data: Record<string, unknown>;
 };
 
+// Kept for backward compatibility with existing web callers.
 type RunWithEventsResponse = {
   run: BackendRun & { error_message?: string | null };
   events: RunStreamEvent[];
@@ -174,6 +176,7 @@ function mapMessage(message: BackendMessage): AgentMessage {
         ? content
         : [{ type: "text", text: message.plain_text ?? "" }],
     createdAt: message.created_at,
+    isStreaming: message.status === "streaming",
   };
 }
 
@@ -239,28 +242,6 @@ function mapRun(run: BackendRun): AgentRun {
   };
 }
 
-function typewriterReveal(text: string, onChunk: (text: string) => void): Promise<void> {
-  return new Promise((resolve) => {
-    const words = text.split(" ");
-    let revealed = "";
-    let i = 0;
-    // Vary speed slightly so it feels natural, not robotic
-    const step = () => {
-      if (i >= words.length) {
-        resolve();
-        return;
-      }
-      revealed += (i === 0 ? "" : " ") + words[i];
-      onChunk(revealed);
-      i++;
-      // ~60-120ms per word feels natural for reading speed
-      const delay = 60 + Math.random() * 40;
-      setTimeout(step, delay);
-    };
-    step();
-  });
-}
-
 export async function listThreads(): Promise<AgentThread[]> {
   const threads = await request<BackendThread[]>("/threads");
   return threads.map(mapThread);
@@ -310,10 +291,16 @@ export async function createThread(title?: string): Promise<AgentThread> {
   return mapThread(thread);
 }
 
+/**
+ * Start a run against the backend. The backend now persists streaming assistant
+ * messages into Convex in real time, so the UI should rely on reactive
+ * `useQuery` subscriptions to render live updates rather than local typewriter
+ * replay. This function fires the POST and throws on error but does not
+ * attempt local text animation.
+ */
 export async function startRun(
   threadId: string,
   userMessage: string,
-  onChunk: (text: string) => void
 ): Promise<void> {
   const result = await request<RunWithEventsResponse>("/runs", {
     method: "POST",
@@ -327,17 +314,6 @@ export async function startRun(
 
   if (result.run.error_message) {
     throw new Error(result.run.error_message);
-  }
-
-  // Find the final assistant text from events and reveal it with a typewriter animation
-  const finalText = result.events
-    .filter((e) => e.event === "assistant.delta")
-    .map((e) => e.data.text as string)
-    .filter(Boolean)
-    .at(-1);
-
-  if (finalText) {
-    await typewriterReveal(finalText, onChunk);
   }
 }
 

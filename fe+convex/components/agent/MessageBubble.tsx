@@ -12,7 +12,7 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, streamingText }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isTool = message.role === "tool";
-  const isStreaming = !!streamingText;
+  const isStreaming = !!streamingText || !!message.isStreaming;
 
   if (isTool) {
     return <ToolResultRow message={message} />;
@@ -33,6 +33,7 @@ export function MessageBubble({ message, streamingText }: MessageBubbleProps) {
             block={block}
             isUser={isUser}
             streamingText={i === message.content.length - 1 ? streamingText : undefined}
+            isMessageStreaming={i === message.content.length - 1 ? message.isStreaming : undefined}
           />
         ))}
 
@@ -56,14 +57,16 @@ function ContentBlockView({
   block,
   isUser,
   streamingText,
+  isMessageStreaming,
 }: {
   block: ContentBlock;
   isUser: boolean;
   streamingText?: string;
+  isMessageStreaming?: boolean;
 }) {
   if (block.type === "text") {
     const text = streamingText ?? block.text;
-    const isStreaming = !!streamingText;
+    const isStreaming = !!streamingText || !!isMessageStreaming;
     return (
       <div
         className={`rounded-[12px] px-3.5 py-2.5 text-[13.5px] leading-[1.55] ${

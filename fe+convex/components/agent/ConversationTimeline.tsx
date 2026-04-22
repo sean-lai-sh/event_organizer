@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from "./types";
 import { MessageBubble } from "./MessageBubble";
 import { ApprovalCard } from "./ApprovalCard";
@@ -9,9 +11,6 @@ import { AgentInput } from "./AgentInput";
 import { TraceRail } from "./TraceRail";
 import {
   createThread,
-  getThreadState,
-  getThreadMessages,
-  getThreadApprovals,
   startRun,
 } from "./adapters/runtime";
 
@@ -24,6 +23,110 @@ interface ConversationTimelineProps {
   onDraftChange?: (value: string) => void;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Map Convex document shapes into the frontend AgentMessage /        */
+/*  AgentApproval / AgentTraceStep types so existing rendering         */
+/*  components stay stable.                                            */
+/* ------------------------------------------------------------------ */
+
+type ConvexMessage = {
+  external_id: string;
+  thread_id: string;
+  role: string;
+  status?: string;
+  plain_text?: string | null;
+  content_blocks: Array<{
+    kind: string;
+    label?: string | null;
+    text?: string | null;
+    mime_type?: string | null;
+    data_json?: string | null;
+    url?: string | null;
+  }>;
+  created_at: number;
+};
+
+type ConvexApproval = {
+  external_id: string;
+  thread_id: string;
+  run_id: string;
+  title: string;
+  payload_json?: string | null;
+  status: string;
+  risk_level: string;
+  requested_at: number;
+};
+
+type ConvexTrace = {
+  external_id: string;
+  run_id: string;
+  kind: string;
+  sequence_number: number;
+  summary: string;
+  detail_json?: string | null;
+  status: string;
+  created_at: number;
+};
+
+function mapConvexMessage(msg: ConvexMessage): AgentMessage {
+  const content = msg.content_blocks.map((block) => {
+    if (block.kind === "text" || block.kind === "markdown") {
+      return {
+        type: "text" as const,
+        text: block.text ?? "",
+        format: block.kind === "markdown" ? ("markdown" as const) : ("plain" as const),
+      };
+    }
+    if (block.kind === "tool_use") {
+      let input: Record<string, unknown> | undefined;
+      if (block.data_json) {
+        try { input = JSON.parse(block.data_json); } catch { /* ignore */ }
+      }
+      return { type: "tool_use" as const, name: block.label ?? "tool", input };
+    }
+    return { type: "tool_result" as const, content: block.text ?? block.label ?? block.kind };
+  });
+
+  return {
+    id: msg.external_id,
+    threadId: msg.thread_id as string,
+    role: msg.role === "tool" ? "tool" : msg.role === "user" ? "user" : "assistant",
+    content: content.length > 0 ? content : [{ type: "text", text: msg.plain_text ?? "" }],
+    createdAt: msg.created_at,
+    isStreaming: msg.status === "streaming",
+  };
+}
+
+function mapConvexApproval(a: ConvexApproval): AgentApproval {
+  let proposedPayload: Record<string, unknown> = {};
+  if (a.payload_json) {
+    try { proposedPayload = JSON.parse(a.payload_json); } catch { /* ignore */ }
+  }
+  return {
+    id: a.external_id,
+    threadId: a.thread_id as string,
+    runId: a.run_id as string,
+    requestedAction: a.title,
+    riskLevel: a.risk_level as AgentApproval["riskLevel"],
+    proposedPayload,
+    status: a.status as AgentApproval["status"],
+    createdAt: a.requested_at,
+  };
+}
+
+function mapConvexTrace(t: ConvexTrace): AgentTraceStep {
+  return {
+    id: t.external_id,
+    runId: t.run_id as string,
+    kind: t.kind as AgentTraceStep["kind"],
+    sequenceNumber: t.sequence_number,
+    summary: t.summary,
+    detailJson: t.detail_json,
+    status: t.status,
+    createdAt: t.created_at,
+  };
+}
+
 export function ConversationTimeline({
   thread,
   onArtifactsChange,
@@ -32,49 +135,60 @@ export function ConversationTimeline({
   draftValue,
   onDraftChange,
 }: ConversationTimelineProps) {
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [approvals, setApprovals] = useState<AgentApproval[]>([]);
-  const [traces, setTraces] = useState<AgentTraceStep[]>([]);
-  const [traceCollapsed, setTraceCollapsed] = useState(true);
-  const [streamingText, setStreamingText] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [traceCollapsed, setTraceCollapsed] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadIdRef = useRef<string | null>(null);
 
-  async function refreshThreadState(threadId: string) {
-    const state = await getThreadState(threadId);
-    if (threadIdRef.current !== threadId) return;
-    setMessages(state.messages);
-    setApprovals(state.approvals);
-    setTraces(state.traces ?? []);
-    setLoaded(true);
-  }
+  // Reactive Convex query: automatically updates when the backend patches
+  // messages, approvals, traces, or run status via append_message / upsert_*.
+  const threadState = useQuery(
+    api.agentState.getThreadState,
+    thread?.id ? { external_id: thread.id } : "skip",
+  );
+
+  // Derive messages, approvals, and traces from the reactive query result.
+  const messages: AgentMessage[] = threadState
+    ? (threadState.messages as unknown as ConvexMessage[]).map(mapConvexMessage)
+    : [];
+
+  const approvals: AgentApproval[] = threadState
+    ? (threadState.approvals as unknown as ConvexApproval[]).map(mapConvexApproval)
+    : [];
+
+  const traces: AgentTraceStep[] = threadState
+    ? (threadState.traces as unknown as ConvexTrace[]).map(mapConvexTrace)
+    : [];
+
+  const loaded = thread ? threadState !== undefined : true;
+
+  // Detect run completion to clear the running flag and refresh artifacts.
+  const runs = threadState?.runs ?? [];
+  const latestRun = runs[0] as { status?: string } | undefined;
+  const latestRunStatus = latestRun?.status;
 
   useEffect(() => {
-    if (!thread) {
-      threadIdRef.current = null;
-      setMessages([]);
-      setApprovals([]);
-      setTraces([]);
-      setLoaded(true);
-      return;
+    if (!isRunning) return;
+    if (
+      latestRunStatus === "completed" ||
+      latestRunStatus === "error" ||
+      latestRunStatus === "paused_approval"
+    ) {
+      setIsRunning(false);
+      onArtifactsChange?.(thread?.id);
     }
+  }, [latestRunStatus, isRunning, thread?.id, onArtifactsChange]);
 
-    if (thread.id === threadIdRef.current) return;
-    threadIdRef.current = thread.id;
-    setLoaded(false);
-    setMessages([]);
-    setApprovals([]);
-    setTraces([]);
-    setStreamingText(null);
-
-    void refreshThreadState(thread.id);
+  // Keep threadIdRef in sync for scroll behavior.
+  useEffect(() => {
+    threadIdRef.current = thread?.id ?? null;
   }, [thread]);
 
+  // Auto-scroll when messages change or while streaming.
+  const streamingMessage = messages.find((m) => m.isStreaming);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, streamingText]);
+  }, [messages.length, streamingMessage?.id]);
 
   async function handleSend(text: string) {
     if (isRunning) return;
@@ -84,37 +198,25 @@ export function ConversationTimeline({
       workingThread = await createThread();
       onThreadCreated?.(workingThread);
       threadIdRef.current = workingThread.id;
-      setLoaded(true);
-      setMessages([]);
-      setApprovals([]);
-      setTraces([]);
     }
 
     setIsRunning(true);
-    setStreamingText("");
     setTraceCollapsed(true);
 
-    const optimisticUser: AgentMessage = {
-      id: `opt-user-${Date.now()}`,
-      threadId: workingThread.id,
-      role: "user",
-      content: [{ type: "text", text }],
-      createdAt: Date.now(),
-    };
-    setMessages((prev) => [...prev, optimisticUser]);
-
     try {
-      await startRun(workingThread.id, text, (chunk) => setStreamingText(chunk));
-      // After run completes, refresh full state to get traces, messages, approvals
-      await refreshThreadState(workingThread.id);
-      onArtifactsChange?.(workingThread.id);
-    } finally {
+      // Use workingThread.id (not thread.id) so the first send from an
+      // empty /agent state uses the just-created thread id.
+      await startRun(workingThread.id, text);
+    } catch {
       setIsRunning(false);
-      setStreamingText(null);
     }
+    // isRunning is cleared reactively when the Convex run status changes.
   }
 
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
+
+  // Check if there is a streaming assistant message being patched live.
+  const hasStreamingBubble = messages.some((m) => m.isStreaming);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -135,29 +237,17 @@ export function ConversationTimeline({
               <MessageBubble key={msg.id} message={msg} />
             ))}
 
-            {isRunning && streamingText !== null && (
+            {/* Show thinking dots only while running and no streaming bubble yet */}
+            {isRunning && !hasStreamingBubble && (
               <div className="flex gap-3">
                 <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A]">
                   <span className="text-[9px] font-bold text-white">AI</span>
                 </div>
                 <div className="max-w-[78%]">
                   <div className="rounded-[12px] rounded-tl-[4px] bg-[#F4F4F4] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-[#111111]">
-                    {streamingText || (
-                      <span className="flex items-center gap-1.5">
-                        <ThinkingDots />
-                      </span>
-                    )}
-                    {streamingText && (
-                      <>
-                        {" "}
-                        <span
-                          className="inline-block h-[13px] w-[2px] translate-y-[1px] rounded-full bg-[#555555] opacity-60"
-                          style={{
-                            animation: "cursorBlink 900ms ease-in-out infinite",
-                          }}
-                        />
-                      </>
-                    )}
+                    <span className="flex items-center gap-1.5">
+                      <ThinkingDots />
+                    </span>
                   </div>
                 </div>
               </div>
@@ -168,7 +258,6 @@ export function ConversationTimeline({
                 key={approval.id}
                 approval={approval}
                 onDecision={async () => {
-                  await refreshThreadState(thread.id);
                   onArtifactsChange?.();
                 }}
               />
@@ -196,13 +285,6 @@ export function ConversationTimeline({
         value={draftValue}
         onValueChange={onDraftChange}
       />
-
-      <style>{`
-        @keyframes cursorBlink {
-          0%, 100% { opacity: 0.6; }
-          50% { opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }
