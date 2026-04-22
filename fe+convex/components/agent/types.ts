@@ -11,6 +11,7 @@ export type ArtifactType =
 export type RiskLevel = "low" | "medium" | "high";
 
 export interface AgentThread {
+  _id?: string;
   id: string;
   title: string;
   channel: "web" | "discord";

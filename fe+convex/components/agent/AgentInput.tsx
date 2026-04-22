@@ -7,21 +7,33 @@ interface AgentInputProps {
   onSubmit: (text: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
 }
 
 export function AgentInput({
   onSubmit,
   disabled = false,
-  placeholder = "Message the agent…",
+  placeholder = "Message the agent...",
+  value,
+  onValueChange,
 }: AgentInputProps) {
-  const [value, setValue] = useState("");
+  const [internalValue, setInternalValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerValue = value ?? internalValue;
+
+  function setComposerValue(nextValue: string) {
+    if (value === undefined) {
+      setInternalValue(nextValue);
+    }
+    onValueChange?.(nextValue);
+  }
 
   function handleSubmit() {
-    const trimmed = value.trim();
+    const trimmed = composerValue.trim();
     if (!trimmed || disabled) return;
     onSubmit(trimmed);
-    setValue("");
+    setComposerValue("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -41,15 +53,15 @@ export function AgentInput({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
 
-  const canSend = value.trim().length > 0 && !disabled;
+  const canSend = composerValue.trim().length > 0 && !disabled;
 
   return (
     <div className="border-t border-[#EBEBEB] bg-[#FFFFFF] px-4 py-3">
       <div className="relative flex items-end gap-2 rounded-[10px] border border-[#E0E0E0] bg-[#FAFAFA] px-3 py-2.5 transition-colors duration-100 focus-within:border-[#CFCFCF] focus-within:bg-[#FFFFFF]">
         <textarea
           ref={textareaRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
+          value={composerValue}
+          onChange={(e) => setComposerValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
           disabled={disabled}
@@ -69,7 +81,7 @@ export function AgentInput({
         </button>
       </div>
       <p className="mt-1.5 px-1 text-[11px] text-[#BBBBBB]">
-        Enter to send · Shift+Enter for new line
+        Enter to send. Shift+Enter for new line
       </p>
     </div>
   );

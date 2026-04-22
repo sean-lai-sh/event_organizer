@@ -1,21 +1,36 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { AgentMessage, AgentApproval, AgentThread } from "./types";
 import { MessageBubble } from "./MessageBubble";
 import { ApprovalCard } from "./ApprovalCard";
 import { AgentInput } from "./AgentInput";
 import {
+  createThread,
   getThreadState,
+  getThreadMessages,
+  getThreadApprovals,
   startRun,
 } from "./adapters/runtime";
 
 interface ConversationTimelineProps {
   thread: AgentThread | null;
-  onArtifactsChange?: () => void;
+  onArtifactsChange?: (threadId?: string) => void | Promise<void>;
+  onThreadCreated?: (thread: AgentThread) => void;
+  emptyState?: ReactNode;
+  draftValue?: string;
+  onDraftChange?: (value: string) => void;
 }
 
-export function ConversationTimeline({ thread, onArtifactsChange }: ConversationTimelineProps) {
+export function ConversationTimeline({
+  thread,
+  onArtifactsChange,
+  onThreadCreated,
+  emptyState,
+  draftValue,
+  onDraftChange,
+}: ConversationTimelineProps) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [approvals, setApprovals] = useState<AgentApproval[]>([]);
   const [streamingText, setStreamingText] = useState<string | null>(null);
@@ -34,6 +49,7 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
 
   useEffect(() => {
     if (!thread) {
+      threadIdRef.current = null;
       setMessages([]);
       setApprovals([]);
       setLoaded(true);
@@ -50,20 +66,29 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
     void refreshThreadState(thread.id);
   }, [thread]);
 
-  // Scroll to bottom when messages change or streaming updates
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, streamingText]);
 
   async function handleSend(text: string) {
-    if (!thread || isRunning) return;
+    if (isRunning) return;
+
+    let workingThread = thread;
+    if (!workingThread) {
+      workingThread = await createThread();
+      onThreadCreated?.(workingThread);
+      threadIdRef.current = workingThread.id;
+      setLoaded(true);
+      setMessages([]);
+      setApprovals([]);
+    }
+
     setIsRunning(true);
     setStreamingText("");
 
-    // Optimistically show user message
     const optimisticUser: AgentMessage = {
       id: `opt-user-${Date.now()}`,
-      threadId: thread.id,
+      threadId: workingThread.id,
       role: "user",
       content: [{ type: "text", text }],
       createdAt: Date.now(),
@@ -71,9 +96,22 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
     setMessages((prev) => [...prev, optimisticUser]);
 
     try {
-      await startRun(thread.id, text, (chunk) => setStreamingText(chunk));
-      await refreshThreadState(thread.id);
-      onArtifactsChange?.();
+      await startRun(
+        thread.id,
+        text,
+        (chunk) => setStreamingText(chunk),
+        (done) => {
+          setStreamingText(null);
+          // Replace optimistic user message with real messages from adapter
+          setMessages((prev) => {
+            const withoutOptimistic = prev.filter(
+              (m) => m.id !== optimisticUser.id,
+            );
+            return [...withoutOptimistic, optimisticUser, done];
+          });
+          onArtifactsChange?.();
+        },
+      );
     } finally {
       setIsRunning(false);
       setStreamingText(null);
@@ -82,29 +120,25 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
 
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
 
-  if (!thread) {
-    return (
-      <div className="flex flex-1 flex-col">
-        <EmptyThreadState />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto">
-        {!loaded ? (
+        {!thread ? (
+          (emptyState ?? (
+            <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
+              Send a message to get started.
+            </div>
+          ))
+        ) : !loaded ? (
           <MessageSkeletons />
         ) : messages.length === 0 && !isRunning ? (
-          <ThreadEmptyState threadTitle={thread.title} />
+          (emptyState ?? <ThreadEmptyState threadTitle={thread.title} />)
         ) : (
           <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
 
-            {/* Streaming assistant message */}
             {isRunning && streamingText !== null && (
               <div className="flex gap-3">
                 <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A]">
@@ -122,7 +156,9 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
                         {" "}
                         <span
                           className="inline-block h-[13px] w-[2px] translate-y-[1px] rounded-full bg-[#555555] opacity-60"
-                          style={{ animation: "cursorBlink 900ms ease-in-out infinite" }}
+                          style={{
+                            animation: "cursorBlink 900ms ease-in-out infinite",
+                          }}
                         />
                       </>
                     )}
@@ -131,7 +167,6 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
               </div>
             )}
 
-            {/* Pending approvals */}
             {pendingApprovals.map((approval) => (
               <ApprovalCard
                 key={approval.id}
@@ -148,11 +183,12 @@ export function ConversationTimeline({ thread, onArtifactsChange }: Conversation
         )}
       </div>
 
-      {/* Input */}
       <AgentInput
         onSubmit={handleSend}
         disabled={isRunning}
-        placeholder={isRunning ? "Agent is working…" : "Message the agent…"}
+        placeholder={isRunning ? "Agent is working..." : "Message the agent..."}
+        value={draftValue}
+        onValueChange={onDraftChange}
       />
 
       <style>{`
@@ -192,7 +228,10 @@ function MessageSkeletons() {
   return (
     <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
       {[70, 55, 80].map((w, i) => (
-        <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}>
+        <div
+          key={i}
+          className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}
+        >
           <div
             className="h-9 animate-pulse rounded-[12px] bg-[#F0F0F0]"
             style={{ width: `${w}%` }}
@@ -203,19 +242,13 @@ function MessageSkeletons() {
   );
 }
 
-function EmptyThreadState() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-      <p className="text-[13px] text-[#BBBBBB]">Select a conversation or start a new one.</p>
-    </div>
-  );
-}
-
 function ThreadEmptyState({ threadTitle }: { threadTitle: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
       <p className="text-[13.5px] font-medium text-[#333333]">{threadTitle}</p>
-      <p className="text-[12.5px] text-[#BBBBBB]">Send a message to get started.</p>
+      <p className="text-[12.5px] text-[#BBBBBB]">
+        Send a message to get started.
+      </p>
     </div>
   );
 }

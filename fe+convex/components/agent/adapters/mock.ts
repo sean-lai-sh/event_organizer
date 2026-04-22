@@ -220,6 +220,29 @@ export async function createThread(title?: string): Promise<AgentThread> {
   return thread;
 }
 
+export async function renameThread(threadId: string, title: string): Promise<AgentThread> {
+  await delay(120);
+  const thread = THREADS.find((t) => t.id === threadId);
+  if (!thread) {
+    throw new Error(`Thread not found: ${threadId}`);
+  }
+  thread.title = title;
+  thread.lastActivityAt = Date.now();
+  return { ...thread };
+}
+
+export async function deleteThread(threadId: string): Promise<void> {
+  await delay(140);
+  const index = THREADS.findIndex((t) => t.id === threadId);
+  if (index === -1) {
+    throw new Error(`Thread not found: ${threadId}`);
+  }
+
+  THREADS.splice(index, 1);
+  delete MESSAGES[threadId];
+  delete APPROVALS[threadId];
+}
+
 /**
  * Simulates streaming a modal run response by calling onChunk incrementally.
  * Replace with SSE from GET /agent/runs/:id/stream.
