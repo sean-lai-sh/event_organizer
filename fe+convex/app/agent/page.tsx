@@ -3,9 +3,6 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { LayoutDashboard } from "lucide-react";
-import type { FunctionReference } from "convex/server";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { ThreadRail } from "@/components/agent/ThreadRail";
 import { ConversationTimeline } from "@/components/agent/ConversationTimeline";
 import { ArtifactCanvas } from "@/components/agent/ArtifactCanvas";
@@ -19,14 +16,6 @@ import {
 } from "@/components/agent/adapters/runtime";
 
 export default function AgentPage() {
-  const agentApi = (
-    api as unknown as {
-      agent: {
-        renameThread: FunctionReference<"mutation", "public">;
-      };
-    }
-  ).agent;
-  const renameThreadMutation = useMutation(agentApi.renameThread);
   const [activeThread, setActiveThread] = useState<AgentThread | null>(null);
   const [artifacts, setArtifacts] = useState<AgentArtifact[]>([]);
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -68,9 +57,6 @@ export default function AgentPage() {
         }}
         onRenameThread={async (threadId, title) => {
           await renameThread(threadId, title);
-          await renameThreadMutation({ external_id: threadId, title }).catch(
-            () => undefined,
-          );
           setActiveThread((prev) =>
             prev && prev.id === threadId ? { ...prev, title } : prev,
           );
