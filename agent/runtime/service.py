@@ -22,9 +22,11 @@ from .contracts import (
     ThreadCreateRequest,
     ThreadRecord,
     ThreadStateResponse,
+    TraceStepKind,
+    TraceStepRecord,
 )
 from .convex_sync import ConvexAgentStateSync
-from .normalize import make_report_artifact, text_block
+from .normalize import make_report_artifact, make_trace_step, text_block
 from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
 from .store import InMemoryRuntimeStore
 from .tool_expectations import (
@@ -131,6 +133,8 @@ class AgentRuntimeService:
             await self._store.upsert_approval(approval)
         for link in hydrated.context_links:
             await self._store.put_context_link(link)
+        for trace in hydrated.traces:
+            await self._store.append_trace(trace)
 
         return hydrated
 
@@ -163,6 +167,14 @@ class AgentRuntimeService:
             data={"status": run.status.value},
         )
 
+        # Emit planning trace step
+        await self._emit_trace(
+            thread_id=request.thread_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.PLANNING,
+            summary="Analyzing request and planning execution strategy.",
+        )
+
         await self._append_message(
             thread_id=request.thread_id,
             run_id=run.external_id,
@@ -176,7 +188,8 @@ class AgentRuntimeService:
         if not resolved:
             raise HTTPException(status_code=500, detail="Run state missing after execution")
         events = await self._store.list_stream_events(run.external_id)
-        return RunWithEventsResponse(run=resolved, events=events)
+        traces = await self._store.list_traces_for_run(run.external_id)
+        return RunWithEventsResponse(run=resolved, events=events, traces=traces)
 
     async def submit_approval(self, approval_id: str, request: ApprovalDecisionRequest) -> ApprovalDecisionResponse:
         decision_status = ApprovalStatus(request.decision)
@@ -210,6 +223,15 @@ class AgentRuntimeService:
             data={"approval_id": approval.external_id, "decision": approval.status.value},
         )
 
+        # Emit approval resolution trace
+        await self._emit_trace(
+            thread_id=approval.thread_external_id,
+            run_id=approval.run_external_id,
+            kind=TraceStepKind.APPROVAL_RESOLUTION,
+            summary=f"Approval {approval.status.value}: {approval.title}",
+            detail_json=json.dumps({"decision": approval.status.value, "note": request.note}),
+        )
+
         run = await self._store.get_run(approval.run_external_id)
         if not run:
             raise HTTPException(status_code=500, detail="Run missing for approval")
@@ -238,6 +260,12 @@ class AgentRuntimeService:
                 created_at=now,
                 data={"status": run.status.value},
             )
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.RUN_COMPLETED,
+                summary="Run completed: action was rejected by user.",
+            )
             return ApprovalDecisionResponse(approval=approval, run=run)
 
         pending_action = await self._store.pop_pending_action(run.external_id)
@@ -261,9 +289,23 @@ class AgentRuntimeService:
         tool_payload = pending_action.payload.get("tool_input") if pending_action else None
         tool_result: object | None = None
         if isinstance(tool_payload, dict):
+            # Emit tool start trace
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.TOOL_START,
+                summary=f"Executing approved tool: {action_label}",
+                detail_json=json.dumps({"tool": action_label, "input": tool_payload}),
+            )
             try:
                 tool_result = await execute_tool_call(action_label, tool_payload)
             except Exception as exc:
+                await self._emit_trace(
+                    thread_id=run.thread_external_id,
+                    run_id=run.external_id,
+                    kind=TraceStepKind.TOOL_FAILURE,
+                    summary=f"Tool {action_label} failed: {str(exc)[:200]}",
+                )
                 await self._mark_run_error(run=run, message=str(exc))
                 failed = await self._store.get_run(run.external_id)
                 if not failed:
@@ -275,6 +317,13 @@ class AgentRuntimeService:
                 event="tool.completed",
                 created_at=_now_ms(),
                 data={"name": action_label, "result": self._serialize_tool_result(tool_result)},
+            )
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.TOOL_COMPLETION,
+                summary=f"Tool {action_label} completed successfully.",
+                detail_json=json.dumps({"tool": action_label, "result": self._serialize_tool_result(tool_result)}),
             )
             await self._append_message(
                 thread_id=run.thread_external_id,
@@ -298,6 +347,15 @@ class AgentRuntimeService:
             created_at=_now_ms(),
             data={},
         )
+
+        # Emit thinking trace for post-approval summarization
+        await self._emit_trace(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.THINKING,
+            summary="Summarizing approved action outcome.",
+        )
+
         await self._execute_text_run(
             run=run,
             user_input=(
@@ -367,6 +425,21 @@ class AgentRuntimeService:
             created_at=now,
             data={"status": run.status.value},
         )
+
+        # Emit approval pause trace
+        await self._emit_trace(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.APPROVAL_PAUSE,
+            summary=f"Waiting for approval: {action.name}",
+            detail_json=json.dumps({
+                "action": action.name,
+                "risk_level": decision.risk_level.value,
+                "reason": decision.reason,
+            }),
+            status="waiting",
+        )
+
         return run
 
     async def _execute_run(self, *, run: RunRecord, user_input: str, max_tokens: int) -> None:
@@ -389,10 +462,25 @@ class AgentRuntimeService:
                 created_at=_now_ms(),
                 data={"name": action.name, "class": action.action_class.value},
             )
+            # Emit tool selection trace
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.TOOL_SELECTION,
+                summary=f"Selected tool: {action.name} ({action.action_class.value})",
+            )
 
         if action and self._policy.evaluate(action).requires_approval:
             await self._pause_for_approval(run=run, action=action)
             return
+
+        # Emit thinking trace for text generation
+        await self._emit_trace(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.THINKING,
+            summary="Generating response.",
+        )
 
         await self._execute_text_run(run=run, user_input=user_input, max_tokens=max_tokens)
 
@@ -401,6 +489,12 @@ class AgentRuntimeService:
         try:
             result = await self._adapter.run_agent(user_prompt=user_input)
         except Exception as exc:
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.RUN_ERROR,
+                summary=f"Agent execution failed: {str(exc)[:200]}",
+            )
             await self._mark_run_error(run=run, message=str(exc))
             return
 
@@ -415,6 +509,14 @@ class AgentRuntimeService:
                     "kind": expectation.kind if expectation else "unknown",
                     "reason": "relevant_tools_not_used",
                 },
+            )
+            # Emit guardrail retry trace
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.GUARDRAIL_RETRY,
+                summary="Retrying: relevant tools were not used in first attempt.",
+                detail_json=json.dumps({"kind": expectation.kind if expectation else "unknown"}),
             )
             try:
                 result = await self._adapter.run_agent(
@@ -448,16 +550,41 @@ class AgentRuntimeService:
                 created_at=_now_ms(),
                 data={"name": trace.name, "input": trace.tool_input},
             )
+            # Emit tool selection trace
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.TOOL_SELECTION,
+                summary=f"Using tool: {trace.name}",
+                detail_json=json.dumps({"tool": trace.name, "input": trace.tool_input}),
+            )
             if trace.result is not None:
+                is_error = trace.is_error
                 await self._store.append_stream_event(
                     run_id=run.external_id,
-                    event="tool.completed" if not trace.is_error else "tool.failed",
+                    event="tool.completed" if not is_error else "tool.failed",
                     created_at=_now_ms(),
                     data={
                         "name": trace.name,
                         "result": self._serialize_tool_result(trace.result),
-                        "is_error": trace.is_error,
+                        "is_error": is_error,
                     },
+                )
+                # Emit tool completion/failure trace
+                await self._emit_trace(
+                    thread_id=run.thread_external_id,
+                    run_id=run.external_id,
+                    kind=TraceStepKind.TOOL_FAILURE if is_error else TraceStepKind.TOOL_COMPLETION,
+                    summary=(
+                        f"Tool {trace.name} failed: {self._tool_result_text(trace.result)[:200]}"
+                        if is_error
+                        else f"Tool {trace.name} completed."
+                    ),
+                    detail_json=json.dumps({
+                        "tool": trace.name,
+                        "result": self._serialize_tool_result(trace.result),
+                        "is_error": is_error,
+                    }),
                 )
 
         if result.blocked_action:
@@ -482,6 +609,12 @@ class AgentRuntimeService:
                     data={"text": partial_text},
                 )
         except Exception as exc:
+            await self._emit_trace(
+                thread_id=run.thread_external_id,
+                run_id=run.external_id,
+                kind=TraceStepKind.RUN_ERROR,
+                summary=f"Text generation failed: {str(exc)[:200]}",
+            )
             await self._mark_run_error(run=run, message=str(exc))
             return
 
@@ -514,6 +647,15 @@ class AgentRuntimeService:
             data={"artifact_id": artifact.external_id, "kind": artifact.kind.value},
         )
 
+        # Emit artifact generation trace
+        await self._emit_trace(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.ARTIFACT_GENERATION,
+            summary=f"Generated artifact: {artifact.title}",
+            detail_json=json.dumps({"artifact_id": artifact.external_id, "kind": artifact.kind.value}),
+        )
+
         now = _now_ms()
         completed = run.model_copy(
             update={
@@ -531,6 +673,14 @@ class AgentRuntimeService:
             event="run.completed",
             created_at=now,
             data={"status": completed.status.value},
+        )
+
+        # Emit run completed trace
+        await self._emit_trace(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.RUN_COMPLETED,
+            summary="Run completed successfully.",
         )
 
     async def _mark_run_error(self, *, run: RunRecord, message: str) -> None:
@@ -551,6 +701,53 @@ class AgentRuntimeService:
             created_at=now,
             data={"message": message},
         )
+
+        # Emit run error trace
+        await self._emit_trace(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.RUN_ERROR,
+            summary=f"Run failed: {message[:200]}",
+        )
+
+    async def _emit_trace(
+        self,
+        *,
+        thread_id: str,
+        run_id: str,
+        kind: TraceStepKind,
+        summary: str,
+        detail_json: str | None = None,
+        status: str = "completed",
+    ) -> TraceStepRecord:
+        seq = await self._store.next_trace_sequence(run_id)
+        trace = make_trace_step(
+            external_id=f"trace_{uuid4().hex}",
+            thread_id=thread_id,
+            run_id=run_id,
+            kind=kind,
+            sequence_number=seq,
+            summary=summary,
+            detail_json=detail_json,
+            status=status,
+        )
+        await self._store.append_trace(trace)
+        await self._sync.append_trace(trace)
+
+        # Also emit as a stream event so live consumers see it
+        await self._store.append_stream_event(
+            run_id=run_id,
+            event="trace.step",
+            created_at=trace.created_at,
+            data={
+                "trace_id": trace.external_id,
+                "kind": kind.value,
+                "summary": summary,
+                "status": status,
+                "sequence": seq,
+            },
+        )
+        return trace
 
     async def _append_message(
         self,
@@ -692,6 +889,23 @@ class AgentRuntimeService:
             if isinstance(item, dict)
         ]
 
+        traces = [
+            TraceStepRecord(
+                external_id=str(item.get("external_id")),
+                thread_external_id=thread.external_id,
+                run_external_id=str(item.get("run_external_id", item.get("run_id", ""))),
+                kind=item.get("kind", "thinking"),
+                sequence_number=item.get("sequence_number", 0),
+                summary=item.get("summary", ""),
+                detail_json=item.get("detail_json"),
+                status=item.get("status", "completed"),
+                created_at=item.get("created_at") or _now_ms(),
+                updated_at=item.get("updated_at") or _now_ms(),
+            )
+            for item in state.get("traces", [])
+            if isinstance(item, dict)
+        ]
+
         return ThreadStateResponse(
             thread=thread,
             runs=runs,
@@ -699,6 +913,7 @@ class AgentRuntimeService:
             artifacts=artifacts,
             approvals=approvals,
             context_links=context_links,
+            traces=traces,
         )
 
     def _hydrate_thread_record(self, item: dict) -> ThreadRecord:

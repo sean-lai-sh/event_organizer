@@ -31,6 +31,21 @@ class ApprovalStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class TraceStepKind(str, Enum):
+    PLANNING = "planning"
+    TOOL_SELECTION = "tool_selection"
+    TOOL_START = "tool_start"
+    TOOL_COMPLETION = "tool_completion"
+    TOOL_FAILURE = "tool_failure"
+    APPROVAL_PAUSE = "approval_pause"
+    APPROVAL_RESOLUTION = "approval_resolution"
+    ARTIFACT_GENERATION = "artifact_generation"
+    THINKING = "thinking"
+    GUARDRAIL_RETRY = "guardrail_retry"
+    RUN_COMPLETED = "run_completed"
+    RUN_ERROR = "run_error"
+
+
 class ArtifactKind(str, Enum):
     METRIC_GROUP = "metric_group"
     TABLE = "table"
@@ -142,6 +157,21 @@ class ArtifactRecord(BaseModel):
     updated_at: int
 
 
+class TraceStepRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_id: str
+    thread_external_id: str
+    run_external_id: str
+    kind: TraceStepKind
+    sequence_number: int
+    summary: str
+    detail_json: str | None = None
+    status: str = "completed"
+    created_at: int
+    updated_at: int
+
+
 class ApprovalRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -210,6 +240,7 @@ class ThreadStateResponse(BaseModel):
     artifacts: list[ArtifactRecord]
     approvals: list[ApprovalRecord]
     context_links: list[ContextLinkRecord]
+    traces: list[TraceStepRecord] = Field(default_factory=list)
 
 
 class RunWithEventsResponse(BaseModel):
@@ -217,6 +248,7 @@ class RunWithEventsResponse(BaseModel):
 
     run: RunRecord
     events: list[StreamEvent]
+    traces: list[TraceStepRecord] = Field(default_factory=list)
 
 
 class ApprovalDecisionResponse(BaseModel):

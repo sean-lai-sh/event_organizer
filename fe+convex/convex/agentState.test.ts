@@ -20,6 +20,7 @@ type TableName =
   | "agent_messages"
   | "agent_artifacts"
   | "agent_approvals"
+  | "agent_traces"
   | "agent_context_links";
 
 type TableRow = { _id: string } & Record<string, unknown>;
@@ -70,6 +71,7 @@ class FakeDb {
     agent_messages: 0,
     agent_artifacts: 0,
     agent_approvals: 0,
+    agent_traces: 0,
     agent_context_links: 0,
   };
 
@@ -79,6 +81,7 @@ class FakeDb {
     agent_messages: [],
     agent_artifacts: [],
     agent_approvals: [],
+    agent_traces: [],
     agent_context_links: [],
   };
 

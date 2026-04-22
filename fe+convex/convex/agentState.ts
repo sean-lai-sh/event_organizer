@@ -71,6 +71,13 @@ async function getApprovalByExternalId(ctx: AgentDbContext, externalId: string) 
     .unique();
 }
 
+async function getTraceByExternalId(ctx: AgentDbContext, externalId: string) {
+  return await ctx.db
+    .query("agent_traces")
+    .withIndex("by_external_id", (q) => q.eq("external_id", externalId))
+    .unique();
+}
+
 async function getContextLinkByKey(ctx: AgentDbContext, linkKey: string) {
   return await ctx.db
     .query("agent_context_links")
@@ -172,7 +179,7 @@ export const getThreadState = query({
   handler: async (ctx, args) => {
     const thread = await requireThread(ctx, args);
 
-    const [runs, messages, artifacts, approvals, context_links] = await Promise.all([
+    const [runs, messages, artifacts, approvals, traces, context_links] = await Promise.all([
       ctx.db
         .query("agent_runs")
         .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
@@ -190,6 +197,10 @@ export const getThreadState = query({
         .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
         .collect(),
       ctx.db
+        .query("agent_traces")
+        .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+        .collect(),
+      ctx.db
         .query("agent_context_links")
         .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
         .collect(),
@@ -201,6 +212,7 @@ export const getThreadState = query({
       messages: sortBySequenceAsc(messages),
       artifacts: sortByOrderAsc(artifacts),
       approvals: sortByRequestedDesc(approvals),
+      traces: sortBySequenceAsc(traces),
       context_links: sortByCreatedAsc(context_links),
     };
   },
@@ -214,7 +226,7 @@ export const getRunState = query({
   handler: async (ctx, args) => {
     const run = await requireRun(ctx, args);
 
-    const [messages, artifacts, approvals, context_links] = await Promise.all([
+    const [messages, artifacts, approvals, traces, context_links] = await Promise.all([
       ctx.db
         .query("agent_messages")
         .withIndex("by_run_id", (q) => q.eq("run_id", run._id))
@@ -228,6 +240,10 @@ export const getRunState = query({
         .withIndex("by_run_id", (q) => q.eq("run_id", run._id))
         .collect(),
       ctx.db
+        .query("agent_traces")
+        .withIndex("by_run_id", (q) => q.eq("run_id", run._id))
+        .collect(),
+      ctx.db
         .query("agent_context_links")
         .withIndex("by_run_id", (q) => q.eq("run_id", run._id))
         .collect(),
@@ -238,6 +254,7 @@ export const getRunState = query({
       messages: sortBySequenceAsc(messages),
       artifacts: sortByOrderAsc(artifacts),
       approvals: sortByRequestedDesc(approvals),
+      traces: sortBySequenceAsc(traces),
       context_links: sortByCreatedAsc(context_links),
     };
   },
@@ -597,6 +614,57 @@ export const resolveApproval = mutation({
     );
 
     return approval._id;
+  },
+});
+
+export const appendTrace = mutation({
+  args: {
+    thread_id: v.id("agent_threads"),
+    run_id: v.id("agent_runs"),
+    external_id: v.string(),
+    kind: v.string(),
+    sequence_number: v.number(),
+    summary: v.string(),
+    detail_json: v.optional(v.string()),
+    status: v.string(),
+    created_at: v.optional(v.number()),
+    updated_at: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const now = args.updated_at ?? Date.now();
+    const createdAt = args.created_at ?? now;
+    const existing = await getTraceByExternalId(ctx, args.external_id);
+
+    if (existing) {
+      await ctx.db.patch(
+        existing._id,
+        definedPatch({
+          thread_id: args.thread_id,
+          run_id: args.run_id,
+          kind: args.kind,
+          sequence_number: args.sequence_number,
+          summary: args.summary,
+          detail_json: args.detail_json,
+          status: args.status,
+          created_at: args.created_at,
+          updated_at: now,
+        })
+      );
+      return existing._id;
+    }
+
+    return await ctx.db.insert("agent_traces", {
+      thread_id: args.thread_id,
+      run_id: args.run_id,
+      external_id: args.external_id,
+      kind: args.kind,
+      sequence_number: args.sequence_number,
+      summary: args.summary,
+      detail_json: args.detail_json,
+      status: args.status,
+      created_at: createdAt,
+      updated_at: now,
+    });
   },
 });
 

@@ -14,6 +14,7 @@ from .contracts import (
     MessageRecord,
     RunRecord,
     ThreadRecord,
+    TraceStepRecord,
 )
 
 logger = logging.getLogger(__name__)
@@ -198,6 +199,34 @@ class ConvexAgentStateSync:
                 return await sb.mutation("agentState:resolveApproval", args)
         except Exception as exc:
             logger.warning("Convex approval resolve sync failed: %s", exc)
+            return None
+
+    async def append_trace(self, record: TraceStepRecord) -> str | None:
+        if not self._enabled:
+            return None
+
+        thread_convex_id = await self._ensure_thread_convex_id(record.thread_external_id)
+        run_convex_id = await self._ensure_run_convex_id(record.run_external_id)
+        if not thread_convex_id or not run_convex_id:
+            return None
+
+        args = {
+            "thread_id": thread_convex_id,
+            "run_id": run_convex_id,
+            "external_id": record.external_id,
+            "kind": record.kind.value,
+            "sequence_number": record.sequence_number,
+            "summary": record.summary,
+            "detail_json": record.detail_json,
+            "status": record.status,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+        }
+        try:
+            async with ConvexClient() as sb:
+                return await sb.mutation("agentState:appendTrace", args)
+        except Exception as exc:
+            logger.warning("Convex trace sync failed: %s", exc)
             return None
 
     async def upsert_context_link(self, thread_external_id: str, record: ContextLinkRecord, run_external_id: str | None = None) -> str | None:
