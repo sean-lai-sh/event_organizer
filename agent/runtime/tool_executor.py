@@ -14,6 +14,7 @@ try:
         list_events,
         search_contacts,
         update_contact,
+        create_event_safe,
         update_event_safe,
     )
 except ModuleNotFoundError:  # pragma: no cover - package import fallback
@@ -28,6 +29,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import fallback
         list_events,
         search_contacts,
         update_contact,
+        create_event_safe,
         update_event_safe,
     )
 
@@ -38,6 +40,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_contact": get_contact,
     "create_contact": create_contact,
     "update_contact": update_contact,
+    "create_event_safe": create_event_safe,
     "list_events": list_events,
     "get_event": get_event,
     "get_event_inbound_status": get_event_inbound_status,

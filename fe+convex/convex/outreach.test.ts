@@ -18,7 +18,7 @@ class FakeIndexRangeBuilder {
 class FakeQuery {
   constructor(private readonly rows: TableRow[], private readonly filters: Array<[string, unknown]> = []) {}
 
-  order(_direction: "asc" | "desc") {
+  order() {
     return this;
   }
 

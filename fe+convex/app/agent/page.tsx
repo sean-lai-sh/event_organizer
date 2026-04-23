@@ -9,7 +9,6 @@ import { ArtifactCanvas } from "@/components/agent/ArtifactCanvas";
 import { AgentEmptyState } from "@/components/AgentEmptyState";
 import type { AgentThread, AgentArtifact } from "@/components/agent/types";
 import {
-  createThread,
   deleteThread,
   getThreadArtifacts,
   renameThread,

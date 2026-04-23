@@ -20,7 +20,12 @@ export interface AgentThread {
   contextLinks?: ContextLink[];
 }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+export type ContentBlock =
+  | TextBlock
+  | ToolUseBlock
+  | ToolResultBlock
+  | FormRequestBlock
+  | ChoiceRequestBlock;
 
 export interface TextBlock {
   type: "text";
@@ -37,6 +42,64 @@ export interface ToolUseBlock {
 export interface ToolResultBlock {
   type: "tool_result";
   content: string;
+}
+
+export type QuestionEntity = "event";
+export type QuestionMode = "create" | "update";
+export type QuestionInputType =
+  | "text"
+  | "textarea"
+  | "date"
+  | "time"
+  | "select"
+  | "checkbox";
+
+export interface QuestionOption {
+  value: string;
+  label: string;
+}
+
+export interface FormRequestField {
+  key: string;
+  label: string;
+  inputType: QuestionInputType;
+  required?: boolean;
+  placeholder?: string;
+  defaultValue?: string | boolean;
+  options?: QuestionOption[];
+}
+
+export interface FormRequestPayload {
+  requestId: string;
+  entity: QuestionEntity;
+  mode: QuestionMode;
+  title: string;
+  submitLabel?: string;
+  fields: FormRequestField[];
+}
+
+export interface ChoiceRequestOption {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+export interface ChoiceRequestPayload {
+  requestId: string;
+  entity: QuestionEntity;
+  mode: QuestionMode;
+  question: string;
+  choices: ChoiceRequestOption[];
+}
+
+export interface FormRequestBlock {
+  type: "form_request";
+  payload: FormRequestPayload;
+}
+
+export interface ChoiceRequestBlock {
+  type: "choice_request";
+  payload: ChoiceRequestPayload;
 }
 
 export interface AgentMessage {

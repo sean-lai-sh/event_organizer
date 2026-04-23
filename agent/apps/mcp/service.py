@@ -139,6 +139,35 @@ async def update_contact(
 
 
 @mcp.tool()
+async def create_event_safe(
+    title: str,
+    event_date: str,
+    event_time: str | None = None,
+    event_end_time: str | None = None,
+    location: str | None = None,
+    description: str | None = None,
+    event_type: str | None = None,
+    target_profile: str | None = None,
+    needs_outreach: bool = False,
+    status: str = "draft",
+) -> str:
+    """Safely create a Convex event after required fields are known and approval is granted."""
+    async with ConvexClient() as convex:
+        return await convex.create_event_safe(
+            title=title,
+            event_date=event_date,
+            event_time=event_time,
+            event_end_time=event_end_time,
+            location=location,
+            description=description,
+            event_type=event_type,
+            target_profile=target_profile,
+            needs_outreach=needs_outreach,
+            status=status,
+        )
+
+
+@mcp.tool()
 async def list_events(status: str | None = None, limit: int = 50) -> list[dict]:
     """List Convex events, typically to find the newest relevant event before a follow-up read."""
     async with ConvexClient() as convex:
@@ -218,6 +247,7 @@ __all__ = [
     "get_contact",
     "create_contact",
     "update_contact",
+    "create_event_safe",
     "list_events",
     "get_event",
     "get_event_inbound_status",

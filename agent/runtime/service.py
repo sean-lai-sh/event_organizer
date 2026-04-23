@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from time import time
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from .contracts import (
     ApprovalRecord,
     ApprovalStatus,
     ArtifactRecord,
+    ContentBlock,
     ContextLinkRecord,
     MessageRecord,
     RunCreateRequest,
@@ -170,6 +172,13 @@ class AgentRuntimeService:
             status="final",
             blocks=[text_block(request.input_text)],
         )
+
+        if await self._maybe_complete_with_event_question(run=run, user_input=request.input_text):
+            resolved = await self._store.get_run(run.external_id)
+            if not resolved:
+                raise HTTPException(status_code=500, detail="Run state missing after event question")
+            events = await self._store.list_stream_events(run.external_id)
+            return RunWithEventsResponse(run=resolved, events=events)
 
         await self._execute_run(run=run, user_input=request.input_text, max_tokens=request.max_tokens)
         resolved = await self._store.get_run(run.external_id)
@@ -368,6 +377,235 @@ class AgentRuntimeService:
             data={"status": run.status.value},
         )
         return run
+
+    async def _maybe_complete_with_event_question(self, *, run: RunRecord, user_input: str) -> bool:
+        if self._is_agent_card_response(user_input):
+            return False
+
+        if self._is_event_create_request(user_input):
+            missing_fields = self._missing_create_event_fields(user_input)
+            if missing_fields:
+                payload = self._event_form_request_payload(missing_fields)
+                await self._complete_with_question_block(
+                    run=run,
+                    block=ContentBlock(
+                        kind="form_request",
+                        label="event",
+                        mime_type="application/json",
+                        data_json=json.dumps(payload),
+                    ),
+                    summary="Waiting for event details.",
+                )
+                return True
+
+        if self._is_event_update_request(user_input) and not self._has_event_id(user_input):
+            events = await self._list_event_choices()
+            if len(events) > 1:
+                payload = {
+                    "request_id": f"req_{uuid4().hex[:12]}",
+                    "entity": "event",
+                    "mode": "update",
+                    "question": "Which event should I update?",
+                    "choices": events,
+                }
+                await self._complete_with_question_block(
+                    run=run,
+                    block=ContentBlock(
+                        kind="choice_request",
+                        label="event",
+                        mime_type="application/json",
+                        data_json=json.dumps(payload),
+                    ),
+                    summary="Waiting for event selection.",
+                )
+                return True
+
+        return False
+
+    async def _complete_with_question_block(self, *, run: RunRecord, block: ContentBlock, summary: str) -> None:
+        await self._append_message(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            role="assistant",
+            status="final",
+            blocks=[block],
+        )
+        now = _now_ms()
+        completed = run.model_copy(
+            update={
+                "status": RunStatus.COMPLETED,
+                "summary": summary,
+                "completed_at": now,
+                "updated_at": now,
+            }
+        )
+        await self._store.upsert_run(completed)
+        await self._sync.upsert_run(completed)
+        await self._store.append_stream_event(
+            run_id=run.external_id,
+            event="question.requested",
+            created_at=now,
+            data={"kind": block.kind, "label": block.label},
+        )
+        await self._store.append_stream_event(
+            run_id=run.external_id,
+            event="run.completed",
+            created_at=now,
+            data={"status": completed.status.value},
+        )
+
+    def _is_agent_card_response(self, text: str) -> bool:
+        stripped = text.strip()
+        return stripped.startswith("[agent-form-response]") or stripped.startswith("[agent-choice-response]")
+
+    def _is_event_create_request(self, text: str) -> bool:
+        lowered = text.lower()
+        return "event" in lowered and any(
+            token in lowered
+            for token in ("create", "new", "schedule", "plan", "add")
+        )
+
+    def _is_event_update_request(self, text: str) -> bool:
+        lowered = text.lower()
+        return "event" in lowered and any(
+            token in lowered
+            for token in ("update", "change", "set", "edit", "move", "rename")
+        )
+
+    def _has_event_id(self, text: str) -> bool:
+        return bool(re.search(r"\bevent_id\s*:\s*\S+|\bevents:[A-Za-z0-9_-]+", text, flags=re.IGNORECASE))
+
+    def _missing_create_event_fields(self, text: str) -> list[str]:
+        missing: list[str] = []
+        if not self._has_event_title(text):
+            missing.append("title")
+        if not self._has_event_date(text):
+            missing.append("event_date")
+        return missing
+
+    def _has_event_title(self, text: str) -> bool:
+        return bool(
+            re.search(r"\b(?:title|event title)\s*:\s*\S+", text, flags=re.IGNORECASE)
+            or re.search(r"\b(?:called|named|titled)\s+[\"']?[^\"'\n]+", text, flags=re.IGNORECASE)
+        )
+
+    def _has_event_date(self, text: str) -> bool:
+        return bool(
+            re.search(r"\b\d{4}-\d{2}-\d{2}\b", text)
+            or re.search(
+                r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?",
+                text,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _event_form_request_payload(self, missing_fields: list[str]) -> dict:
+        required_keys = set(missing_fields)
+        return {
+            "request_id": f"req_{uuid4().hex[:12]}",
+            "entity": "event",
+            "mode": "create",
+            "title": "Create event",
+            "submit_label": "Continue",
+            "fields": [
+                {
+                    "key": "title",
+                    "label": "Event title",
+                    "input_type": "text",
+                    "required": "title" in required_keys,
+                    "placeholder": "AI & Society Speaker Panel",
+                },
+                {
+                    "key": "event_date",
+                    "label": "Event date",
+                    "input_type": "date",
+                    "required": "event_date" in required_keys,
+                },
+                {
+                    "key": "event_time",
+                    "label": "Start time",
+                    "input_type": "text",
+                    "required": False,
+                    "placeholder": "6:00 PM",
+                },
+                {
+                    "key": "event_end_time",
+                    "label": "End time",
+                    "input_type": "text",
+                    "required": False,
+                    "placeholder": "7:00 PM",
+                },
+                {
+                    "key": "location",
+                    "label": "Location",
+                    "input_type": "text",
+                    "required": False,
+                    "placeholder": "Leslie eLab",
+                },
+                {
+                    "key": "description",
+                    "label": "Description",
+                    "input_type": "textarea",
+                    "required": False,
+                },
+                {
+                    "key": "event_type",
+                    "label": "Event type",
+                    "input_type": "select",
+                    "required": False,
+                    "options": [
+                        {"value": "Speaker Panel", "label": "Speaker Panel"},
+                        {"value": "Workshop", "label": "Workshop"},
+                        {"value": "Networking", "label": "Networking"},
+                        {"value": "Social", "label": "Social"},
+                    ],
+                },
+                {
+                    "key": "target_profile",
+                    "label": "Target audience or speaker profile",
+                    "input_type": "textarea",
+                    "required": False,
+                },
+                {
+                    "key": "needs_outreach",
+                    "label": "Needs outreach",
+                    "input_type": "checkbox",
+                    "required": False,
+                    "default_value": False,
+                },
+            ],
+        }
+
+    async def _list_event_choices(self) -> list[dict]:
+        try:
+            rows = await execute_tool_call("list_events", {"limit": 5})
+        except Exception:
+            rows = []
+
+        if not isinstance(rows, list):
+            return []
+
+        choices: list[dict] = []
+        for row in rows[:5]:
+            if not isinstance(row, dict):
+                continue
+            event_id = str(row.get("_id") or row.get("id") or "")
+            if not event_id:
+                continue
+            label = str(row.get("title") or row.get("name") or event_id)
+            detail_parts = [
+                str(value)
+                for value in (row.get("event_date"), row.get("status"), row.get("location"))
+                if value
+            ]
+            choices.append(
+                {
+                    "id": event_id,
+                    "label": label,
+                    "description": " · ".join(detail_parts) if detail_parts else None,
+                }
+            )
+        return choices
 
     async def _execute_run(self, *, run: RunRecord, user_input: str, max_tokens: int) -> None:
         await self._store.append_stream_event(

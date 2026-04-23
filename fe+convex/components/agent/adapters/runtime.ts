@@ -1,11 +1,13 @@
 import type {
   AgentApproval,
   AgentArtifact,
+  ChoiceRequestPayload,
   AgentMessage,
   AgentRun,
   AgentThread,
   AgentThreadState,
   ContentBlock,
+  FormRequestPayload,
   ReportBlock,
 } from "../types";
 
@@ -124,7 +126,7 @@ function mapThread(thread: BackendThread): AgentThread {
   };
 }
 
-function mapContentBlock(block: BackendContentBlock): ContentBlock {
+export function mapContentBlock(block: BackendContentBlock): ContentBlock {
   if (block.kind === "text" || block.kind === "markdown") {
     return {
       type: "text",
@@ -134,6 +136,60 @@ function mapContentBlock(block: BackendContentBlock): ContentBlock {
   }
 
   const data = parseJson(block.data_json);
+  if (block.kind === "form_request" && data) {
+    return {
+      type: "form_request",
+      payload: {
+        requestId: String(data.request_id ?? data.requestId ?? ""),
+        entity: "event",
+        mode: data.mode === "update" ? "update" : "create",
+        title: String(data.title ?? "Event details"),
+        submitLabel: typeof data.submit_label === "string" ? data.submit_label : undefined,
+        fields: Array.isArray(data.fields)
+          ? data.fields.map((field) => ({
+              key: String(field.key ?? ""),
+              label: String(field.label ?? field.key ?? ""),
+              inputType: String(field.input_type ?? field.inputType ?? "text") as FormRequestPayload["fields"][number]["inputType"],
+              required: field.required === true,
+              placeholder: typeof field.placeholder === "string" ? field.placeholder : undefined,
+              defaultValue:
+                typeof field.default_value === "string" || typeof field.default_value === "boolean"
+                  ? field.default_value
+                  : typeof field.defaultValue === "string" || typeof field.defaultValue === "boolean"
+                    ? field.defaultValue
+                    : undefined,
+              options: Array.isArray(field.options)
+                ? field.options.map((option: Record<string, unknown>) => ({
+                    value: String(option.value ?? ""),
+                    label: String(option.label ?? option.value ?? ""),
+                  }))
+                : undefined,
+            }))
+          : [],
+      },
+    };
+  }
+
+  if (block.kind === "choice_request" && data) {
+    return {
+      type: "choice_request",
+      payload: {
+        requestId: String(data.request_id ?? data.requestId ?? ""),
+        entity: "event",
+        mode: data.mode === "create" ? "create" : "update",
+        question: String(data.question ?? "Choose an event"),
+        choices: Array.isArray(data.choices)
+          ? data.choices.map((choice) => ({
+              id: String(choice.id ?? ""),
+              label: String(choice.label ?? choice.id ?? ""),
+              description:
+                typeof choice.description === "string" ? choice.description : undefined,
+            }))
+          : [],
+      } satisfies ChoiceRequestPayload,
+    };
+  }
+
   if (block.kind === "tool_use") {
     return {
       type: "tool_use",

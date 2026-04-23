@@ -98,6 +98,36 @@ class FakeConvexClient:
         self.state["attendance_calls"].append(event_id)
         return self.state.get("attendance_result", {})
 
+    async def create_event_safe(
+        self,
+        *,
+        title: str,
+        event_date: str,
+        event_time: str | None = None,
+        event_end_time: str | None = None,
+        location: str | None = None,
+        description: str | None = None,
+        event_type: str | None = None,
+        target_profile: str | None = None,
+        needs_outreach: bool = False,
+        status: str = "draft",
+    ) -> str:
+        self.state.setdefault("create_event_calls", []).append(
+            {
+                "title": title,
+                "event_date": event_date,
+                "event_time": event_time,
+                "event_end_time": event_end_time,
+                "location": location,
+                "description": description,
+                "event_type": event_type,
+                "target_profile": target_profile,
+                "needs_outreach": needs_outreach,
+                "status": status,
+            }
+        )
+        return self.state.get("create_event_result", "events:new")
+
     async def update_event_safe(
         self,
         event_id: str,
@@ -464,6 +494,46 @@ async def test_get_event_attendance_io(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "create_event_calls": [],
+        "create_event_result": "events:created",
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    event_id = await mcp_service.create_event_safe(
+        title="AI Night",
+        event_date="2026-05-22",
+        event_time="18:30",
+        location="Room 101",
+        needs_outreach=True,
+    )
+
+    assert state["create_event_calls"] == [
+        {
+            "title": "AI Night",
+            "event_date": "2026-05-22",
+            "event_time": "18:30",
+            "event_end_time": None,
+            "location": "Room 101",
+            "description": None,
+            "event_type": None,
+            "target_profile": None,
+            "needs_outreach": True,
+            "status": "draft",
+        }
+    ]
+    assert event_id == "events:created"
+
+
+@pytest.mark.asyncio
 async def test_update_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
     state = {
         "list_events_calls": [],
@@ -503,6 +573,7 @@ async def test_update_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_mcp_tool_docstrings_describe_event_and_attendance_uses() -> None:
+    assert "create a Convex event" in (mcp_service.create_event_safe.__doc__ or "")
     assert "newest relevant event" in (mcp_service.list_events.__doc__ or "")
     assert "actual attendance" in (mcp_service.get_event_attendance.__doc__ or "")
     assert "aggregate attendance dashboard" in (mcp_service.get_attendance_dashboard.__doc__ or "")

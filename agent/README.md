@@ -55,6 +55,7 @@ The runtime's current MCP tool surface is:
    - `get_event_outreach`
    - `get_attendance_dashboard`
    - `get_event_attendance`
+   - approval-gated `create_event_safe`
    - approval-gated `update_event_safe`
 
 ## Supporting Services (Root Files)

@@ -78,6 +78,36 @@ class ConvexClient:
     async def create_event(self, event: dict) -> str:
         return await self.mutation("events:createEvent", event)
 
+    async def create_event_safe(
+        self,
+        *,
+        title: str,
+        event_date: str,
+        event_time: str | None = None,
+        event_end_time: str | None = None,
+        location: str | None = None,
+        description: str | None = None,
+        event_type: str | None = None,
+        target_profile: str | None = None,
+        needs_outreach: bool = False,
+        status: str = "draft",
+    ) -> str:
+        return await self.mutation(
+            "events:createEvent",
+            {
+                "title": title,
+                "description": description,
+                "event_date": event_date,
+                "event_time": event_time,
+                "event_end_time": event_end_time,
+                "location": location,
+                "event_type": event_type,
+                "target_profile": target_profile,
+                "needs_outreach": needs_outreach,
+                "status": status,
+            },
+        )
+
     async def apply_inbound_milestones(
         self,
         event_id: str,

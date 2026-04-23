@@ -151,6 +151,26 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "create_event_safe",
+        "description": "Safely create a Convex event after required fields are known and approval is granted.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "event_date": {"type": "string"},
+                "event_time": {"type": "string"},
+                "event_end_time": {"type": "string"},
+                "location": {"type": "string"},
+                "description": {"type": "string"},
+                "event_type": {"type": "string"},
+                "target_profile": {"type": "string"},
+                "needs_outreach": {"type": "boolean"},
+                "status": {"type": "string"},
+            },
+            "required": ["title", "event_date"],
+        },
+    },
+    {
         "name": "update_event_safe",
         "description": "Safely patch approved event fields and milestone booleans for a Convex event.",
         "input_schema": {

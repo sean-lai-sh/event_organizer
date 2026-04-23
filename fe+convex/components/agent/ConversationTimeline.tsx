@@ -9,8 +9,6 @@ import { AgentInput } from "./AgentInput";
 import {
   createThread,
   getThreadState,
-  getThreadMessages,
-  getThreadApprovals,
   startRun,
 } from "./adapters/runtime";
 
@@ -96,22 +94,9 @@ export function ConversationTimeline({
     setMessages((prev) => [...prev, optimisticUser]);
 
     try {
-      await startRun(
-        thread.id,
-        text,
-        (chunk) => setStreamingText(chunk),
-        (done) => {
-          setStreamingText(null);
-          // Replace optimistic user message with real messages from adapter
-          setMessages((prev) => {
-            const withoutOptimistic = prev.filter(
-              (m) => m.id !== optimisticUser.id,
-            );
-            return [...withoutOptimistic, optimisticUser, done];
-          });
-          onArtifactsChange?.();
-        },
-      );
+      await startRun(workingThread.id, text, (chunk) => setStreamingText(chunk));
+      await refreshThreadState(workingThread.id);
+      onArtifactsChange?.(workingThread.id);
     } finally {
       setIsRunning(false);
       setStreamingText(null);
@@ -136,7 +121,11 @@ export function ConversationTimeline({
         ) : (
           <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                onStructuredSubmit={handleSend}
+              />
             ))}
 
             {isRunning && streamingText !== null && (

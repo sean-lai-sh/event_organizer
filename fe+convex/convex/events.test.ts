@@ -4,7 +4,10 @@ type TableName = "events" | "event_outreach" | "attendance" | "agent_context_lin
 type TableRow = { _id: string } & Record<string, unknown>;
 type Tables = Record<TableName, TableRow[]>;
 
-let requireAdminMemberImpl = async () => ({ authUser: { _id: "user:1" }, member: { role: "admin" } });
+let requireAdminMemberImpl: (...args: unknown[]) => Promise<{
+  authUser: { _id: string };
+  member: { role: string };
+}> = async () => ({ authUser: { _id: "user:1" }, member: { role: "admin" } });
 
 mock.module("./eboard", () => ({
   requireAdminMember: (...args: unknown[]) => requireAdminMemberImpl(...args),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 
 import pytest
@@ -208,6 +209,98 @@ async def test_tool_aware_write_run_pauses_then_executes_exact_tool(monkeypatch:
 
     assert executed == [("update_event_safe", {"event_id": "evt_1", "status": "confirmed"})]
     assert decision.run.status.value == "completed"
+
+
+@pytest.mark.asyncio
+async def test_missing_create_event_fields_produce_persisted_form_request() -> None:
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeAdapter(),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Event card"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Create a new event")
+    )
+
+    assert response.run.status.value == "completed"
+    state = await service.get_thread_state(thread.external_id)
+    assistant = state.messages[-1]
+    assert assistant.role == "assistant"
+    block = assistant.content_blocks[0]
+    assert block.kind == "form_request"
+    payload = json.loads(block.data_json or "{}")
+    assert payload["entity"] == "event"
+    assert payload["mode"] == "create"
+    field_keys = [field["key"] for field in payload["fields"]]
+    assert field_keys[:2] == ["title", "event_date"]
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_update_event_produces_choice_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_execute_tool_call(tool_name: str, tool_input: dict) -> list[dict]:
+        assert tool_name == "list_events"
+        assert tool_input == {"limit": 5}
+        return [
+            {"_id": "events:1", "title": "VC Panel", "event_date": "2026-05-01", "status": "draft"},
+            {"_id": "events:2", "title": "AI Night", "event_date": "2026-05-08", "status": "outreach"},
+        ]
+
+    monkeypatch.setattr(runtime_service, "execute_tool_call", fake_execute_tool_call)
+
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeAdapter(),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Update card"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Update the event status to completed")
+    )
+
+    assert response.run.status.value == "completed"
+    state = await service.get_thread_state(thread.external_id)
+    block = state.messages[-1].content_blocks[0]
+    assert block.kind == "choice_request"
+    payload = json.loads(block.data_json or "{}")
+    assert payload["question"] == "Which event should I update?"
+    assert [choice["id"] for choice in payload["choices"]] == ["events:1", "events:2"]
+
+
+@pytest.mark.asyncio
+async def test_agent_form_response_continues_existing_run_path() -> None:
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeToolAwareAdapter(
+            AgentTurnResult(
+                text_deltas=["Continuing with submitted event details."],
+                final_text="Continuing with submitted event details.",
+            )
+        ),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Submitted card"))
+    response = await service.start_run(
+        RunCreateRequest(
+            thread_id=thread.external_id,
+            input_text=(
+                "[agent-form-response]\n"
+                "entity: event\n"
+                "mode: create\n"
+                "request_id: req_123\n"
+                "title: AI & Society\n"
+                "event_date: 2026-05-22\n"
+                "[/agent-form-response]"
+            ),
+        )
+    )
+
+    assert response.run.status.value == "completed"
+    state = await service.get_thread_state(thread.external_id)
+    assert state.messages[-1].content_blocks[0].kind == "text"
 
 
 @pytest.mark.asyncio

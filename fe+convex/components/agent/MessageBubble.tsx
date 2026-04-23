@@ -1,15 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { Wrench } from "lucide-react";
 import type { AgentMessage, ContentBlock } from "./types";
 import { RichAgentMarkdown } from "./RichAgentMarkdown";
+import {
+  getInitialFormValues,
+  serializeChoiceRequestSubmission,
+  serializeFormRequestSubmission,
+} from "./questionCards";
 
 interface MessageBubbleProps {
   message: AgentMessage;
   streamingText?: string;
+  onStructuredSubmit?: (text: string) => void | Promise<void>;
 }
 
-export function MessageBubble({ message, streamingText }: MessageBubbleProps) {
+export function MessageBubble({ message, streamingText, onStructuredSubmit }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isTool = message.role === "tool";
   const isStreaming = !!streamingText;
@@ -33,6 +40,7 @@ export function MessageBubble({ message, streamingText }: MessageBubbleProps) {
             block={block}
             isUser={isUser}
             streamingText={i === message.content.length - 1 ? streamingText : undefined}
+            onStructuredSubmit={onStructuredSubmit}
           />
         ))}
 
@@ -56,10 +64,12 @@ function ContentBlockView({
   block,
   isUser,
   streamingText,
+  onStructuredSubmit,
 }: {
   block: ContentBlock;
   isUser: boolean;
   streamingText?: string;
+  onStructuredSubmit?: (text: string) => void | Promise<void>;
 }) {
   if (block.type === "text") {
     const text = streamingText ?? block.text;
@@ -97,7 +107,137 @@ function ContentBlockView({
     );
   }
 
+  if (block.type === "form_request") {
+    return <FormRequestCard block={block} onStructuredSubmit={onStructuredSubmit} />;
+  }
+
+  if (block.type === "choice_request") {
+    return <ChoiceRequestCard block={block} onStructuredSubmit={onStructuredSubmit} />;
+  }
+
   return null;
+}
+
+function FormRequestCard({
+  block,
+  onStructuredSubmit,
+}: {
+  block: Extract<ContentBlock, { type: "form_request" }>;
+  onStructuredSubmit?: (text: string) => void | Promise<void>;
+}) {
+  const [values, setValues] = useState<Record<string, string | boolean>>(() =>
+    getInitialFormValues(block.payload.fields)
+  );
+
+  return (
+    <form
+      className="w-full max-w-[520px] rounded-[10px] border border-[#E0E0E0] bg-[#FFFFFF] p-3.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void onStructuredSubmit?.(serializeFormRequestSubmission(block.payload, values));
+      }}
+    >
+      <p className="text-[13px] font-semibold text-[#111111]">{block.payload.title}</p>
+      <div className="mt-3 space-y-3">
+        {block.payload.fields.map((field) => (
+          <label key={field.key} className="block">
+            <span className="text-[11.5px] font-medium text-[#555555]">
+              {field.label}
+              {field.required ? " *" : ""}
+            </span>
+            {field.inputType === "textarea" ? (
+              <textarea
+                className="mt-1 min-h-[76px] w-full resize-none rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 py-2 text-[13px] text-[#111111] outline-none focus:border-[#111111]"
+                placeholder={field.placeholder}
+                required={field.required}
+                value={String(values[field.key] ?? "")}
+                onChange={(event) =>
+                  setValues((prev) => ({ ...prev, [field.key]: event.target.value }))
+                }
+              />
+            ) : field.inputType === "select" ? (
+              <select
+                className="mt-1 h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] px-3 text-[13px] text-[#111111] outline-none focus:border-[#111111]"
+                required={field.required}
+                value={String(values[field.key] ?? "")}
+                onChange={(event) =>
+                  setValues((prev) => ({ ...prev, [field.key]: event.target.value }))
+                }
+              >
+                <option value="">Select...</option>
+                {(field.options ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : field.inputType === "checkbox" ? (
+              <input
+                type="checkbox"
+                className="mt-2 h-4 w-4 accent-[#111111]"
+                checked={values[field.key] === true}
+                onChange={(event) =>
+                  setValues((prev) => ({ ...prev, [field.key]: event.target.checked }))
+                }
+              />
+            ) : (
+              <input
+                type={field.inputType === "date" || field.inputType === "time" ? field.inputType : "text"}
+                className="mt-1 h-10 w-full rounded-[8px] border border-[#E0E0E0] bg-transparent px-3 text-[13px] text-[#111111] outline-none focus:border-[#111111]"
+                placeholder={field.placeholder}
+                required={field.required}
+                value={String(values[field.key] ?? "")}
+                onChange={(event) =>
+                  setValues((prev) => ({ ...prev, [field.key]: event.target.value }))
+                }
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <button
+        type="submit"
+        className="mt-3 h-9 rounded-[8px] bg-[#0A0A0A] px-3 text-[12px] font-semibold text-[#FFFFFF]"
+      >
+        {block.payload.submitLabel ?? "Continue"}
+      </button>
+    </form>
+  );
+}
+
+function ChoiceRequestCard({
+  block,
+  onStructuredSubmit,
+}: {
+  block: Extract<ContentBlock, { type: "choice_request" }>;
+  onStructuredSubmit?: (text: string) => void | Promise<void>;
+}) {
+  return (
+    <div className="w-full max-w-[520px] rounded-[10px] border border-[#E0E0E0] bg-[#FFFFFF] p-3.5">
+      <p className="text-[13px] font-semibold text-[#111111]">{block.payload.question}</p>
+      <div className="mt-3 space-y-2">
+        {block.payload.choices.map((choice) => (
+          <button
+            key={choice.id}
+            type="button"
+            className="block w-full rounded-[8px] border border-[#E0E0E0] px-3 py-2 text-left transition hover:border-[#111111]"
+            onClick={() =>
+              void onStructuredSubmit?.(
+                serializeChoiceRequestSubmission(block.payload, choice.id)
+              )
+            }
+          >
+            <span className="block text-[13px] font-medium text-[#111111]">{choice.label}</span>
+            {choice.description && (
+              <span className="mt-0.5 block text-[11.5px] text-[#777777]">
+                {choice.description}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ToolResultRow({ message }: { message: AgentMessage }) {

@@ -297,7 +297,7 @@ Current MCP tool surface:
 
 - Attio reads/writes: `search_contacts`, `get_contact`, `create_contact`, `update_contact`
 - Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
-- Approval-gated Convex writes: `update_event_safe`
+- Approval-gated Convex writes: `create_event_safe`, `update_event_safe`
 
 ### Outbound matching
 

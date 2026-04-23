@@ -69,6 +69,7 @@ READ_ONLY_TOOL_NAMES = {
 WRITE_TOOL_NAMES = {
     "create_contact",
     "update_contact",
+    "create_event_safe",
     "update_event_safe",
 }
 
