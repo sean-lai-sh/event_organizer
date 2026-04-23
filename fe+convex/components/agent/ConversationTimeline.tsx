@@ -324,7 +324,11 @@ export function ConversationTimeline({
             <MessageSkeletons />
           )
         ) : messages.length === 0 && !isRunning ? (
-          (emptyState ?? <ThreadEmptyState threadTitle={thread.title} />)
+          (emptyState ?? (
+            <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
+              Send a message to get started.
+            </div>
+          ))
         ) : (
           <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
             {messages.map((msg) => (
@@ -484,29 +488,36 @@ function InlineTraceList({
 
 function MessageSkeletons() {
   return (
-    <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
-      {[70, 55, 80].map((w, i) => (
-        <div
-          key={i}
-          className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}
-        >
-          <div
-            className="h-9 animate-pulse rounded-[12px] bg-[#F0F0F0]"
-            style={{ width: `${w}%` }}
-          />
+    <div className="mx-auto max-w-[700px] space-y-5 px-5 py-5">
+      {/* User bubble */}
+      <div className="flex justify-end gap-3">
+        <div className="h-9 w-[52%] animate-pulse rounded-[12px] rounded-br-[4px] bg-[#EBEBEB]" />
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+      </div>
+      {/* Assistant response — multi-line block */}
+      <div className="flex justify-start gap-3">
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+        <div className="flex flex-1 flex-col gap-2">
+          <div className="h-3.5 w-[88%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[72%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[80%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[55%] animate-pulse rounded-full bg-[#F0F0F0]" />
         </div>
-      ))}
+      </div>
+      {/* Second user bubble */}
+      <div className="flex justify-end gap-3">
+        <div className="h-9 w-[38%] animate-pulse rounded-[12px] rounded-br-[4px] bg-[#EBEBEB]" />
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+      </div>
+      {/* Second assistant response */}
+      <div className="flex justify-start gap-3">
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+        <div className="flex flex-1 flex-col gap-2">
+          <div className="h-3.5 w-[76%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[62%] animate-pulse rounded-full bg-[#F0F0F0]" />
+        </div>
+      </div>
     </div>
   );
 }
 
-function ThreadEmptyState({ threadTitle }: { threadTitle: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-      <p className="text-[13.5px] font-medium text-[#333333]">{threadTitle}</p>
-      <p className="text-[12.5px] text-[#BBBBBB]">
-        Send a message to get started.
-      </p>
-    </div>
-  );
-}
