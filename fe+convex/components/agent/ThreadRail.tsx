@@ -63,6 +63,8 @@ export function ThreadRail({
   onDeleteThread,
 }: ThreadRailProps) {
   const rawThreads = useQuery(api.agentState.listThreads, { limit: 50 });
+  const pendingThreadIds = useQuery(api.agentState.listThreadsWithPendingApprovals) ?? [];
+  const pendingSet = new Set(pendingThreadIds);
 
   // ── localStorage cache ────────────────────────────────────────────────────
   // Populated from localStorage on mount so the list renders immediately
@@ -292,6 +294,7 @@ export function ThreadRail({
               const editing = editingThreadId === thread.id;
               const busy = busyThreadId === thread.id;
               const isNew = !seenIdsRef.current.has(thread.id);
+              const hasPending = pendingSet.has(thread.id);
               return (
                 <li
                   key={thread.id}
@@ -304,7 +307,9 @@ export function ThreadRail({
                     }}
                     disabled={busy}
                     className={`group w-full rounded-[8px] px-3 py-2.5 pr-9 text-left transition-colors duration-100 ${
-                      active
+                      hasPending
+                        ? "border border-orange-400" + (active ? " bg-[#EAEAEA]" : " hover:bg-[#EFEFEF]")
+                        : active
                         ? "border border-[#CFCFCF] bg-[#EAEAEA]"
                         : "border border-transparent hover:bg-[#EFEFEF]"
                     } ${busy ? "opacity-60" : ""}`}

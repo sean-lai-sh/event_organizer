@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Pencil, X } from "lucide-react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useSession } from "@/lib/auth-client";
 import type { AgentApproval, RiskLevel } from "./types";
 import { FIELD_LABELS } from "./ApprovalCard";
 import { submitApproval } from "./adapters/runtime";
@@ -42,6 +45,10 @@ export function PendingApprovalBar({ approvals, onDecision }: PendingApprovalBar
   const [editValue, setEditValue] = useState("");
   const [loading, setLoading] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const draftApplied = useRef<string | null>(null);
+
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? null;
 
   // Clamp approval index when list shrinks.
   useEffect(() => {
@@ -50,39 +57,47 @@ export function PendingApprovalBar({ approvals, onDecision }: PendingApprovalBar
 
   const approval = approvals[index];
 
-  // Restore persisted draft (step + overrides) when the active approval changes;
-  // fall back to defaults if nothing is saved.
+  const draft = useQuery(
+    api.agentState.getApprovalDraft,
+    approval?.id && userId
+      ? { approval_external_id: approval.id, user_id: userId }
+      : "skip",
+  );
+  const saveDraft = useMutation(api.agentState.saveApprovalDraft);
+  const clearDraft = useMutation(api.agentState.clearApprovalDraft);
+
+  // Restore persisted draft from Convex when the active approval changes or draft first arrives.
   useEffect(() => {
     if (!approval?.id) return;
-    try {
-      const raw = sessionStorage.getItem(`approval_draft_${approval.id}`);
-      if (raw) {
-        const { step: s, overrides: o } = JSON.parse(raw) as {
-          step: number;
-          overrides: Record<string, string>;
-        };
-        setStep(s ?? 0);
-        setOverrides(o ?? {});
-      } else {
-        setStep(0);
-        setOverrides({});
-      }
-    } catch {
+    if (draft === undefined) return;           // still loading — don't reset yet
+    if (draftApplied.current === approval.id) return;  // already applied for this approval
+    draftApplied.current = approval.id;
+
+    if (draft !== null) {
+      let parsedOverrides: Record<string, string> = {};
+      try { parsedOverrides = JSON.parse(draft.overrides_json) as Record<string, string>; } catch { /**/ }
+      setStep(draft.step ?? 0);
+      setOverrides(parsedOverrides);
+    } else {
       setStep(0);
       setOverrides({});
     }
     setEditing(false);
     setEditValue("");
-  }, [approval?.id]);
+  }, [approval?.id, draft]);
 
-  // Persist step + overrides to sessionStorage whenever they change.
+  // Persist step + overrides to Convex on change (fire-and-forget).
   useEffect(() => {
-    if (!approval?.id) return;
-    sessionStorage.setItem(
-      `approval_draft_${approval.id}`,
-      JSON.stringify({ step, overrides }),
-    );
-  }, [approval?.id, step, overrides]);
+    if (!approval?.id || !userId) return;
+    if (draftApplied.current !== approval.id) return;  // skip before first restore
+
+    void saveDraft({
+      approval_external_id: approval.id,
+      user_id: userId,
+      step,
+      overrides_json: JSON.stringify(overrides),
+    });
+  }, [approval?.id, userId, step, overrides]);
 
   useEffect(() => {
     if (editing) editInputRef.current?.focus();
@@ -142,7 +157,9 @@ export function PendingApprovalBar({ approvals, onDecision }: PendingApprovalBar
           ? changedOverrides
           : undefined,
       );
-      sessionStorage.removeItem(`approval_draft_${approval.id}`);
+      if (userId) {
+        await clearDraft({ approval_external_id: approval.id, user_id: userId });
+      }
       await onDecision?.(decision);
     } finally {
       setLoading(false);

@@ -155,6 +155,14 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_thread_status", ["thread_id", "status"]),
 
+  approval_drafts: defineTable({
+    approval_external_id: v.string(),
+    user_id: v.string(),
+    step: v.number(),
+    overrides_json: v.string(),
+    updated_at: v.number(),
+  }).index("by_approval_user", ["approval_external_id", "user_id"]),
+
   agent_traces: defineTable({
     thread_id: v.id("agent_threads"),
     run_id: v.id("agent_runs"),

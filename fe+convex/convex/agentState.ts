@@ -71,6 +71,19 @@ async function getApprovalByExternalId(ctx: AgentDbContext, externalId: string) 
     .unique();
 }
 
+async function getDraftByApprovalUser(
+  ctx: AgentDbContext,
+  approvalExternalId: string,
+  userId: string,
+) {
+  return await ctx.db
+    .query("approval_drafts")
+    .withIndex("by_approval_user", (q) =>
+      q.eq("approval_external_id", approvalExternalId).eq("user_id", userId)
+    )
+    .unique();
+}
+
 async function getTraceByExternalId(ctx: AgentDbContext, externalId: string) {
   return await ctx.db
     .query("agent_traces")
@@ -295,6 +308,54 @@ export const listPendingApprovals = query({
 
     const pending = sortByRequestedDesc(rows.filter((approval) => approval.status === "pending"));
     return limit ? pending.slice(0, limit) : pending;
+  },
+});
+
+export const listThreadsWithPendingApprovals = query({
+  args: {},
+  handler: async (ctx) => {
+    const pending = await ctx.db
+      .query("agent_approvals")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .collect();
+    const threadConvexIds = [...new Set(pending.map((a) => a.thread_id))];
+    const threads = await Promise.all(threadConvexIds.map((id) => ctx.db.get(id)));
+    return threads.filter(Boolean).map((t) => t!.external_id);
+  },
+});
+
+export const getApprovalDraft = query({
+  args: { approval_external_id: v.string(), user_id: v.string() },
+  handler: async (ctx, { approval_external_id, user_id }) => {
+    const draft = await getDraftByApprovalUser(ctx, approval_external_id, user_id);
+    if (!draft) return null;
+    return { step: draft.step, overrides_json: draft.overrides_json };
+  },
+});
+
+export const saveApprovalDraft = mutation({
+  args: {
+    approval_external_id: v.string(),
+    user_id: v.string(),
+    step: v.number(),
+    overrides_json: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const existing = await getDraftByApprovalUser(ctx, args.approval_external_id, args.user_id);
+    if (existing) {
+      await ctx.db.patch(existing._id, { step: args.step, overrides_json: args.overrides_json, updated_at: now });
+      return existing._id;
+    }
+    return await ctx.db.insert("approval_drafts", { ...args, updated_at: now });
+  },
+});
+
+export const clearApprovalDraft = mutation({
+  args: { approval_external_id: v.string(), user_id: v.string() },
+  handler: async (ctx, args) => {
+    const existing = await getDraftByApprovalUser(ctx, args.approval_external_id, args.user_id);
+    if (existing) await ctx.db.delete(existing._id);
   },
 });
 
