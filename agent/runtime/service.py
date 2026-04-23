@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from .anthropic_adapter import AnthropicRuntimeAdapter, DEFAULT_SYSTEM_PROMPT
+from .context_assembler import ThreadExecutionContext, assemble_thread_context
 from .contracts import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
@@ -44,6 +45,12 @@ from .tool_expectations import (
     looks_like_fake_limitation,
 )
 from .tool_executor import execute_tool_call
+
+
+_POST_APPROVAL_INSTRUCTION = (
+    "The approved action has already been executed. "
+    "Continue the same conversation, summarize the outcome, and give next steps if needed."
+)
 
 
 def _now_ms() -> int:
@@ -209,7 +216,8 @@ class AgentRuntimeService:
             blocks=[text_block(request.input_text)],
         )
 
-        await self._execute_run(run=run, user_input=request.input_text, max_tokens=request.max_tokens)
+        context = await self._assemble_context(request.thread_id)
+        await self._execute_run(run=run, user_input=request.input_text, context=context, max_tokens=request.max_tokens)
         resolved = await self._store.get_run(run.external_id)
         if not resolved:
             raise HTTPException(status_code=500, detail="Run state missing after execution")
@@ -392,16 +400,12 @@ class AgentRuntimeService:
             summary="Summarizing approved action outcome.",
         )
 
-        await self._execute_text_run(
-            run=run,
-            user_input=(
-                f"Approved tool `{action_label}` executed.\n"
-                f"Arguments: {json.dumps(tool_payload)}\n"
-                f"Result: {json.dumps(self._serialize_tool_result(tool_result))}\n"
-                "Summarize the outcome and any next steps."
-            ),
-            max_tokens=700,
+        post_approval_context = await self._assemble_context(run.thread_external_id)
+        post_approval_context = ThreadExecutionContext(
+            system_prompt=post_approval_context.system_prompt + "\n\n" + _POST_APPROVAL_INSTRUCTION,
+            messages=post_approval_context.messages,
         )
+        await self._execute_text_run(run=run, context=post_approval_context, max_tokens=700)
 
         resolved_run = await self._store.get_run(run.external_id)
         if not resolved_run:
@@ -479,7 +483,7 @@ class AgentRuntimeService:
 
         return run
 
-    async def _execute_run(self, *, run: RunRecord, user_input: str, max_tokens: int) -> None:
+    async def _execute_run(self, *, run: RunRecord, user_input: str, context: ThreadExecutionContext, max_tokens: int) -> None:
         await self._store.append_stream_event(
             run_id=run.external_id,
             event="assistant.stream_started",
@@ -488,7 +492,7 @@ class AgentRuntimeService:
         )
 
         if hasattr(self._adapter, "run_agent"):
-            await self._execute_tool_aware_run(run=run, user_input=user_input)
+            await self._execute_tool_aware_run(run=run, user_input=user_input, context=context)
             return
 
         action = infer_tool_action_from_text(user_input)
@@ -519,12 +523,15 @@ class AgentRuntimeService:
             summary="Generating response.",
         )
 
-        await self._execute_text_run(run=run, user_input=user_input, max_tokens=max_tokens)
+        await self._execute_text_run(run=run, context=context, max_tokens=max_tokens)
 
-    async def _execute_tool_aware_run(self, *, run: RunRecord, user_input: str) -> None:
+    async def _execute_tool_aware_run(self, *, run: RunRecord, user_input: str, context: ThreadExecutionContext) -> None:
         expectation = infer_request_tool_expectation(user_input)
         try:
-            result = await self._adapter.run_agent(user_prompt=user_input)
+            result = await self._adapter.run_agent(
+                messages=context.messages,
+                system_prompt=context.system_prompt,
+            )
         except Exception as exc:
             await self._emit_trace(
                 thread_id=run.thread_external_id,
@@ -557,8 +564,8 @@ class AgentRuntimeService:
             )
             try:
                 result = await self._adapter.run_agent(
-                    user_prompt=user_input,
-                    system_prompt=self._retry_system_prompt(expectation),
+                    messages=context.messages,
+                    system_prompt=self._retry_system_prompt(context.system_prompt, expectation),
                 )
             except Exception as exc:
                 await self._mark_run_error(run=run, message=str(exc))
@@ -644,14 +651,15 @@ class AgentRuntimeService:
             run=run, text=final_text, streaming_message=assistant_msg
         )
 
-    async def _execute_text_run(self, *, run: RunRecord, user_input: str, max_tokens: int) -> None:
+    async def _execute_text_run(self, *, run: RunRecord, context: ThreadExecutionContext, max_tokens: int) -> None:
         # Create a streaming assistant placeholder before first delta
         assistant_msg = await self._begin_streaming_assistant_message(run=run)
 
         latest_text = ""
         try:
             async for partial_text in self._adapter.stream_text(
-                user_prompt=user_input,
+                messages=context.messages,
+                system_prompt=context.system_prompt,
                 max_tokens=max_tokens,
             ):
                 latest_text = partial_text
@@ -1129,7 +1137,24 @@ class AgentRuntimeService:
             expectation,
         )
 
-    def _retry_system_prompt(self, expectation: RequestToolExpectation | None) -> str:
+    async def _assemble_context(self, thread_id: str) -> ThreadExecutionContext:
+        state = await self._store.list_thread_state(thread_id)
+        thread = state.thread if state else await self._store.get_thread(thread_id)
+        messages = state.messages if state else []
+        context_links = state.context_links if state else []
+        if thread is None:
+            return ThreadExecutionContext(
+                system_prompt=DEFAULT_SYSTEM_PROMPT,
+                messages=[],
+            )
+        return assemble_thread_context(
+            thread=thread,
+            messages=messages,
+            context_links=context_links,
+            base_system_prompt=DEFAULT_SYSTEM_PROMPT,
+        )
+
+    def _retry_system_prompt(self, base_system: str, expectation: RequestToolExpectation | None) -> str:
         instruction = (
             expectation.retry_instruction
             if expectation is not None
@@ -1140,7 +1165,7 @@ class AgentRuntimeService:
             "Use them before answering. "
             "Do not claim access limitations unless a tool actually fails."
         )
-        return f"{DEFAULT_SYSTEM_PROMPT}\n\n{extra}\n{instruction}"
+        return f"{base_system}\n\n{extra}\n{instruction}"
 
     def _normalize_tool_aware_result(
         self,

@@ -21,8 +21,8 @@ class FakeAdapter:
             "Processed: fallback complete",
         ]
 
-    async def stream_text(self, *, user_prompt: str, system_prompt: str | None = None, max_tokens: int = 900) -> AsyncIterator[str]:
-        _ = (user_prompt, system_prompt, max_tokens)
+    async def stream_text(self, *, messages: list, system_prompt: str | None = None, max_tokens: int = 900) -> AsyncIterator[str]:
+        _ = (messages, system_prompt, max_tokens)
         for chunk in self._chunks:
             yield chunk
 
@@ -37,10 +37,10 @@ class FakeToolAwareAdapter:
             self._results = [result]
         self.calls: list[dict[str, object]] = []
 
-    async def run_agent(self, *, user_prompt: str, system_prompt: str | None = None, max_turns: int = 6) -> AgentTurnResult:
+    async def run_agent(self, *, messages: list, system_prompt: str | None = None, max_turns: int = 8) -> AgentTurnResult:
         self.calls.append(
             {
-                "user_prompt": user_prompt,
+                "messages": messages,
                 "system_prompt": system_prompt,
                 "max_turns": max_turns,
             }
@@ -50,11 +50,11 @@ class FakeToolAwareAdapter:
     async def stream_text(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
         max_tokens: int = 900,
     ) -> AsyncIterator[str]:
-        _ = (user_prompt, system_prompt, max_tokens)
+        _ = (messages, system_prompt, max_tokens)
         yield "Approved tool executed"
         yield "Approved tool executed successfully"
 
