@@ -150,7 +150,7 @@ function mapContentBlock(block: BackendContentBlock): ContentBlock {
     };
   }
 
-  const data = parseJson(block.data_json);
+  const data = parseJson<Record<string, unknown>>(block.data_json);
   if (block.kind === "tool_use") {
     return {
       type: "tool_use",
