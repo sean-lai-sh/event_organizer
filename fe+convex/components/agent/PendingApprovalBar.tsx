@@ -50,13 +50,39 @@ export function PendingApprovalBar({ approvals, onDecision }: PendingApprovalBar
 
   const approval = approvals[index];
 
-  // Reset stepper when the active approval changes.
+  // Restore persisted draft (step + overrides) when the active approval changes;
+  // fall back to defaults if nothing is saved.
   useEffect(() => {
-    setStep(0);
-    setOverrides({});
+    if (!approval?.id) return;
+    try {
+      const raw = sessionStorage.getItem(`approval_draft_${approval.id}`);
+      if (raw) {
+        const { step: s, overrides: o } = JSON.parse(raw) as {
+          step: number;
+          overrides: Record<string, string>;
+        };
+        setStep(s ?? 0);
+        setOverrides(o ?? {});
+      } else {
+        setStep(0);
+        setOverrides({});
+      }
+    } catch {
+      setStep(0);
+      setOverrides({});
+    }
     setEditing(false);
     setEditValue("");
   }, [approval?.id]);
+
+  // Persist step + overrides to sessionStorage whenever they change.
+  useEffect(() => {
+    if (!approval?.id) return;
+    sessionStorage.setItem(
+      `approval_draft_${approval.id}`,
+      JSON.stringify({ step, overrides }),
+    );
+  }, [approval?.id, step, overrides]);
 
   useEffect(() => {
     if (editing) editInputRef.current?.focus();
@@ -116,6 +142,7 @@ export function PendingApprovalBar({ approvals, onDecision }: PendingApprovalBar
           ? changedOverrides
           : undefined,
       );
+      sessionStorage.removeItem(`approval_draft_${approval.id}`);
       await onDecision?.(decision);
     } finally {
       setLoading(false);
