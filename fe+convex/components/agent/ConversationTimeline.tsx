@@ -150,6 +150,14 @@ export function ConversationTimeline({
   const threadIdRef = useRef<string | null>(null);
   const messagesAtSend = useRef<number>(0);
   const traceHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks which thread the active run belongs to so the thread-change effect
+  // doesn't clear tracesVisible when onThreadCreated fires for a first message.
+  const runThreadIdRef = useRef<string | null>(null);
+  // Captures the latestRunInternalId at send time so old-run traces aren't
+  // shown during the gap between send and Convex delivering the new run.
+  const lastRunIdBeforeSend = useRef<string | null>(null);
+  // Prevents the run-in-progress initializer from firing more than once per mount.
+  const runInitialized = useRef(false);
 
   // Reactive Convex query: automatically updates when the backend patches
   // messages, approvals, traces, or run status via append_message / upsert_*.
@@ -175,9 +183,11 @@ export function ConversationTimeline({
 
   // Detect run completion to clear the running flag and refresh artifacts.
   const runs = threadState?.runs ?? [];
-  const latestRun = runs[0] as { status?: string; external_id?: string } | undefined;
+  // Cast to include _id — Convex serialises it as a string, and trace.run_id
+  // references this internal _id, NOT the human-readable external_id.
+  const latestRun = runs[0] as { status?: string; _id?: string } | undefined;
   const latestRunStatus = latestRun?.status;
-  const latestRunId = latestRun?.external_id ?? null;
+  const latestRunInternalId = latestRun?._id ?? null;
 
   useEffect(() => {
     if (!isRunning) return;
@@ -199,10 +209,25 @@ export function ConversationTimeline({
     threadIdRef.current = thread?.id ?? null;
   }, [thread]);
 
-  // Clear traces and pending bubble when thread changes (new conversation or thread switch).
+  // When navigating directly to /agent/<id> while a run is in progress,
+  // bootstrap isRunning and tracesVisible from the Convex run status so the
+  // thinking state shows without the user having called handleSend.
   useEffect(() => {
-    if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
-    setTracesVisible(false);
+    if (runInitialized.current || latestRunStatus === undefined) return;
+    runInitialized.current = true;
+    if (latestRunStatus === "running") {
+      setIsRunning(true);
+      setTracesVisible(true);
+    }
+  }, [latestRunStatus]);
+
+  // Clear traces when switching threads, but not when the thread changes because
+  // onThreadCreated just fired for the current run (runThreadIdRef guards that case).
+  useEffect(() => {
+    if (thread?.id !== runThreadIdRef.current) {
+      if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+      setTracesVisible(false);
+    }
     if (!thread) setPendingMessage(null);
   }, [thread]);
 
@@ -225,6 +250,7 @@ export function ConversationTimeline({
     let workingThread = thread;
 
     messagesAtSend.current = messages.length;
+    lastRunIdBeforeSend.current = latestRunInternalId;
     setIsRunning(true);
     setTracesVisible(true);
     if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
@@ -233,13 +259,18 @@ export function ConversationTimeline({
     if (!workingThread) {
       try {
         workingThread = await createThread(deriveTitle(text));
-        onThreadCreated?.(workingThread);
+        // Set before onThreadCreated so the thread-change effect sees the match
+        // and doesn't clear tracesVisible for this in-flight run.
+        runThreadIdRef.current = workingThread.id;
         threadIdRef.current = workingThread.id;
+        onThreadCreated?.(workingThread);
       } catch {
         setIsRunning(false);
         setPendingMessage(null);
         return;
       }
+    } else {
+      runThreadIdRef.current = workingThread.id;
     }
 
     try {
@@ -257,10 +288,15 @@ export function ConversationTimeline({
     (m) => m.isStreaming && m.content.some((b) => b.type === "text" && b.text.length > 0),
   );
 
-  // Filter to current run's traces only, so previous-run traces don't bleed through.
-  const displayTraces = tracesVisible && latestRunId
-    ? traces.filter((t) => t.runId === latestRunId)
-    : [];
+  // Show traces only for the current run, and only once Convex has delivered a
+  // NEW run (latestRunInternalId changed from what it was at send time).
+  // This prevents old-run traces from flashing during the transition.
+  const displayTraces =
+    tracesVisible &&
+    latestRunInternalId &&
+    latestRunInternalId !== lastRunIdBeforeSend.current
+      ? traces.filter((t) => t.runId === latestRunInternalId)
+      : [];
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
