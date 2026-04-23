@@ -8,21 +8,6 @@ interface TraceRailProps {
   onToggle?: () => void;
 }
 
-const STEP_ICONS: Record<TraceStepKind, string> = {
-  planning: "\u{1F4CB}",
-  tool_selection: "\u{1F50D}",
-  tool_start: "\u{2699}\u{FE0F}",
-  tool_completion: "\u{2705}",
-  tool_failure: "\u{274C}",
-  approval_pause: "\u{23F8}\u{FE0F}",
-  approval_resolution: "\u{2714}\u{FE0F}",
-  artifact_generation: "\u{1F4E6}",
-  thinking: "\u{1F4AD}",
-  guardrail_retry: "\u{1F504}",
-  run_completed: "\u{1F3C1}",
-  run_error: "\u{26A0}\u{FE0F}",
-};
-
 const STEP_COLORS: Record<TraceStepKind, string> = {
   planning: "text-blue-600",
   tool_selection: "text-indigo-600",
@@ -49,7 +34,7 @@ export function TraceRail({ traces, collapsed = true, onToggle }: TraceRailProps
   if (traces.length === 0) return null;
 
   return (
-    <div className="mx-auto max-w-[700px] px-5">
+    <div>
       <button
         onClick={onToggle}
         className="flex items-center gap-1.5 text-[11px] font-medium text-[#999999] transition-colors hover:text-[#666666]"
@@ -81,20 +66,15 @@ export function TraceRail({ traces, collapsed = true, onToggle }: TraceRailProps
                           : "#9CA3AF",
                 }}
               />
-              <div className="flex items-start gap-1.5">
-                <span className="text-[11px] leading-[16px]">
-                  {STEP_ICONS[step.kind] ?? "\u{25CF}"}
+              <div className="min-w-0">
+                <span
+                  className={`text-[11px] font-medium leading-[16px] ${STEP_COLORS[step.kind] ?? "text-gray-600"}`}
+                >
+                  {formatKind(step.kind)}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <span
-                    className={`text-[11px] font-medium leading-[16px] ${STEP_COLORS[step.kind] ?? "text-gray-600"}`}
-                  >
-                    {formatKind(step.kind)}
-                  </span>
-                  <p className="text-[11px] leading-[15px] text-[#777777]">
-                    {step.summary}
-                  </p>
-                </div>
+                <p className="text-[11px] leading-[15px] text-[#777777]">
+                  {step.summary}
+                </p>
               </div>
             </div>
           ))}

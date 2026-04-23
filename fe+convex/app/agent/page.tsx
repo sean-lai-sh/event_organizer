@@ -26,7 +26,6 @@ export default function AgentPage() {
     setDraftValue("");
     const arts = await getThreadArtifacts(thread.id);
     setArtifacts(arts);
-    setCanvasOpen(arts.length > 0);
   }
 
   const handleArtifactsChange = useCallback(
@@ -35,7 +34,6 @@ export default function AgentPage() {
       if (!resolvedThreadId) return;
       const arts = await getThreadArtifacts(resolvedThreadId);
       setArtifacts(arts);
-      if (arts.length > 0) setCanvasOpen(true);
     },
     [activeThread],
   );

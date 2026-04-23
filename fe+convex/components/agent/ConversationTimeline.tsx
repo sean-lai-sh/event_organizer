@@ -8,7 +8,6 @@ import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from ".
 import { MessageBubble } from "./MessageBubble";
 import { ApprovalCard } from "./ApprovalCard";
 import { AgentInput } from "./AgentInput";
-import { TraceRail } from "./TraceRail";
 import {
   createThread,
   startRun,
@@ -145,10 +144,12 @@ export function ConversationTimeline({
   onDraftChange,
 }: ConversationTimelineProps) {
   const [isRunning, setIsRunning] = useState(false);
-  const [traceCollapsed, setTraceCollapsed] = useState(true);
+  const [tracesVisible, setTracesVisible] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadIdRef = useRef<string | null>(null);
+  const messagesAtSend = useRef<number>(0);
+  const traceHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reactive Convex query: automatically updates when the backend patches
   // messages, approvals, traces, or run status via append_message / upsert_*.
@@ -174,8 +175,9 @@ export function ConversationTimeline({
 
   // Detect run completion to clear the running flag and refresh artifacts.
   const runs = threadState?.runs ?? [];
-  const latestRun = runs[0] as { status?: string } | undefined;
+  const latestRun = runs[0] as { status?: string; external_id?: string } | undefined;
   const latestRunStatus = latestRun?.status;
+  const latestRunId = latestRun?.external_id ?? null;
 
   useEffect(() => {
     if (!isRunning) return;
@@ -186,6 +188,9 @@ export function ConversationTimeline({
     ) {
       setIsRunning(false);
       onArtifactsChange?.(thread?.id);
+      // Fade traces out 30s after run completes.
+      if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+      traceHideTimer.current = setTimeout(() => setTracesVisible(false), 30_000);
     }
   }, [latestRunStatus, isRunning, thread?.id, onArtifactsChange]);
 
@@ -194,22 +199,38 @@ export function ConversationTimeline({
     threadIdRef.current = thread?.id ?? null;
   }, [thread]);
 
-  // Auto-scroll when messages change or while streaming.
+  // Clear traces and pending bubble when thread changes (new conversation or thread switch).
+  useEffect(() => {
+    if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+    setTracesVisible(false);
+    if (!thread) setPendingMessage(null);
+  }, [thread]);
+
+  // Once Convex delivers messages beyond what we had at send time, retire the optimistic bubble.
+  useEffect(() => {
+    if (pendingMessage !== null && messages.length > messagesAtSend.current) {
+      setPendingMessage(null);
+    }
+  }, [messages.length, pendingMessage]);
+
+  // Auto-scroll when messages change, optimistic bubble appears, or while streaming.
   const streamingMessage = messages.find((m) => m.isStreaming);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, streamingMessage?.id]);
+  }, [messages.length, streamingMessage?.id, pendingMessage]);
 
   async function handleSend(text: string) {
     if (isRunning) return;
 
     let workingThread = thread;
 
+    messagesAtSend.current = messages.length;
     setIsRunning(true);
-    setTraceCollapsed(true);
+    setTracesVisible(true);
+    if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+    setPendingMessage(text);
 
     if (!workingThread) {
-      setPendingMessage(text);
       try {
         workingThread = await createThread(deriveTitle(text));
         onThreadCreated?.(workingThread);
@@ -231,15 +252,50 @@ export function ConversationTimeline({
 
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
 
-  // Check if there is a streaming assistant message being patched live.
-  const hasStreamingBubble = messages.some((m) => m.isStreaming);
+  // Only suppress ThinkingBubble once a streaming message has actual text to show.
+  const hasStreamingBubble = messages.some(
+    (m) => m.isStreaming && m.content.some((b) => b.type === "text" && b.text.length > 0),
+  );
+
+  // Filter to current run's traces only, so previous-run traces don't bleed through.
+  const displayTraces = tracesVisible && latestRunId
+    ? traces.filter((t) => t.runId === latestRunId)
+    : [];
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         {!thread ? (
           pendingMessage ? (
-            <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
+            <PendingConversationView
+              pendingMessage={pendingMessage}
+              bottomRef={bottomRef}
+            />
+          ) : (
+            emptyState ?? (
+              <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
+                Send a message to get started.
+              </div>
+            )
+          )
+        ) : !loaded ? (
+          pendingMessage ? (
+            <PendingConversationView
+              pendingMessage={pendingMessage}
+              bottomRef={bottomRef}
+            />
+          ) : (
+            <MessageSkeletons />
+          )
+        ) : messages.length === 0 && !isRunning ? (
+          (emptyState ?? <ThreadEmptyState threadTitle={thread.title} />)
+        ) : (
+          <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+
+            {pendingMessage && (
               <div className="flex justify-end gap-3">
                 <div className="max-w-[78%]">
                   <div className="rounded-[12px] rounded-br-[4px] bg-[#0A0A0A] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-white">
@@ -250,49 +306,14 @@ export function ConversationTimeline({
                   <span className="text-[10px] font-semibold text-[#555555]">U</span>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A]">
-                  <span className="text-[9px] font-bold text-white">AI</span>
-                </div>
-                <div className="max-w-[78%]">
-                  <div className="rounded-[12px] rounded-tl-[4px] bg-[#F4F4F4] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-[#111111]">
-                    <ThinkingDots />
-                  </div>
-                </div>
-              </div>
-              <div ref={bottomRef} />
-            </div>
-          ) : (
-            emptyState ?? (
-              <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
-                Send a message to get started.
-              </div>
-            )
-          )
-        ) : !loaded ? (
-          <MessageSkeletons />
-        ) : messages.length === 0 && !isRunning ? (
-          (emptyState ?? <ThreadEmptyState threadTitle={thread.title} />)
-        ) : (
-          <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
+            )}
 
-            {/* Show thinking dots only while running and no streaming bubble yet */}
-            {isRunning && !hasStreamingBubble && (
-              <div className="flex gap-3">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A]">
-                  <span className="text-[9px] font-bold text-white">AI</span>
-                </div>
-                <div className="max-w-[78%]">
-                  <div className="rounded-[12px] rounded-tl-[4px] bg-[#F4F4F4] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-[#111111]">
-                    <span className="flex items-center gap-1.5">
-                      <ThinkingDots />
-                    </span>
-                  </div>
-                </div>
-              </div>
+            {isRunning && !hasStreamingBubble && displayTraces.length === 0 && (
+              <ThinkingBubble />
+            )}
+
+            {displayTraces.length > 0 && (
+              <InlineTraceList traces={displayTraces} isRunning={isRunning} />
             )}
 
             {pendingApprovals.map((approval) => (
@@ -308,16 +329,6 @@ export function ConversationTimeline({
             <div ref={bottomRef} />
           </div>
         )}
-
-        {traces.length > 0 && (
-          <div className="border-t border-[#F0F0F0] py-3">
-            <TraceRail
-              traces={traces}
-              collapsed={traceCollapsed}
-              onToggle={() => setTraceCollapsed((prev) => !prev)}
-            />
-          </div>
-        )}
       </div>
 
       <AgentInput
@@ -331,26 +342,107 @@ export function ConversationTimeline({
   );
 }
 
-function ThinkingDots() {
+/* ------------------------------------------------------------------ */
+/*  Shared optimistic view shown before Convex delivers real messages  */
+/* ------------------------------------------------------------------ */
+
+function PendingConversationView({
+  pendingMessage,
+  bottomRef,
+}: {
+  pendingMessage: string;
+  bottomRef: React.RefObject<HTMLDivElement | null>;
+}) {
   return (
-    <span className="flex items-center gap-1">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="h-1.5 w-1.5 rounded-full bg-[#BBBBBB]"
-          style={{
-            animation: "dotPulse 1.2s ease-in-out infinite",
-            animationDelay: `${i * 200}ms`,
-          }}
-        />
-      ))}
+    <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
+      <div className="flex justify-end gap-3">
+        <div className="max-w-[78%]">
+          <div className="rounded-[12px] rounded-br-[4px] bg-[#0A0A0A] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-white">
+            {pendingMessage}
+          </div>
+        </div>
+        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#E0E0E0] bg-[#FFFFFF]">
+          <span className="text-[10px] font-semibold text-[#555555]">U</span>
+        </div>
+      </div>
+      <ThinkingBubble />
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Thinking bubble: live trace summary → rotating preset fallback     */
+/* ------------------------------------------------------------------ */
+
+const THINKING_PHRASES = [
+  "Thinking", "Analyzing", "Searching", "Processing", "Reasoning",
+  "Looking into this", "Exploring", "Connecting the dots",
+  "Gathering context", "Reviewing", "Evaluating", "Synthesizing",
+  "Investigating", "Working on it", "Fetching data", "Querying",
+  "Formulating a response", "Preparing", "Consulting records", "Considering",
+];
+
+function ThinkingBubble() {
+  const [phraseIndex, setPhraseIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPhraseIndex((i) => (i + 1) % THINKING_PHRASES.length);
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 text-[13.5px] text-[#AAAAAA]">
+      <span>{THINKING_PHRASES[phraseIndex]}</span>
+      <span
+        className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#CCCCCC]"
+        style={{ animation: "thinkPulse 1.2s ease-in-out infinite" }}
+      />
       <style>{`
-        @keyframes dotPulse {
+        @keyframes thinkPulse {
           0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
           40% { opacity: 1; transform: scale(1); }
         }
       `}</style>
-    </span>
+    </div>
+  );
+}
+
+function formatTraceKind(kind: string): string {
+  return kind
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function InlineTraceList({
+  traces,
+  isRunning,
+}: {
+  traces: AgentTraceStep[];
+  isRunning: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      {traces.map((step, i) => {
+        const isLatest = i === traces.length - 1;
+        const label = step.summary || formatTraceKind(step.kind);
+        return (
+          <div key={step.id} className="flex items-center gap-2 text-[11.5px] text-[#BBBBBB]">
+            <div className="h-1 w-1 shrink-0 rounded-full bg-[#DDDDDD]" />
+            <span>{label}</span>
+            {isLatest && isRunning && (
+              <span
+                className="inline-block h-1 w-1 shrink-0 rounded-full bg-[#CCCCCC]"
+                style={{ animation: "thinkPulse 1.2s ease-in-out infinite" }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
