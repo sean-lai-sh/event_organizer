@@ -20,13 +20,15 @@ export function MessageBubble({ message, streamingText }: MessageBubbleProps) {
 
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-      {!isUser && (
-        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A]">
-          <span className="text-[9px] font-bold text-white">AI</span>
-        </div>
-      )}
+      {/* No AI avatar — assistant messages render as plain text (Claude/GPT style) */}
 
-      <div className={`flex max-w-[78%] flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+      <div
+        className={
+          isUser
+            ? "flex max-w-[78%] flex-col gap-1 items-end"
+            : "flex flex-1 flex-col gap-1 items-start"
+        }
+      >
         {message.content.map((block, i) => (
           <ContentBlockView
             key={i}
@@ -38,9 +40,9 @@ export function MessageBubble({ message, streamingText }: MessageBubbleProps) {
         ))}
 
         {isStreaming && message.content.length === 0 && (
-          <div className="rounded-[12px] rounded-tl-[4px] bg-[#F4F4F4] px-3.5 py-2.5">
+          <span className="text-[13.5px] leading-[1.65] text-[#111111]">
             <StreamingCursor />
-          </div>
+          </span>
         )}
       </div>
 
@@ -65,24 +67,19 @@ function ContentBlockView({
   isMessageStreaming?: boolean;
 }) {
   if (block.type === "text") {
-    const text = streamingText ?? block.text;
+    const fullText = streamingText ?? block.text;
     const isStreaming = !!streamingText || !!isMessageStreaming;
-    return (
-      <div
-        className={`rounded-[12px] px-3.5 py-2.5 text-[13.5px] leading-[1.55] ${
-          isUser
-            ? "rounded-br-[4px] bg-[#0A0A0A] text-white"
-            : "rounded-tl-[4px] bg-[#F4F4F4] text-[#111111]"
-        }`}
-      >
-        {isUser || isStreaming ? (
-          text
-        ) : (
-          <RichAgentMarkdown markdown={text} variant="bubble" />
-        )}
-        {isStreaming && <StreamingCursor />}
-      </div>
-    );
+
+    if (isUser) {
+      return (
+        <div className="rounded-[12px] rounded-br-[4px] bg-[#0A0A0A] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-white">
+          {fullText}
+          {isStreaming && <StreamingCursor />}
+        </div>
+      );
+    }
+
+    return <AssistantTextBlock text={fullText} isStreaming={isStreaming} />;
   }
 
   if (block.type === "tool_use") {
@@ -103,12 +100,35 @@ function ContentBlockView({
   return null;
 }
 
+function AssistantTextBlock({
+  text,
+  isStreaming,
+}: {
+  text: string;
+  isStreaming: boolean;
+}) {
+  if (isStreaming) {
+    return (
+      <div className="text-[13.5px] leading-[1.65] text-[#111111]">
+        {text}
+        <StreamingCursor />
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-[13.5px] leading-[1.65] text-[#111111]">
+      <RichAgentMarkdown markdown={text} variant="bubble" />
+    </div>
+  );
+}
+
 function ToolResultRow({ message }: { message: AgentMessage }) {
   const block = message.content[0];
   if (!block || block.type !== "tool_result") return null;
 
   return (
-    <div className="flex items-start gap-2 pl-9">
+    <div className="flex items-start gap-2 pl-2">
       <div className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#CFCFCF]" />
       <p className="text-[11.5px] text-[#999999]">{block.content}</p>
     </div>

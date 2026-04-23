@@ -8,7 +8,6 @@ import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from ".
 import { MessageBubble } from "./MessageBubble";
 import { ApprovalCard } from "./ApprovalCard";
 import { AgentInput } from "./AgentInput";
-import { TraceRail } from "./TraceRail";
 import {
   createThread,
   startRun,
@@ -127,6 +126,15 @@ function mapConvexTrace(t: ConvexTrace): AgentTraceStep {
   };
 }
 
+function deriveTitle(text: string): string {
+  const MAX = 60;
+  const trimmed = text.trim();
+  if (trimmed.length <= MAX) return trimmed;
+  const cut = trimmed.slice(0, MAX);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + "…";
+}
+
 export function ConversationTimeline({
   thread,
   onArtifactsChange,
@@ -136,9 +144,20 @@ export function ConversationTimeline({
   onDraftChange,
 }: ConversationTimelineProps) {
   const [isRunning, setIsRunning] = useState(false);
-  const [traceCollapsed, setTraceCollapsed] = useState(true);
+  const [tracesVisible, setTracesVisible] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadIdRef = useRef<string | null>(null);
+  const messagesAtSend = useRef<number>(0);
+  const traceHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks which thread the active run belongs to so the thread-change effect
+  // doesn't clear tracesVisible when onThreadCreated fires for a first message.
+  const runThreadIdRef = useRef<string | null>(null);
+  // Captures the latestRunInternalId at send time so old-run traces aren't
+  // shown during the gap between send and Convex delivering the new run.
+  const lastRunIdBeforeSend = useRef<string | null>(null);
+  // Prevents the run-in-progress initializer from firing more than once per mount.
+  const runInitialized = useRef(false);
 
   // Reactive Convex query: automatically updates when the backend patches
   // messages, approvals, traces, or run status via append_message / upsert_*.
@@ -157,15 +176,18 @@ export function ConversationTimeline({
     : [];
 
   const traces: AgentTraceStep[] = threadState
-    ? (threadState.traces as unknown as ConvexTrace[]).map(mapConvexTrace)
+    ? ((threadState.traces as unknown as ConvexTrace[]) ?? []).map(mapConvexTrace)
     : [];
 
   const loaded = thread ? threadState !== undefined : true;
 
   // Detect run completion to clear the running flag and refresh artifacts.
   const runs = threadState?.runs ?? [];
-  const latestRun = runs[0] as { status?: string } | undefined;
+  // Cast to include _id — Convex serialises it as a string, and trace.run_id
+  // references this internal _id, NOT the human-readable external_id.
+  const latestRun = runs[0] as { status?: string; _id?: string } | undefined;
   const latestRunStatus = latestRun?.status;
+  const latestRunInternalId = latestRun?._id ?? null;
 
   useEffect(() => {
     if (!isRunning) return;
@@ -176,6 +198,9 @@ export function ConversationTimeline({
     ) {
       setIsRunning(false);
       onArtifactsChange?.(thread?.id);
+      // Fade traces out 30s after run completes.
+      if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+      traceHideTimer.current = setTimeout(() => setTracesVisible(false), 30_000);
     }
   }, [latestRunStatus, isRunning, thread?.id, onArtifactsChange]);
 
@@ -184,73 +209,174 @@ export function ConversationTimeline({
     threadIdRef.current = thread?.id ?? null;
   }, [thread]);
 
-  // Auto-scroll when messages change or while streaming.
+  // Clear the trace-hide timer on unmount to prevent setState on an
+  // unmounted component if the user navigates away before it fires.
+  useEffect(() => {
+    return () => {
+      if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+    };
+  }, []);
+
+  // When navigating directly to /agent/<id> while a run is in progress,
+  // bootstrap isRunning and tracesVisible from the Convex run status so the
+  // thinking state shows without the user having called handleSend.
+  // runInitialized is reset on thread change so this fires once per thread.
+  useEffect(() => {
+    if (runInitialized.current || latestRunStatus === undefined) return;
+    runInitialized.current = true;
+    if (latestRunStatus === "running") {
+      setIsRunning(true);
+      setTracesVisible(true);
+    }
+  }, [latestRunStatus]);
+
+  // Clear traces/running state when switching threads, but not when the thread
+  // changes because onThreadCreated just fired for the current run
+  // (runThreadIdRef guards that case).
+  useEffect(() => {
+    if (thread?.id !== runThreadIdRef.current) {
+      if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+      setTracesVisible(false);
+      // Clear isRunning so AgentInput isn't stuck disabled on the new thread.
+      setIsRunning(false);
+      runThreadIdRef.current = null;
+      // Allow the bootstrap effect to re-run for the incoming thread.
+      runInitialized.current = false;
+    }
+    if (!thread) setPendingMessage(null);
+  }, [thread]);
+
+  // Once Convex delivers messages beyond what we had at send time, retire the optimistic bubble.
+  useEffect(() => {
+    if (pendingMessage !== null && messages.length > messagesAtSend.current) {
+      setPendingMessage(null);
+    }
+  }, [messages.length, pendingMessage]);
+
+  // Auto-scroll when messages change, optimistic bubble appears, or while streaming.
   const streamingMessage = messages.find((m) => m.isStreaming);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, streamingMessage?.id]);
+  }, [messages.length, streamingMessage?.id, pendingMessage]);
 
   async function handleSend(text: string) {
     if (isRunning) return;
+    // Don't allow sends before threadState has loaded — latestRunInternalId
+    // would be null, causing old-run traces to appear once state arrives.
+    if (!loaded) return;
 
     let workingThread = thread;
+
+    messagesAtSend.current = messages.length;
+    lastRunIdBeforeSend.current = latestRunInternalId;
+    setIsRunning(true);
+    setTracesVisible(true);
+    if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+    setPendingMessage(text);
+
     if (!workingThread) {
-      workingThread = await createThread();
-      onThreadCreated?.(workingThread);
-      threadIdRef.current = workingThread.id;
+      try {
+        workingThread = await createThread(deriveTitle(text));
+        // Set before onThreadCreated so the thread-change effect sees the match
+        // and doesn't clear tracesVisible for this in-flight run.
+        runThreadIdRef.current = workingThread.id;
+        threadIdRef.current = workingThread.id;
+        onThreadCreated?.(workingThread);
+      } catch {
+        setIsRunning(false);
+        setPendingMessage(null);
+        return;
+      }
+    } else {
+      runThreadIdRef.current = workingThread.id;
     }
 
-    setIsRunning(true);
-    setTraceCollapsed(true);
-
     try {
-      // Use workingThread.id (not thread.id) so the first send from an
-      // empty /agent state uses the just-created thread id.
       await startRun(workingThread.id, text);
     } catch {
+      // If the run failed to start, clear all optimistic state so the UI
+      // doesn't get stuck in a pending/thinking state with no response.
       setIsRunning(false);
+      setPendingMessage(null);
+      setTracesVisible(false);
+      runThreadIdRef.current = null;
     }
     // isRunning is cleared reactively when the Convex run status changes.
   }
 
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
 
-  // Check if there is a streaming assistant message being patched live.
-  const hasStreamingBubble = messages.some((m) => m.isStreaming);
+  // Only suppress ThinkingBubble once a streaming message has actual text to show.
+  const hasStreamingBubble = messages.some(
+    (m) => m.isStreaming && m.content.some((b) => b.type === "text" && b.text.length > 0),
+  );
+
+  // Show traces only for the current run, and only once Convex has delivered a
+  // NEW run (latestRunInternalId changed from what it was at send time).
+  // This prevents old-run traces from flashing during the transition.
+  const displayTraces =
+    tracesVisible &&
+    latestRunInternalId &&
+    latestRunInternalId !== lastRunIdBeforeSend.current
+      ? traces.filter((t) => t.runId === latestRunInternalId)
+      : [];
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         {!thread ? (
+          pendingMessage ? (
+            <PendingConversationView
+              pendingMessage={pendingMessage}
+              bottomRef={bottomRef}
+            />
+          ) : (
+            emptyState ?? (
+              <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
+                Send a message to get started.
+              </div>
+            )
+          )
+        ) : !loaded ? (
+          pendingMessage ? (
+            <PendingConversationView
+              pendingMessage={pendingMessage}
+              bottomRef={bottomRef}
+            />
+          ) : (
+            <MessageSkeletons />
+          )
+        ) : messages.length === 0 && !isRunning ? (
           (emptyState ?? (
             <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
               Send a message to get started.
             </div>
           ))
-        ) : !loaded ? (
-          <MessageSkeletons />
-        ) : messages.length === 0 && !isRunning ? (
-          (emptyState ?? <ThreadEmptyState threadTitle={thread.title} />)
         ) : (
           <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
 
-            {/* Show thinking dots only while running and no streaming bubble yet */}
-            {isRunning && !hasStreamingBubble && (
-              <div className="flex gap-3">
-                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A]">
-                  <span className="text-[9px] font-bold text-white">AI</span>
-                </div>
+            {pendingMessage && (
+              <div className="flex justify-end gap-3">
                 <div className="max-w-[78%]">
-                  <div className="rounded-[12px] rounded-tl-[4px] bg-[#F4F4F4] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-[#111111]">
-                    <span className="flex items-center gap-1.5">
-                      <ThinkingDots />
-                    </span>
+                  <div className="rounded-[12px] rounded-br-[4px] bg-[#0A0A0A] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-white">
+                    {pendingMessage}
                   </div>
                 </div>
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#E0E0E0] bg-[#FFFFFF]">
+                  <span className="text-[10px] font-semibold text-[#555555]">U</span>
+                </div>
               </div>
+            )}
+
+            {isRunning && !hasStreamingBubble && displayTraces.length === 0 && (
+              <ThinkingBubble />
+            )}
+
+            {displayTraces.length > 0 && (
+              <InlineTraceList traces={displayTraces} isRunning={isRunning} />
             )}
 
             {pendingApprovals.map((approval) => (
@@ -266,16 +392,6 @@ export function ConversationTimeline({
             <div ref={bottomRef} />
           </div>
         )}
-
-        {traces.length > 0 && (
-          <div className="border-t border-[#F0F0F0] py-3">
-            <TraceRail
-              traces={traces}
-              collapsed={traceCollapsed}
-              onToggle={() => setTraceCollapsed((prev) => !prev)}
-            />
-          </div>
-        )}
       </div>
 
       <AgentInput
@@ -289,54 +405,142 @@ export function ConversationTimeline({
   );
 }
 
-function ThinkingDots() {
+/* ------------------------------------------------------------------ */
+/*  Shared optimistic view shown before Convex delivers real messages  */
+/* ------------------------------------------------------------------ */
+
+function PendingConversationView({
+  pendingMessage,
+  bottomRef,
+}: {
+  pendingMessage: string;
+  bottomRef: React.RefObject<HTMLDivElement | null>;
+}) {
   return (
-    <span className="flex items-center gap-1">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="h-1.5 w-1.5 rounded-full bg-[#BBBBBB]"
-          style={{
-            animation: "dotPulse 1.2s ease-in-out infinite",
-            animationDelay: `${i * 200}ms`,
-          }}
-        />
-      ))}
+    <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
+      <div className="flex justify-end gap-3">
+        <div className="max-w-[78%]">
+          <div className="rounded-[12px] rounded-br-[4px] bg-[#0A0A0A] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-white">
+            {pendingMessage}
+          </div>
+        </div>
+        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#E0E0E0] bg-[#FFFFFF]">
+          <span className="text-[10px] font-semibold text-[#555555]">U</span>
+        </div>
+      </div>
+      <ThinkingBubble />
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Thinking bubble: live trace summary → rotating preset fallback     */
+/* ------------------------------------------------------------------ */
+
+const THINKING_PHRASES = [
+  "Thinking", "Analyzing", "Searching", "Processing", "Reasoning",
+  "Looking into this", "Exploring", "Connecting the dots",
+  "Gathering context", "Reviewing", "Evaluating", "Synthesizing",
+  "Investigating", "Working on it", "Fetching data", "Querying",
+  "Formulating a response", "Preparing", "Consulting records", "Considering",
+];
+
+function ThinkingBubble() {
+  const [phraseIndex, setPhraseIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPhraseIndex((i) => (i + 1) % THINKING_PHRASES.length);
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 text-[13.5px] text-[#AAAAAA]">
+      <span>{THINKING_PHRASES[phraseIndex]}</span>
+      <span
+        className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#CCCCCC]"
+        style={{ animation: "thinkPulse 1.2s ease-in-out infinite" }}
+      />
       <style>{`
-        @keyframes dotPulse {
+        @keyframes thinkPulse {
           0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
           40% { opacity: 1; transform: scale(1); }
         }
       `}</style>
-    </span>
+    </div>
+  );
+}
+
+function formatTraceKind(kind: string): string {
+  return kind
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function InlineTraceList({
+  traces,
+  isRunning,
+}: {
+  traces: AgentTraceStep[];
+  isRunning: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      {traces.map((step, i) => {
+        const isLatest = i === traces.length - 1;
+        const label = step.summary || formatTraceKind(step.kind);
+        return (
+          <div key={step.id} className="flex items-center gap-2 text-[11.5px] text-[#BBBBBB]">
+            <div className="h-1 w-1 shrink-0 rounded-full bg-[#DDDDDD]" />
+            <span>{label}</span>
+            {isLatest && isRunning && (
+              <span
+                className="inline-block h-1 w-1 shrink-0 rounded-full bg-[#CCCCCC]"
+                style={{ animation: "thinkPulse 1.2s ease-in-out infinite" }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
 function MessageSkeletons() {
   return (
-    <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
-      {[70, 55, 80].map((w, i) => (
-        <div
-          key={i}
-          className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}
-        >
-          <div
-            className="h-9 animate-pulse rounded-[12px] bg-[#F0F0F0]"
-            style={{ width: `${w}%` }}
-          />
+    <div className="mx-auto max-w-[700px] space-y-5 px-5 py-5">
+      {/* User bubble */}
+      <div className="flex justify-end gap-3">
+        <div className="h-9 w-[52%] animate-pulse rounded-[12px] rounded-br-[4px] bg-[#EBEBEB]" />
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+      </div>
+      {/* Assistant response — multi-line block */}
+      <div className="flex justify-start gap-3">
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+        <div className="flex flex-1 flex-col gap-2">
+          <div className="h-3.5 w-[88%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[72%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[80%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[55%] animate-pulse rounded-full bg-[#F0F0F0]" />
         </div>
-      ))}
+      </div>
+      {/* Second user bubble */}
+      <div className="flex justify-end gap-3">
+        <div className="h-9 w-[38%] animate-pulse rounded-[12px] rounded-br-[4px] bg-[#EBEBEB]" />
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+      </div>
+      {/* Second assistant response */}
+      <div className="flex justify-start gap-3">
+        <div className="mt-0.5 h-6 w-6 shrink-0 animate-pulse rounded-full bg-[#E8E8E8]" />
+        <div className="flex flex-1 flex-col gap-2">
+          <div className="h-3.5 w-[76%] animate-pulse rounded-full bg-[#F0F0F0]" />
+          <div className="h-3.5 w-[62%] animate-pulse rounded-full bg-[#F0F0F0]" />
+        </div>
+      </div>
     </div>
   );
 }
 
-function ThreadEmptyState({ threadTitle }: { threadTitle: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-      <p className="text-[13.5px] font-medium text-[#333333]">{threadTitle}</p>
-      <p className="text-[12.5px] text-[#BBBBBB]">
-        Send a message to get started.
-      </p>
-    </div>
-  );
-}

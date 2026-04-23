@@ -49,4 +49,11 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run frontend tests
+        # Discovers all *.test.ts files via bun:test, including:
+        #   - components/agent/ConversationTimeline.test.ts (view-branch, trace anti-bleed,
+        #     pending-bubble lifecycle, thread-change guard, run bootstrap, deriveTitle, formatTraceKind)
+        #   - components/agent/ThreadRail.test.ts (timeAgo, mapConvexThread, seenIdsRef animation guard,
+        #     displayedThreads merge logic)
+        #   - app/api/agent/threads/[threadId]/route.test.ts (rename/delete handlers)
+        #   - convex/*.test.ts (agentState, traces, attendance, outreach)
         run: bun run test
