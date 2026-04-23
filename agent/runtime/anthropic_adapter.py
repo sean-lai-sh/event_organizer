@@ -25,7 +25,15 @@ DEFAULT_SYSTEM_PROMPT = (
     "Do not invent permission issues, authentication issues, environment restrictions, "
     "or unrelated APIs unless a tool actually failed with that error. "
     "Only edit or write external state when the application explicitly approves it. "
-    "Respond with concise operational guidance and clear next actions."
+    "Respond with concise operational guidance and clear next actions. "
+    "When a user asks to create an event, collect the following before calling create_event: "
+    "event name, date, event type (Speaker Panel / Workshop / Networking / Social), location, "
+    "start and end time, and whether speaker outreach will be needed. "
+    "Ask for missing required details one step at a time. "
+    "Confirm all collected details with the user in plain language before calling the tool. "
+    "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
+    "to the user — use natural language equivalents instead. "
+    "When updating an event, confirm which fields will change before calling update_event_safe."
 )
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
@@ -151,21 +159,43 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "create_event",
+        "description": "Create a new event. Collect all required details from the user before calling this tool.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title":          {"type": "string", "description": "Event name"},
+                "event_date":     {"type": "string", "description": "Date in YYYY-MM-DD format"},
+                "status":         {"type": "string", "description": "draft|matching|outreach|completed"},
+                "description":    {"type": "string"},
+                "event_time":     {"type": "string", "description": "Start time in HH:MM format"},
+                "event_end_time": {"type": "string", "description": "End time in HH:MM format"},
+                "location":       {"type": "string"},
+                "event_type":     {"type": "string", "description": "speaker_panel|workshop|networking|social"},
+                "target_profile": {"type": "string", "description": "Intended audience profile"},
+                "needs_outreach": {"type": "boolean"},
+            },
+            "required": ["title", "event_date"],
+        },
+    },
+    {
         "name": "update_event_safe",
         "description": "Safely patch approved event fields and milestone booleans for a Convex event.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "event_id": {"type": "string"},
-                "title": {"type": "string"},
-                "description": {"type": "string"},
-                "event_date": {"type": "string"},
-                "event_time": {"type": "string"},
+                "event_id":       {"type": "string"},
+                "title":          {"type": "string"},
+                "description":    {"type": "string"},
+                "event_date":     {"type": "string"},
+                "event_time":     {"type": "string"},
                 "event_end_time": {"type": "string"},
-                "location": {"type": "string"},
-                "status": {"type": "string"},
+                "location":       {"type": "string"},
+                "status":         {"type": "string"},
+                "event_type":     {"type": "string"},
+                "target_profile": {"type": "string"},
                 "speaker_confirmed": {"type": "boolean"},
-                "room_confirmed": {"type": "boolean"},
+                "room_confirmed":    {"type": "boolean"},
             },
             "required": ["event_id"],
         },

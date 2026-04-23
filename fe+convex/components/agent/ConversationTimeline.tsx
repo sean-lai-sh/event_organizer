@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from "./types";
 import { MessageBubble } from "./MessageBubble";
 import { ApprovalCard } from "./ApprovalCard";
+import { PendingApprovalBar } from "./PendingApprovalBar";
 import { AgentInput } from "./AgentInput";
 import {
   createThread,
@@ -305,6 +306,7 @@ export function ConversationTimeline({
   }
 
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
+  const resolvedApprovals = approvals.filter((a) => a.status !== "pending");
 
   // Only suppress ThinkingBubble once a streaming message has actual text to show.
   const hasStreamingBubble = messages.some(
@@ -375,29 +377,46 @@ export function ConversationTimeline({
               <ThinkingBubble />
             )}
 
+            <div ref={bottomRef} />
+
             {displayTraces.length > 0 && (
               <InlineTraceList traces={displayTraces} isRunning={isRunning} />
             )}
 
-            {pendingApprovals.map((approval) => (
+            {resolvedApprovals.map((approval) => (
               <ApprovalCard
                 key={approval.id}
                 approval={approval}
-                onDecision={async () => {
-                  onArtifactsChange?.();
-                }}
               />
             ))}
-
-            <div ref={bottomRef} />
           </div>
         )}
       </div>
 
+      {pendingApprovals.length > 0 && (
+        <PendingApprovalBar
+          approvals={pendingApprovals}
+          onDecision={async (decision) => {
+            if (decision === "approved") {
+              // Re-arm isRunning so the run-completion effect fires when the
+              // resumed run finishes and resets the trace-hide timer.
+              setIsRunning(true);
+            }
+            onArtifactsChange?.();
+          }}
+        />
+      )}
+
       <AgentInput
         onSubmit={handleSend}
-        disabled={isRunning}
-        placeholder={isRunning ? "Agent is working..." : "Message the agent..."}
+        disabled={isRunning || pendingApprovals.length > 0}
+        placeholder={
+          pendingApprovals.length > 0
+            ? "Approve or reject the action above to continue..."
+            : isRunning
+            ? "Agent is working..."
+            : "Message the agent..."
+        }
         value={draftValue}
         onValueChange={onDraftChange}
       />

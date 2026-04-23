@@ -50,6 +50,24 @@ def _now_ms() -> int:
     return int(time() * 1000)
 
 
+def _make_approval_title(action: ToolAction) -> str:
+    tool_input = action.payload.get("tool_input", {})
+    if action.name == "create_event":
+        name = tool_input.get("title", "untitled event")
+        date = tool_input.get("event_date", "")
+        return f"Create event: {name}" + (f" on {date}" if date else "")
+    if action.name == "update_event_safe":
+        return "Update event details"
+    if action.name == "create_contact":
+        first = tool_input.get("firstname", "")
+        last = tool_input.get("lastname", "")
+        full = f"{first} {last}".strip()
+        return f"Create contact: {full}" if full else "Create contact"
+    if action.name == "update_contact":
+        return "Update contact"
+    return f"Approval required: {action.name}"
+
+
 class AgentRuntimeService:
     """Modal-side orchestration service for threads, runs, approvals, and sync."""
 
@@ -204,6 +222,14 @@ class AgentRuntimeService:
 
         approval = await self._store.get_approval(approval_id)
         if not approval:
+            thread_id = await self._sync.fetch_approval_thread_id(approval_id)
+            if thread_id:
+                try:
+                    await self.get_thread_state(thread_id)
+                except HTTPException:
+                    pass
+                approval = await self._store.get_approval(approval_id)
+        if not approval:
             raise HTTPException(status_code=404, detail=f"Approval not found: {approval_id}")
 
         if approval.status != ApprovalStatus.PENDING:
@@ -295,6 +321,8 @@ class AgentRuntimeService:
 
         action_label = pending_action.name if pending_action else "approved_action"
         tool_payload = pending_action.payload.get("tool_input") if pending_action else None
+        if isinstance(tool_payload, dict) and request.override_args:
+            tool_payload = {**tool_payload, **request.override_args}
         tool_result: object | None = None
         if isinstance(tool_payload, dict):
             # Emit tool start trace
@@ -389,7 +417,7 @@ class AgentRuntimeService:
             run_external_id=run.external_id,
             status=ApprovalStatus.PENDING,
             action_type=action.action_class.value,
-            title=f"Approval required: {action.name}",
+            title=_make_approval_title(action),
             summary=decision.reason,
             risk_level=decision.risk_level,
             payload_json=json.dumps(action.model_dump()),
@@ -925,6 +953,15 @@ class AgentRuntimeService:
 
         thread = self._hydrate_thread_record(thread_data)
 
+        raw_runs = [item for item in state.get("runs", []) if isinstance(item, dict)]
+        # Convex documents use internal _id for relationships; build a lookup so that
+        # approvals/messages/artifacts can resolve run_id → run external_id.
+        run_convex_id_to_external: dict[str, str] = {
+            str(item.get("_id")): str(item.get("external_id"))
+            for item in raw_runs
+            if item.get("_id") and item.get("external_id")
+        }
+
         runs = [
             RunRecord(
                 external_id=str(item.get("external_id")),
@@ -941,15 +978,19 @@ class AgentRuntimeService:
                 updated_at=item.get("updated_at") or _now_ms(),
                 latest_message_sequence=item.get("latest_message_sequence"),
             )
-            for item in state.get("runs", [])
-            if isinstance(item, dict)
+            for item in raw_runs
         ]
+
+        def _resolve_run_external_id(convex_run_id: object) -> str | None:
+            if not convex_run_id:
+                return None
+            return run_convex_id_to_external.get(str(convex_run_id), str(convex_run_id))
 
         messages = [
             MessageRecord(
                 external_id=str(item.get("external_id")),
                 thread_external_id=thread.external_id,
-                run_external_id=item.get("run_id") and str(item.get("run_id")),
+                run_external_id=_resolve_run_external_id(item.get("run_id")),
                 role=item.get("role", "assistant"),
                 status=item.get("status", "final"),
                 sequence_number=item.get("sequence_number", 0),
@@ -966,7 +1007,7 @@ class AgentRuntimeService:
             ArtifactRecord(
                 external_id=str(item.get("external_id")),
                 thread_external_id=thread.external_id,
-                run_external_id=item.get("run_id") and str(item.get("run_id")),
+                run_external_id=_resolve_run_external_id(item.get("run_id")),
                 kind=item.get("kind", "report"),
                 status=item.get("status", "ready"),
                 sort_order=item.get("sort_order", 0),
@@ -984,7 +1025,7 @@ class AgentRuntimeService:
             ApprovalRecord(
                 external_id=str(item.get("external_id")),
                 thread_external_id=thread.external_id,
-                run_external_id=str(item.get("run_id")),
+                run_external_id=_resolve_run_external_id(item.get("run_id")) or "",
                 status=item.get("status", "pending"),
                 action_type=item.get("action_type", "write"),
                 title=item.get("title", "Approval"),
@@ -1022,7 +1063,7 @@ class AgentRuntimeService:
             TraceStepRecord(
                 external_id=str(item.get("external_id")),
                 thread_external_id=thread.external_id,
-                run_external_id=str(item.get("run_external_id", item.get("run_id", ""))),
+                run_external_id=_resolve_run_external_id(item.get("run_external_id") or item.get("run_id")) or "",
                 kind=item.get("kind", "thinking"),
                 sequence_number=item.get("sequence_number", 0),
                 summary=item.get("summary", ""),

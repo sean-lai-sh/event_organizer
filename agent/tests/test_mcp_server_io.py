@@ -98,6 +98,10 @@ class FakeConvexClient:
         self.state["attendance_calls"].append(event_id)
         return self.state.get("attendance_result", {})
 
+    async def create_event(self, event: dict) -> str:
+        self.state["create_event_calls"].append(event)
+        return self.state.get("create_event_result", "new_evt_id")
+
     async def update_event_safe(
         self,
         event_id: str,
@@ -109,6 +113,8 @@ class FakeConvexClient:
         event_end_time: str | None = None,
         location: str | None = None,
         status: str | None = None,
+        event_type: str | None = None,
+        target_profile: str | None = None,
         speaker_confirmed: bool | None = None,
         room_confirmed: bool | None = None,
     ) -> dict | None:
@@ -122,6 +128,8 @@ class FakeConvexClient:
                 "event_end_time": event_end_time,
                 "location": location,
                 "status": status,
+                "event_type": event_type,
+                "target_profile": target_profile,
                 "speaker_confirmed": speaker_confirmed,
                 "room_confirmed": room_confirmed,
             }
@@ -495,11 +503,119 @@ async def test_update_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
             "event_end_time": None,
             "location": None,
             "status": "outreach",
+            "event_type": None,
+            "target_profile": None,
             "speaker_confirmed": True,
             "room_confirmed": False,
         }
     ]
     assert updated == {"_id": "evt_9", "title": "Updated"}
+
+
+@pytest.mark.asyncio
+async def test_create_event_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "create_event_calls": [],
+        "create_event_result": "evt_new_42",
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    result = await mcp_service.create_event(
+        title="Startup Growth Panel",
+        event_date="2026-04-30",
+        event_time="18:00",
+        event_end_time="20:00",
+        location="Room 101",
+        event_type="speaker_panel",
+        target_profile="early-stage founders",
+        needs_outreach=True,
+        status="draft",
+    )
+
+    assert len(state["create_event_calls"]) == 1
+    payload = state["create_event_calls"][0]
+    assert payload["title"] == "Startup Growth Panel"
+    assert payload["event_date"] == "2026-04-30"
+    assert payload["event_time"] == "18:00"
+    assert payload["event_end_time"] == "20:00"
+    assert payload["location"] == "Room 101"
+    assert payload["event_type"] == "speaker_panel"
+    assert payload["target_profile"] == "early-stage founders"
+    assert payload["needs_outreach"] is True
+    assert payload["status"] == "draft"
+
+    assert result == {"event_id": "evt_new_42", "title": "Startup Growth Panel"}
+
+
+@pytest.mark.asyncio
+async def test_create_event_io_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only required fields (title + event_date); optional fields default to None/True."""
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "create_event_calls": [],
+        "create_event_result": "evt_min_1",
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    result = await mcp_service.create_event(
+        title="Quick Meetup",
+        event_date="2026-05-01",
+    )
+
+    assert len(state["create_event_calls"]) == 1
+    payload = state["create_event_calls"][0]
+    assert payload["title"] == "Quick Meetup"
+    assert payload["event_date"] == "2026-05-01"
+    assert payload["status"] == "draft"
+    assert payload["needs_outreach"] is True
+    assert payload["description"] is None
+    assert payload["location"] is None
+    assert payload["event_type"] is None
+
+    assert result == {"event_id": "evt_min_1", "title": "Quick Meetup"}
+
+
+@pytest.mark.asyncio
+async def test_update_event_safe_io_with_event_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """update_event_safe correctly forwards event_type and target_profile."""
+    state = {
+        "list_events_calls": [],
+        "get_event_calls": [],
+        "inbound_status_calls": [],
+        "get_outreach_calls": [],
+        "dashboard_calls": [],
+        "attendance_calls": [],
+        "update_event_calls": [],
+        "create_event_calls": [],
+        "update_event_result": {"_id": "evt_10", "title": "Workshop", "event_type": "workshop"},
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    updated = await mcp_service.update_event_safe(
+        event_id="evt_10",
+        event_type="workshop",
+        target_profile="engineers",
+    )
+
+    assert len(state["update_event_calls"]) == 1
+    call = state["update_event_calls"][0]
+    assert call["event_type"] == "workshop"
+    assert call["target_profile"] == "engineers"
+    assert call["event_id"] == "evt_10"
+    assert updated == {"_id": "evt_10", "title": "Workshop", "event_type": "workshop"}
 
 
 def test_mcp_tool_docstrings_describe_event_and_attendance_uses() -> None:

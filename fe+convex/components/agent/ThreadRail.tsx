@@ -94,12 +94,6 @@ export function ThreadRail({
     } catch { /* ignore */ }
   }, [rawThreads]);
 
-  // After threads change, mark displayed threads as seen so future Convex
-  // updates (reordering, metadata changes) don't re-trigger the animation.
-  useEffect(() => {
-    threads.forEach((t) => seenIdsRef.current.add(t.id));
-  }, [threads]);
-
   const threads: AgentThread[] = useMemo(
     () => (rawThreads
       ? (rawThreads as unknown as ConvexThread[])
@@ -107,6 +101,12 @@ export function ThreadRail({
     ).map(mapConvexThread),
     [rawThreads, cachedRaw],
   );
+
+  // After threads change, mark displayed threads as seen so future Convex
+  // updates (reordering, metadata changes) don't re-trigger the animation.
+  useEffect(() => {
+    threads.forEach((t) => seenIdsRef.current.add(t.id));
+  }, [threads]);
   const loaded = rawThreads !== undefined || cachedRaw.length > 0;
 
   const [openMenuThreadId, setOpenMenuThreadId] = useState<string | null>(null);
