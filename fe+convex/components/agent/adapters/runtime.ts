@@ -380,13 +380,17 @@ export async function deleteThread(threadId: string): Promise<void> {
 
 export async function submitApproval(
   approvalId: string,
-  decision: "approved" | "rejected"
+  decision: "approved" | "rejected",
+  overrideArgs?: Record<string, unknown>,
 ): Promise<void> {
   await request(`/approvals/${encodeURIComponent(approvalId)}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({ decision }),
+    body: JSON.stringify({
+      decision,
+      ...(overrideArgs && Object.keys(overrideArgs).length > 0 ? { override_args: overrideArgs } : {}),
+    }),
   });
 }

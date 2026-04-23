@@ -229,6 +229,7 @@ class ApprovalDecisionRequest(BaseModel):
     decision: Literal["approved", "rejected"]
     note: str | None = None
     decided_by_user_id: str | None = None
+    override_args: dict[str, Any] | None = None
 
 
 class ThreadStateResponse(BaseModel):

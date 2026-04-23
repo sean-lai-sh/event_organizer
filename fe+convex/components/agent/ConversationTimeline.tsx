@@ -377,6 +377,8 @@ export function ConversationTimeline({
               <ThinkingBubble />
             )}
 
+            <div ref={bottomRef} />
+
             {displayTraces.length > 0 && (
               <InlineTraceList traces={displayTraces} isRunning={isRunning} />
             )}
@@ -387,8 +389,6 @@ export function ConversationTimeline({
                 approval={approval}
               />
             ))}
-
-            <div ref={bottomRef} />
           </div>
         )}
       </div>
@@ -396,7 +396,12 @@ export function ConversationTimeline({
       {pendingApprovals.length > 0 && (
         <PendingApprovalBar
           approvals={pendingApprovals}
-          onDecision={async () => {
+          onDecision={async (decision) => {
+            if (decision === "approved") {
+              // Re-arm isRunning so the run-completion effect fires when the
+              // resumed run finishes and resets the trace-hide timer.
+              setIsRunning(true);
+            }
             onArtifactsChange?.();
           }}
         />

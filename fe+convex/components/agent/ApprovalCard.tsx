@@ -5,7 +5,7 @@ import { AlertTriangle, Check, X } from "lucide-react";
 import type { AgentApproval, RiskLevel } from "./types";
 import { submitApproval } from "./adapters/runtime";
 
-const FIELD_LABELS: Record<string, string> = {
+export const FIELD_LABELS: Record<string, string> = {
   title: "Event Name",
   event_date: "Date",
   event_time: "Start Time",
