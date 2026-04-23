@@ -5,7 +5,7 @@ from typing import Any
 
 from .contracts import ContextLinkRecord, MessageRecord, ThreadRecord
 
-_RECENT_MESSAGE_COUNT = 15
+RECENT_MESSAGE_COUNT = 15
 _LINE_TRIM = 240
 _OLDER_BLOCK_CAP = 2000
 
@@ -29,8 +29,12 @@ def assemble_thread_context(
         key=lambda m: m.sequence_number,
     )
 
-    recent = finalized[-_RECENT_MESSAGE_COUNT:]
-    older = finalized[: max(0, len(finalized) - _RECENT_MESSAGE_COUNT)]
+    recent_start = max(0, len(finalized) - RECENT_MESSAGE_COUNT)
+    while recent_start > 0 and finalized[recent_start].role != "user":
+        recent_start -= 1
+
+    recent = finalized[recent_start:]
+    older = finalized[:recent_start]
 
     sections: list[str] = [base_system_prompt]
 

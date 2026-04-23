@@ -21,8 +21,8 @@ import runtime.service as runtime_service
 from runtime.anthropic_adapter import AgentTurnResult, ToolTrace
 from runtime.context_assembler import (
     ThreadExecutionContext,
+    RECENT_MESSAGE_COUNT,
     assemble_thread_context,
-    _RECENT_MESSAGE_COUNT,
 )
 from runtime.contracts import (
     ApprovalDecisionRequest,
@@ -213,16 +213,17 @@ async def test_assemble_context_last_15_verbatim_older_compressed() -> None:
         base_system_prompt="BASE",
     )
 
-    # Only last 15 messages are verbatim in ctx.messages
-    # (after merging consecutive same-role messages, the count may vary,
-    #  but the content of the 5 oldest should NOT appear in ctx.messages)
+    # The naive recent_start = 20 - 15 = 5 (index 5, message 6) lands on an
+    # assistant turn; the boundary fix walks back to index 4 (message 5, user).
+    # So recent = messages 5-20; older = messages 1-4.
     verbatim_content = " ".join(m["content"] for m in ctx.messages)
     assert "Message 1 text" not in verbatim_content
-    assert "Message 5 text" not in verbatim_content
-    # Messages 6-20 are "recent" (last 15)
+    assert "Message 4 text" not in verbatim_content
+    # Boundary user turn (msg 5) and later are verbatim
+    assert "Message 5 text" in verbatim_content
     assert "Message 6 text" in verbatim_content or "Message 7 text" in verbatim_content
 
-    # Older messages appear compressed in the system prompt
+    # Older messages (1-4) appear compressed in the system prompt
     assert "Message 1 text" in ctx.system_prompt
     assert "Older thread context" in ctx.system_prompt
 
@@ -508,9 +509,30 @@ async def test_post_approval_messages_include_tool_result_from_thread(
     tool_msgs = [m for m in final_state.messages if m.role == "tool"]
     assert len(tool_msgs) >= 1
 
-    # The post-approval messages list should reference the tool result content
+    tool_msg_plain = tool_msgs[-1].plain_text or ""
+
+    # The post-approval continuation passed to the adapter should include the
+    # tool result from thread history in the assembled messages/system prompt.
     stream_calls = [c for c in adapter.calls if "messages" in c]
     assert len(stream_calls) >= 1
+
+    def _call_text(call: dict[str, Any]) -> str:
+        parts = []
+        if "messages" in call:
+            parts.append(json.dumps(call["messages"], sort_keys=True))
+        if "system_prompt" in call:
+            parts.append(str(call["system_prompt"]))
+        return "\n".join(parts)
+
+    call_texts = [_call_text(call) for call in stream_calls]
+    assert any(
+        (
+            tool_msg_plain in text
+            or "evt_2" in text
+            or "updated" in text
+        )
+        for text in call_texts
+    ), "Expected post-approval continuation payload to include tool result content from the thread"
 
 
 @pytest.mark.asyncio
@@ -579,7 +601,7 @@ async def test_long_thread_compresses_older_messages_into_system_prompt() -> Non
     assert "Older thread context" in system_prompt
 
     # Recent messages (verbatim) should be in messages list
-    assert len(messages) <= _RECENT_MESSAGE_COUNT + 2  # at most RECENT_COUNT + possible merges
+    assert len(messages) <= RECENT_MESSAGE_COUNT + 2  # at most RECENT_COUNT + possible merges
 
 
 # ---------------------------------------------------------------------------
