@@ -6,9 +6,42 @@ on:
   workflow_dispatch:
 
 jobs:
-  agent-tests:
-    name: Agent tests
+  agent-checks:
+    name: Agent / ${{ matrix.area }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - area: MCP server and launchers
+            command: >-
+              uv run pytest
+              tests/test_mcp_server_io.py
+              tests/test_entrypoint_launchers.py
+              -q
+              -m "not integration"
+          - area: Runtime API, policy, and traces
+            command: >-
+              uv run pytest
+              tests/test_runtime_api.py
+              tests/test_runtime_policy.py
+              tests/test_runtime_service.py
+              tests/test_runtime_traces.py
+              tests/test_runtime_normalize.py
+              tests/test_streaming_traces_integration.py
+              tests/test_modal_app_identity.py
+              -q
+              -m "not integration"
+          - area: Attio, replies, and compatibility
+            command: >-
+              uv run pytest
+              tests/test_attio.py
+              tests/test_attio_env.py
+              tests/test_reply_handler.py
+              tests/test_reply_handler_dedupe.py
+              tests/test_helper_compat.py
+              -q
+              -m "not integration"
     defaults:
       run:
         working-directory: agent
@@ -27,12 +60,70 @@ jobs:
       - name: Install agent dependencies
         run: uv sync --frozen --group dev
 
-      - name: Run agent tests
-        run: uv run pytest tests -q -m "not integration"
+      - name: Run agent ${{ matrix.area }} checks
+        run: ${{ matrix.command }}
 
-  frontend-tests:
-    name: Frontend tests
+  convex-checks:
+    name: Convex / ${{ matrix.area }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - area: Events and outreach
+            command: >-
+              bun test
+              convex/events.test.ts
+              convex/outreach.test.ts
+          - area: Agent state and traces
+            command: >-
+              bun test
+              convex/agent.test.ts
+              convex/agentState.test.ts
+              convex/agentState.trace.test.ts
+          - area: Attendance analytics
+            command: >-
+              bun test
+              convex/attendance.test.ts
+    defaults:
+      run:
+        working-directory: fe+convex
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Convex ${{ matrix.area }} checks
+        run: ${{ matrix.command }}
+
+  frontend-checks:
+    name: Frontend / ${{ matrix.area }}
+    runs-on: ubuntu-latest
+    needs: agent-checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - area: Agent timeline behavior
+            command: >-
+              bun test
+              components/agent/ConversationTimeline.test.ts
+          - area: Agent thread rail behavior
+            command: >-
+              bun test
+              components/agent/ThreadRail.test.ts
+          - area: Agent routes and runtime adapters
+            command: >-
+              bun test
+              components/agent/adapters/runtime.test.ts
+              "app/api/agent/threads/[threadId]/route.test.ts"
     defaults:
       run:
         working-directory: fe+convex
@@ -48,12 +139,5 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run frontend tests
-        # Discovers all *.test.ts files via bun:test, including:
-        #   - components/agent/ConversationTimeline.test.ts (view-branch, trace anti-bleed,
-        #     pending-bubble lifecycle, thread-change guard, run bootstrap, deriveTitle, formatTraceKind)
-        #   - components/agent/ThreadRail.test.ts (timeAgo, mapConvexThread, seenIdsRef animation guard,
-        #     displayedThreads merge logic)
-        #   - app/api/agent/threads/[threadId]/route.test.ts (rename/delete handlers)
-        #   - convex/*.test.ts (agentState, traces, attendance, outreach)
-        run: bun run test
+      - name: Run frontend ${{ matrix.area }} checks
+        run: ${{ matrix.command }}
