@@ -14,12 +14,19 @@ from .tool_executor import execute_tool_call
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are the Event Organizer runtime assistant. "
-    "You have live access to Convex event and attendance data and Attio contact data via in-process tools. "
+    "You have live access to Convex event and attendance data and Attio people/speaker data via in-process tools. "
     "Use the available tools whenever the user asks for current or specific business data. "
     "For latest or recent event attendance questions, first call `list_events`, then call "
     "`get_event_attendance` for the newest relevant event. "
     "`get_attendance_dashboard` is aggregate dashboard data, while `get_event_attendance` is "
     "actual attendance for one event. "
+    "Attio `people` is identity-only. Use `search_people`, `get_person`, `upsert_person`, and "
+    "`append_person_note` for identity and notes. "
+    "Attio `speakers` is the workflow layer. Use `search_speakers`, `get_speaker`, "
+    "`ensure_speaker_for_person`, and `update_speaker_workflow` for status, source, assignment, "
+    "and active event state. Never write workflow fields through the people tools. "
+    "`status` and `source` must use the canonical live Attio option titles "
+    "(source: outreach, warm, in bound, event, alumni; status: Prospect, Engaged, Confirmed, Declined). "
     "Prefer deriving IDs through tool lookups instead of asking the user for them when possible. "
     "If a tool fails, mention the tool name and the concrete failure. "
     "Do not invent permission issues, authentication issues, environment restrictions, "
@@ -40,59 +47,155 @@ DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 # Anthropic tool definitions for all in-process tools
 _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     {
-        "name": "search_contacts",
-        "description": "Search Attio contacts by workflow filters such as source or outreach status.",
+        "name": "search_people",
+        "description": (
+            "Search Attio people by identity fields such as email or free-text name query. "
+            "Use `search_speakers` for workflow-scoped filters like status or source."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "outreach_status": {"type": "string", "description": "Filter by outreach status"},
-                "contact_source": {"type": "string", "description": "Filter by contact source"},
+                "email": {"type": "string", "description": "Exact email match"},
+                "query": {"type": "string", "description": "Free-text name query"},
                 "limit": {"type": "integer", "description": "Max results to return (default 20)"},
             },
         },
     },
     {
-        "name": "get_contact",
-        "description": "Fetch one Attio contact by record ID when the specific person is already known.",
+        "name": "get_person",
+        "description": "Fetch one Attio person by record ID when the specific person is already known.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "record_id": {"type": "string", "description": "Attio record ID"},
+                "record_id": {"type": "string", "description": "Attio people record ID"},
             },
             "required": ["record_id"],
         },
     },
     {
-        "name": "create_contact",
-        "description": "Create a new Attio contact record with CRM workflow defaults for the agent.",
+        "name": "upsert_person",
+        "description": (
+            "Upsert an Attio person using identity/profile fields only. "
+            "Workflow state (status, source, assignment) must be written through "
+            "`update_speaker_workflow`, not here."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "firstname": {"type": "string"},
                 "lastname": {"type": "string"},
                 "email": {"type": "string"},
-                "contact_source": {"type": "string"},
-                "contact_type": {"type": "string"},
-                "career_profile": {"type": "string"},
-                "warm_intro_by": {"type": "string"},
-                "assigned_members": {"type": "string"},
+                "phone": {"type": "string"},
+                "company": {"type": "string"},
+                "job_title": {"type": "string"},
+                "description": {"type": "string"},
             },
             "required": ["firstname", "lastname", "email"],
         },
     },
     {
-        "name": "update_contact",
-        "description": "Update one Attio contact and optionally append an agent note for audit history.",
+        "name": "append_person_note",
+        "description": "Append an audit-history note to an Attio person record.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "record_id": {"type": "string"},
-                "outreach_status": {"type": "string"},
-                "relationship_stage": {"type": "string"},
-                "agent_notes": {"type": "string"},
-                "last_agent_action_at": {"type": "string"},
+                "note": {"type": "string"},
+                "title": {"type": "string"},
+            },
+            "required": ["record_id", "note"],
+        },
+    },
+    {
+        "name": "search_contacts",
+        "description": (
+            "Compatibility alias for `search_people`; identity-only. "
+            "Prefer `search_people` or `search_speakers` in new prompts."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "email": {"type": "string"},
+                "query": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+        },
+    },
+    {
+        "name": "get_contact",
+        "description": "Compatibility alias for `get_person`; identity-only read.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "record_id": {"type": "string"},
             },
             "required": ["record_id"],
+        },
+    },
+    {
+        "name": "search_speakers",
+        "description": (
+            "Search Attio speaker workflow entries by status, source, or active event id. "
+            "`status` and `source` are normalized to canonical live Attio option titles."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "description": "Prospect|Engaged|Confirmed|Declined"},
+                "source": {"type": "string", "description": "outreach|warm|in bound|event|alumni"},
+                "active_event_id": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+        },
+    },
+    {
+        "name": "get_speaker",
+        "description": "Fetch one Attio speaker workflow entry by its list entry id.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "speaker_entry_id": {"type": "string"},
+            },
+            "required": ["speaker_entry_id"],
+        },
+    },
+    {
+        "name": "ensure_speaker_for_person",
+        "description": (
+            "Return the single MVP speaker entry for a person, creating it if needed. "
+            "Requires the Attio people record id; `source`, when provided, must use the "
+            "canonical live option title."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "person_record_id": {"type": "string"},
+                "source": {"type": "string"},
+            },
+            "required": ["person_record_id"],
+        },
+    },
+    {
+        "name": "update_speaker_workflow",
+        "description": (
+            "Update workflow fields on an Attio speakers list entry (status, source, "
+            "active_event_id, assigned, managed_poc, previous_events, speaker_info, "
+            "work_history). Use canonical live Attio option titles for `status` and `source`."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "speaker_entry_id": {"type": "string"},
+                "status": {"type": "string"},
+                "source": {"type": "string"},
+                "active_event_id": {"type": "string"},
+                "assigned": {"type": "string"},
+                "managed_poc": {"type": "string"},
+                "previous_events": {"type": "string"},
+                "speaker_info": {"type": "string"},
+                "work_history": {"type": "string"},
+            },
+            "required": ["speaker_entry_id"],
         },
     },
     {

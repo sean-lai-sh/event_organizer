@@ -106,9 +106,13 @@ Repo-specific logic must remain in local modules:
 
 Current MCP tool surface:
 
-- Attio: `search_contacts`, `get_contact`, `create_contact`, `update_contact`
+- Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
+- Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
+- Temporary compatibility read aliases: `search_contacts`, `get_contact`
 - Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
-- Approval-gated Convex writes: `update_event_safe`
+- Approval-gated Convex writes: `update_event_safe`, `create_event`
+
+The legacy `create_contact` / `update_contact` tools are retired: they wrote workflow fields onto `people` and violated the identity/workflow split.
 
 Application code should depend on an internal runtime adapter, not directly on SDK-specific primitives across the repo.
 

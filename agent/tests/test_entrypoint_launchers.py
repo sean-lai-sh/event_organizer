@@ -42,7 +42,23 @@ def test_mcp_root_launcher_exposes_server_contract() -> None:
     assert callable(mcp_server.get_attendance_dashboard)
     assert callable(mcp_server.get_event_attendance)
     assert callable(mcp_server.update_event_safe)
+
+    # People tools (identity only)
+    assert callable(mcp_server.search_people)
+    assert callable(mcp_server.get_person)
+    assert callable(mcp_server.upsert_person)
+    assert callable(mcp_server.append_person_note)
+
+    # Compatibility read aliases for people
     assert callable(mcp_server.search_contacts)
     assert callable(mcp_server.get_contact)
-    assert callable(mcp_server.create_contact)
-    assert callable(mcp_server.update_contact)
+
+    # Speaker tools (workflow)
+    assert callable(mcp_server.search_speakers)
+    assert callable(mcp_server.get_speaker)
+    assert callable(mcp_server.ensure_speaker_for_person)
+    assert callable(mcp_server.update_speaker_workflow)
+
+    # Retired workflow-authoritative tools must be gone from the launcher.
+    assert not hasattr(mcp_server, "create_contact")
+    assert not hasattr(mcp_server, "update_contact")

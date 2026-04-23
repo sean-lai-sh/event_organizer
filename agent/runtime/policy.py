@@ -56,8 +56,16 @@ class ApprovalPolicy:
 
 
 READ_ONLY_TOOL_NAMES = {
+    # people reads
+    "search_people",
+    "get_person",
+    # compatibility read aliases
     "search_contacts",
     "get_contact",
+    # speaker reads
+    "search_speakers",
+    "get_speaker",
+    # convex reads
     "list_events",
     "get_event",
     "get_event_inbound_status",
@@ -67,8 +75,13 @@ READ_ONLY_TOOL_NAMES = {
 }
 
 WRITE_TOOL_NAMES = {
-    "create_contact",
-    "update_contact",
+    # people identity writes + notes
+    "upsert_person",
+    "append_person_note",
+    # speaker workflow writes
+    "ensure_speaker_for_person",
+    "update_speaker_workflow",
+    # convex event writes
     "create_event",
     "update_event_safe",
 }

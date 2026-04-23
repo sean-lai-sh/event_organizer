@@ -126,9 +126,11 @@ doppler run -- npx @modelcontextprotocol/inspector uv run python -m apps.mcp.ser
 
 The Modal runtime starts that same MCP server over stdio through the Claude agent SDK. The current tool surface is:
 
-- Attio reads/writes: `search_contacts`, `get_contact`, `create_contact`, `update_contact`
+- Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
+- Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
+- Compatibility read aliases: `search_contacts`, `get_contact`
 - Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
-- Approval-gated Convex writes: `update_event_safe`
+- Approval-gated Convex writes: `create_event`, `update_event_safe`
 
 Deploy or serve Modal functions from the `agent/` package as needed for runtime work.
 

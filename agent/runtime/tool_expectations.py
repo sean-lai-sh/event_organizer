@@ -86,15 +86,33 @@ def infer_request_tool_expectation(text: str) -> RequestToolExpectation | None:
             ),
         )
 
+    if "speaker" in lowered and _mentions_any(
+        lowered, ("status", "pipeline", "workflow", "assigned", "source", "confirmed", "declined")
+    ):
+        return RequestToolExpectation(
+            kind="speaker_lookup",
+            relevant_tools=("search_speakers", "get_speaker"),
+            retry_instruction=(
+                "This request is about speaker workflow state. Use `search_speakers` or "
+                "`get_speaker` before answering, and do not read workflow fields off `people`."
+            ),
+        )
+
     if _mentions_any(lowered, ("contact", "speaker", "person")) and _mentions_any(
         lowered, ("find", "lookup", "search", "show", "who is")
     ):
         return RequestToolExpectation(
-            kind="contact_lookup",
-            relevant_tools=("search_contacts", "get_contact"),
+            kind="person_lookup",
+            relevant_tools=(
+                "search_people",
+                "get_person",
+                "search_contacts",
+                "get_contact",
+            ),
             retry_instruction=(
-                "This request is about contact lookup. Use `search_contacts` or `get_contact` "
-                "before answering."
+                "This request is about person identity lookup. Use `search_people` or "
+                "`get_person` before answering (the legacy `search_contacts`/`get_contact` "
+                "aliases are accepted but not preferred)."
             ),
         )
 
