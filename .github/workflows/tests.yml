@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  agent-tests:
-    name: Agent tests
+  agent-checks:
+    name: Agent checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,15 +23,47 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: agent/uv.lock
 
       - name: Install agent dependencies
         run: uv sync --frozen --group dev
 
-      - name: Run agent tests
-        run: uv run pytest tests -q -m "not integration"
+      - name: Run MCP server and launcher checks
+        run: >-
+          uv run pytest
+          tests/test_mcp_server_io.py
+          tests/test_entrypoint_launchers.py
+          -q
+          -m "not integration"
 
-  frontend-tests:
-    name: Frontend tests
+      - name: Run runtime API, policy, and trace checks
+        run: >-
+          uv run pytest
+          tests/test_runtime_api.py
+          tests/test_runtime_policy.py
+          tests/test_runtime_service.py
+          tests/test_runtime_traces.py
+          tests/test_runtime_normalize.py
+          tests/test_streaming_traces_integration.py
+          tests/test_modal_app_identity.py
+          -q
+          -m "not integration"
+
+      - name: Run Attio, replies, and compatibility checks
+        run: >-
+          uv run pytest
+          tests/test_attio.py
+          tests/test_attio_env.py
+          tests/test_reply_handler.py
+          tests/test_reply_handler_dedupe.py
+          tests/test_helper_compat.py
+          -q
+          -m "not integration"
+
+  convex-checks:
+    name: Convex checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,15 +77,74 @@ jobs:
         with:
           bun-version: "1.3.10"
 
+      - name: Cache Bun downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('fe+convex/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install Bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Convex events and outreach checks
+        run: >-
+          bun test
+          convex/events.test.ts
+          convex/outreach.test.ts
+
+      - name: Run Convex agent state and trace checks
+        run: >-
+          bun test
+          convex/agent.test.ts
+          convex/agentState.test.ts
+          convex/agentState.trace.test.ts
+
+      - name: Run Convex attendance analytics checks
+        run: >-
+          bun test
+          convex/attendance.test.ts
+
+  frontend-checks:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    needs: agent-checks
+    defaults:
+      run:
+        working-directory: fe+convex
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('fe+convex/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run frontend tests
-        # Discovers all *.test.ts files via bun:test, including:
-        #   - components/agent/ConversationTimeline.test.ts (view-branch, trace anti-bleed,
-        #     pending-bubble lifecycle, thread-change guard, run bootstrap, deriveTitle, formatTraceKind)
-        #   - components/agent/ThreadRail.test.ts (timeAgo, mapConvexThread, seenIdsRef animation guard,
-        #     displayedThreads merge logic)
-        #   - app/api/agent/threads/[threadId]/route.test.ts (rename/delete handlers)
-        #   - convex/*.test.ts (agentState, traces, attendance, outreach)
-        run: bun run test
+      - name: Run agent timeline behavior checks
+        run: >-
+          bun test
+          components/agent/ConversationTimeline.test.ts
+
+      - name: Run agent thread rail behavior checks
+        run: >-
+          bun test
+          components/agent/ThreadRail.test.ts
+
+      - name: Run agent routes and runtime adapter checks
+        run: >-
+          bun test
+          components/agent/adapters/runtime.test.ts
+          "app/api/agent/threads/[threadId]/route.test.ts"
