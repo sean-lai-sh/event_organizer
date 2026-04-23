@@ -209,9 +209,18 @@ export function ConversationTimeline({
     threadIdRef.current = thread?.id ?? null;
   }, [thread]);
 
+  // Clear the trace-hide timer on unmount to prevent setState on an
+  // unmounted component if the user navigates away before it fires.
+  useEffect(() => {
+    return () => {
+      if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+    };
+  }, []);
+
   // When navigating directly to /agent/<id> while a run is in progress,
   // bootstrap isRunning and tracesVisible from the Convex run status so the
   // thinking state shows without the user having called handleSend.
+  // runInitialized is reset on thread change so this fires once per thread.
   useEffect(() => {
     if (runInitialized.current || latestRunStatus === undefined) return;
     runInitialized.current = true;
@@ -221,12 +230,18 @@ export function ConversationTimeline({
     }
   }, [latestRunStatus]);
 
-  // Clear traces when switching threads, but not when the thread changes because
-  // onThreadCreated just fired for the current run (runThreadIdRef guards that case).
+  // Clear traces/running state when switching threads, but not when the thread
+  // changes because onThreadCreated just fired for the current run
+  // (runThreadIdRef guards that case).
   useEffect(() => {
     if (thread?.id !== runThreadIdRef.current) {
       if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
       setTracesVisible(false);
+      // Clear isRunning so AgentInput isn't stuck disabled on the new thread.
+      setIsRunning(false);
+      runThreadIdRef.current = null;
+      // Allow the bootstrap effect to re-run for the incoming thread.
+      runInitialized.current = false;
     }
     if (!thread) setPendingMessage(null);
   }, [thread]);
@@ -246,6 +261,9 @@ export function ConversationTimeline({
 
   async function handleSend(text: string) {
     if (isRunning) return;
+    // Don't allow sends before threadState has loaded — latestRunInternalId
+    // would be null, causing old-run traces to appear once state arrives.
+    if (!loaded) return;
 
     let workingThread = thread;
 
@@ -276,7 +294,12 @@ export function ConversationTimeline({
     try {
       await startRun(workingThread.id, text);
     } catch {
+      // If the run failed to start, clear all optimistic state so the UI
+      // doesn't get stuck in a pending/thinking state with no response.
       setIsRunning(false);
+      setPendingMessage(null);
+      setTracesVisible(false);
+      runThreadIdRef.current = null;
     }
     // isRunning is cleared reactively when the Convex run status changes.
   }

@@ -94,11 +94,11 @@ export function ThreadRail({
     } catch { /* ignore */ }
   }, [rawThreads]);
 
-  // After every render, mark displayed threads as seen so future Convex
+  // After threads change, mark displayed threads as seen so future Convex
   // updates (reordering, metadata changes) don't re-trigger the animation.
   useEffect(() => {
     threads.forEach((t) => seenIdsRef.current.add(t.id));
-  });
+  }, [threads]);
 
   const threads: AgentThread[] = useMemo(
     () => (rawThreads
