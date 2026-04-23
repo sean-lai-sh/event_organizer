@@ -52,6 +52,8 @@ function mapConvexThread(t: ConvexThread): AgentThread {
   };
 }
 
+const THREADS_CACHE_KEY = "agent_threads_v1";
+
 export function ThreadRail({
   activeThreadId,
   activeThread,
@@ -60,16 +62,52 @@ export function ThreadRail({
   onRenameThread,
   onDeleteThread,
 }: ThreadRailProps) {
-  // Reactive Convex query replaces the one-shot listThreads() fetch.
   const rawThreads = useQuery(api.agentState.listThreads, { limit: 50 });
+
+  // ── localStorage cache ────────────────────────────────────────────────────
+  // Populated from localStorage on mount so the list renders immediately
+  // instead of showing a skeleton on every page load.
+  const [cachedRaw, setCachedRaw] = useState<ConvexThread[]>([]);
+
+  // Tracks which thread IDs have already been shown so we only animate
+  // threads that are genuinely new (e.g. just created), not every re-render.
+  const seenIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(THREADS_CACHE_KEY);
+      if (stored) {
+        const parsed: ConvexThread[] = JSON.parse(stored);
+        setCachedRaw(parsed);
+        // Pre-populate seenIds so cached threads don't animate on first render.
+        parsed.forEach((t) => seenIdsRef.current.add(t.external_id));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (!rawThreads) return;
+    const raw = rawThreads as unknown as ConvexThread[];
+    setCachedRaw(raw);
+    try {
+      localStorage.setItem(THREADS_CACHE_KEY, JSON.stringify(raw));
+    } catch { /* ignore */ }
+  }, [rawThreads]);
+
+  // After every render, mark displayed threads as seen so future Convex
+  // updates (reordering, metadata changes) don't re-trigger the animation.
+  useEffect(() => {
+    threads.forEach((t) => seenIdsRef.current.add(t.id));
+  });
+
   const threads: AgentThread[] = useMemo(
-    () =>
-      rawThreads
-        ? (rawThreads as unknown as ConvexThread[]).map(mapConvexThread)
-        : [],
-    [rawThreads],
+    () => (rawThreads
+      ? (rawThreads as unknown as ConvexThread[])
+      : cachedRaw
+    ).map(mapConvexThread),
+    [rawThreads, cachedRaw],
   );
-  const loaded = rawThreads !== undefined;
+  const loaded = rawThreads !== undefined || cachedRaw.length > 0;
 
   const [openMenuThreadId, setOpenMenuThreadId] = useState<string | null>(null);
   const [openMenuPosition, setOpenMenuPosition] = useState<{
@@ -253,14 +291,12 @@ export function ThreadRail({
               const menuOpen = openMenuThreadId === thread.id;
               const editing = editingThreadId === thread.id;
               const busy = busyThreadId === thread.id;
+              const isNew = !seenIdsRef.current.has(thread.id);
               return (
                 <li
                   key={thread.id}
-                  style={{
-                    animationDelay: `${i * 40}ms`,
-                    animationFillMode: "both",
-                  }}
-                  className="thread-item-enter group relative"
+                  style={isNew ? { animationDelay: `${i * 40}ms`, animationFillMode: "both" } : undefined}
+                  className={`${isNew ? "thread-item-enter " : ""}group relative`}
                 >
                   <button
                     onClick={() => {
