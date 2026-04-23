@@ -5,6 +5,40 @@ import { AlertTriangle, Check, X } from "lucide-react";
 import type { AgentApproval, RiskLevel } from "./types";
 import { submitApproval } from "./adapters/runtime";
 
+const FIELD_LABELS: Record<string, string> = {
+  title: "Event Name",
+  event_date: "Date",
+  event_time: "Start Time",
+  event_end_time: "End Time",
+  location: "Location",
+  event_type: "Event Type",
+  description: "Description",
+  status: "Status",
+  needs_outreach: "Needs Outreach",
+  target_profile: "Target Audience",
+  speaker_confirmed: "Speaker Confirmed",
+  room_confirmed: "Room Confirmed",
+  event_id: "Event ID",
+  firstname: "First Name",
+  lastname: "Last Name",
+  email: "Email",
+  record_id: "Record ID",
+  contact_source: "Contact Source",
+  contact_type: "Contact Type",
+};
+
+export function formatPayload(raw: Record<string, unknown>): Record<string, unknown> {
+  const payloadInner = (raw?.payload as Record<string, unknown> | undefined)?.tool_input;
+  const inner = (payloadInner && typeof payloadInner === "object")
+    ? (payloadInner as Record<string, unknown>)
+    : raw;
+  return Object.fromEntries(
+    Object.entries(inner)
+      .filter(([, v]) => v !== null && v !== undefined && v !== "")
+      .map(([k, v]) => [FIELD_LABELS[k] ?? k, v])
+  );
+}
+
 interface ApprovalCardProps {
   approval: AgentApproval;
   onDecision?: (decision: "approved" | "rejected") => void | Promise<void>;
@@ -74,7 +108,7 @@ export function ApprovalCard({ approval, onDecision }: ApprovalCardProps) {
         {Object.keys(approval.proposedPayload).length > 0 && (
           <div className="mt-2 rounded-[6px] border border-[#EBEBEB] bg-[#FAFAFA] px-3 py-2">
             <pre className="whitespace-pre-wrap break-all font-mono text-[11px] text-[#555555]">
-              {JSON.stringify(approval.proposedPayload, null, 2)}
+              {JSON.stringify(formatPayload(approval.proposedPayload), null, 2)}
             </pre>
           </div>
         )}

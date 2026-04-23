@@ -181,6 +181,36 @@ async def get_event_attendance(event_id: str) -> dict:
 
 
 @mcp.tool()
+async def create_event(
+    title: str,
+    event_date: str,
+    status: str = "draft",
+    description: str | None = None,
+    event_time: str | None = None,
+    event_end_time: str | None = None,
+    location: str | None = None,
+    event_type: str | None = None,
+    target_profile: str | None = None,
+    needs_outreach: bool = True,
+) -> dict:
+    """Create a new event with the provided details."""
+    async with ConvexClient() as convex:
+        event_id = await convex.create_event({
+            "title": title,
+            "description": description,
+            "event_date": event_date,
+            "event_time": event_time,
+            "event_end_time": event_end_time,
+            "location": location,
+            "event_type": event_type,
+            "target_profile": target_profile,
+            "needs_outreach": needs_outreach,
+            "status": status,
+        })
+        return {"event_id": event_id, "title": title}
+
+
+@mcp.tool()
 async def update_event_safe(
     event_id: str,
     title: str | None = None,
@@ -190,6 +220,8 @@ async def update_event_safe(
     event_end_time: str | None = None,
     location: str | None = None,
     status: str | None = None,
+    event_type: str | None = None,
+    target_profile: str | None = None,
     speaker_confirmed: bool | None = None,
     room_confirmed: bool | None = None,
 ) -> dict | None:
@@ -204,6 +236,8 @@ async def update_event_safe(
             event_end_time=event_end_time,
             location=location,
             status=status,
+            event_type=event_type,
+            target_profile=target_profile,
             speaker_confirmed=speaker_confirmed,
             room_confirmed=room_confirmed,
         )
@@ -224,5 +258,6 @@ __all__ = [
     "get_event_outreach",
     "get_attendance_dashboard",
     "get_event_attendance",
+    "create_event",
     "update_event_safe",
 ]

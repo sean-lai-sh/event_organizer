@@ -50,6 +50,24 @@ def _now_ms() -> int:
     return int(time() * 1000)
 
 
+def _make_approval_title(action: ToolAction) -> str:
+    tool_input = action.payload.get("tool_input", {})
+    if action.name == "create_event":
+        name = tool_input.get("title", "untitled event")
+        date = tool_input.get("event_date", "")
+        return f"Create event: {name}" + (f" on {date}" if date else "")
+    if action.name == "update_event_safe":
+        return "Update event details"
+    if action.name == "create_contact":
+        first = tool_input.get("firstname", "")
+        last = tool_input.get("lastname", "")
+        full = f"{first} {last}".strip()
+        return f"Create contact: {full}" if full else "Create contact"
+    if action.name == "update_contact":
+        return "Update contact"
+    return f"Approval required: {action.name}"
+
+
 class AgentRuntimeService:
     """Modal-side orchestration service for threads, runs, approvals, and sync."""
 
@@ -389,7 +407,7 @@ class AgentRuntimeService:
             run_external_id=run.external_id,
             status=ApprovalStatus.PENDING,
             action_type=action.action_class.value,
-            title=f"Approval required: {action.name}",
+            title=_make_approval_title(action),
             summary=decision.reason,
             risk_level=decision.risk_level,
             payload_json=json.dumps(action.model_dump()),

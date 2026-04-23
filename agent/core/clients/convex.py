@@ -105,6 +105,8 @@ class ConvexClient:
         event_end_time: str | None = None,
         location: str | None = None,
         status: str | None = None,
+        event_type: str | None = None,
+        target_profile: str | None = None,
         speaker_confirmed: bool | None = None,
         room_confirmed: bool | None = None,
     ) -> dict | None:
@@ -119,6 +121,8 @@ class ConvexClient:
                 "event_end_time": event_end_time,
                 "location": location,
                 "status": status,
+                "event_type": event_type,
+                "target_profile": target_profile,
                 "speaker_confirmed": speaker_confirmed,
                 "room_confirmed": room_confirmed,
             },
