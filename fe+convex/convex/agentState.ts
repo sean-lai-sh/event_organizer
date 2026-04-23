@@ -260,6 +260,23 @@ export const getRunState = query({
   },
 });
 
+export const getApprovalState = query({
+  args: { external_id: v.string() },
+  handler: async (ctx, { external_id }) => {
+    const approval = await getApprovalByExternalId(ctx, external_id);
+    if (!approval) return null;
+    const [thread, run] = await Promise.all([
+      ctx.db.get(approval.thread_id),
+      ctx.db.get(approval.run_id),
+    ]);
+    return {
+      approval,
+      thread_external_id: thread?.external_id ?? null,
+      run_external_id: run?.external_id ?? null,
+    };
+  },
+});
+
 export const listPendingApprovals = query({
   args: {
     thread_id: v.optional(v.id("agent_threads")),

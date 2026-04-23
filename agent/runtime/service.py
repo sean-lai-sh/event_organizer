@@ -222,6 +222,14 @@ class AgentRuntimeService:
 
         approval = await self._store.get_approval(approval_id)
         if not approval:
+            thread_id = await self._sync.fetch_approval_thread_id(approval_id)
+            if thread_id:
+                try:
+                    await self.get_thread_state(thread_id)
+                except HTTPException:
+                    pass
+                approval = await self._store.get_approval(approval_id)
+        if not approval:
             raise HTTPException(status_code=404, detail=f"Approval not found: {approval_id}")
 
         if approval.status != ApprovalStatus.PENDING:

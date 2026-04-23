@@ -258,6 +258,19 @@ class ConvexAgentStateSync:
             logger.warning("Convex context-link sync failed: %s", exc)
             return None
 
+    async def fetch_approval_thread_id(self, approval_external_id: str) -> str | None:
+        """Return the thread external_id that owns the given approval, or None."""
+        if not self._enabled:
+            return None
+        try:
+            async with ConvexClient() as sb:
+                result = await sb.query("agentState:getApprovalState", {"external_id": approval_external_id})
+            if isinstance(result, dict):
+                return result.get("thread_external_id")
+        except Exception as exc:
+            logger.warning("Convex approval state fetch failed: %s", exc)
+        return None
+
     async def fetch_thread_state(self, external_thread_id: str) -> dict | None:
         if not self._enabled:
             return None
