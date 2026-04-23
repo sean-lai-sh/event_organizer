@@ -241,9 +241,9 @@ class AnthropicRuntimeAdapter:
     async def run_agent(
         self,
         *,
-        user_prompt: str,
+        messages: list[dict[str, Any]],
         system_prompt: str | None = None,
-        max_turns: int = 6,
+        max_turns: int = 8,
     ) -> AgentTurnResult:
         if not self._api_key:
             fallback = (
@@ -258,7 +258,7 @@ class AnthropicRuntimeAdapter:
 
         client = anthropic.AsyncAnthropic(api_key=self._api_key)
         result = AgentTurnResult(model=self._model)
-        messages: list[dict[str, Any]] = [{"role": "user", "content": user_prompt}]
+        messages = list(messages)
 
         for _ in range(max_turns):
             response = await client.messages.create(
@@ -339,7 +339,7 @@ class AnthropicRuntimeAdapter:
     async def stream_text(
         self,
         *,
-        user_prompt: str,
+        messages: list[dict[str, Any]],
         system_prompt: str | None = None,
         max_tokens: int = 900,
     ) -> AsyncIterator[str]:
@@ -357,7 +357,7 @@ class AnthropicRuntimeAdapter:
             model=self._model,
             max_tokens=max_tokens,
             system=system_prompt or DEFAULT_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=messages,
         )
 
         text = "".join(

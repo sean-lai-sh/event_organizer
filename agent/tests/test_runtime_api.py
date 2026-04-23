@@ -10,10 +10,10 @@ from runtime.store import InMemoryRuntimeStore
 class FakeAdapter:
     model = "fake-model"
 
-    async def stream_text(self, *, user_prompt: str, system_prompt: str | None = None, max_tokens: int = 900):
-        _ = (system_prompt, max_tokens)
+    async def stream_text(self, *, messages: list, system_prompt: str | None = None, max_tokens: int = 900):
+        _ = (messages, system_prompt, max_tokens)
         yield "Step 1"
-        yield f"Done: {user_prompt[:15]}"
+        yield "Done: response"
 
 
 def test_runtime_api_agent_thread_run_stream_and_approval_flow() -> None:

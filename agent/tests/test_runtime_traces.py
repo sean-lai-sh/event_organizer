@@ -55,13 +55,13 @@ class FakeAdapter:
     async def stream_text(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
         max_tokens: int = 900,
     ) -> AsyncIterator[str]:
-        _ = (system_prompt, max_tokens)
-        yield f"Processed: {user_prompt[:20]}"
-        yield f"Processed: {user_prompt[:20]} complete"
+        _ = (messages, system_prompt, max_tokens)
+        yield "Processed: response"
+        yield "Processed: response complete"
 
 
 class FakeToolAwareAdapter:
@@ -77,13 +77,13 @@ class FakeToolAwareAdapter:
     async def run_agent(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
-        max_turns: int = 6,
+        max_turns: int = 8,
     ) -> AgentTurnResult:
         self.calls.append(
             {
-                "user_prompt": user_prompt,
+                "messages": messages,
                 "system_prompt": system_prompt,
                 "max_turns": max_turns,
             }
@@ -93,11 +93,11 @@ class FakeToolAwareAdapter:
     async def stream_text(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
         max_tokens: int = 900,
     ) -> AsyncIterator[str]:
-        _ = (user_prompt, system_prompt, max_tokens)
+        _ = (messages, system_prompt, max_tokens)
         yield "Approved tool executed"
         yield "Approved tool executed successfully"
 

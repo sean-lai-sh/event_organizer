@@ -60,13 +60,13 @@ class FakeAdapter:
     async def stream_text(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
         max_tokens: int = 900,
     ) -> AsyncIterator[str]:
         _ = (system_prompt, max_tokens)
-        yield f"Partial: {user_prompt[:15]}"
-        yield f"Done: {user_prompt[:15]}"
+        yield "Partial: response"
+        yield "Done: response"
 
 
 class ErrorAdapter:
@@ -76,11 +76,11 @@ class ErrorAdapter:
     async def stream_text(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
         max_tokens: int = 900,
     ) -> AsyncIterator[str]:
-        _ = (system_prompt, max_tokens)
+        _ = (messages, system_prompt, max_tokens)
         yield "Starting..."
         raise RuntimeError("Simulated streaming failure")
 
@@ -98,13 +98,13 @@ class FakeToolAwareAdapter:
     async def run_agent(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
-        max_turns: int = 6,
+        max_turns: int = 8,
     ) -> AgentTurnResult:
         self.calls.append(
             {
-                "user_prompt": user_prompt,
+                "messages": messages,
                 "system_prompt": system_prompt,
                 "max_turns": max_turns,
             }
@@ -114,11 +114,11 @@ class FakeToolAwareAdapter:
     async def stream_text(
         self,
         *,
-        user_prompt: str,
+        messages: list,
         system_prompt: str | None = None,
         max_tokens: int = 900,
     ) -> AsyncIterator[str]:
-        _ = (user_prompt, system_prompt, max_tokens)
+        _ = (messages, system_prompt, max_tokens)
         yield "Approved tool executed"
         yield "Approved tool executed successfully"
 
