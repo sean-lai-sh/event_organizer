@@ -127,6 +127,15 @@ function mapConvexTrace(t: ConvexTrace): AgentTraceStep {
   };
 }
 
+function deriveTitle(text: string): string {
+  const MAX = 60;
+  const trimmed = text.trim();
+  if (trimmed.length <= MAX) return trimmed;
+  const cut = trimmed.slice(0, MAX);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + "…";
+}
+
 export function ConversationTimeline({
   thread,
   onArtifactsChange,
@@ -137,6 +146,7 @@ export function ConversationTimeline({
 }: ConversationTimelineProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [traceCollapsed, setTraceCollapsed] = useState(true);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const threadIdRef = useRef<string | null>(null);
 
@@ -157,7 +167,7 @@ export function ConversationTimeline({
     : [];
 
   const traces: AgentTraceStep[] = threadState
-    ? (threadState.traces as unknown as ConvexTrace[]).map(mapConvexTrace)
+    ? ((threadState.traces as unknown as ConvexTrace[]) ?? []).map(mapConvexTrace)
     : [];
 
   const loaded = thread ? threadState !== undefined : true;
@@ -194,18 +204,24 @@ export function ConversationTimeline({
     if (isRunning) return;
 
     let workingThread = thread;
-    if (!workingThread) {
-      workingThread = await createThread();
-      onThreadCreated?.(workingThread);
-      threadIdRef.current = workingThread.id;
-    }
 
     setIsRunning(true);
     setTraceCollapsed(true);
 
+    if (!workingThread) {
+      setPendingMessage(text);
+      try {
+        workingThread = await createThread(deriveTitle(text));
+        onThreadCreated?.(workingThread);
+        threadIdRef.current = workingThread.id;
+      } catch {
+        setIsRunning(false);
+        setPendingMessage(null);
+        return;
+      }
+    }
+
     try {
-      // Use workingThread.id (not thread.id) so the first send from an
-      // empty /agent state uses the just-created thread id.
       await startRun(workingThread.id, text);
     } catch {
       setIsRunning(false);
@@ -222,11 +238,37 @@ export function ConversationTimeline({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         {!thread ? (
-          (emptyState ?? (
-            <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
-              Send a message to get started.
+          pendingMessage ? (
+            <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
+              <div className="flex justify-end gap-3">
+                <div className="max-w-[78%]">
+                  <div className="rounded-[12px] rounded-br-[4px] bg-[#0A0A0A] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-white">
+                    {pendingMessage}
+                  </div>
+                </div>
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#E0E0E0] bg-[#FFFFFF]">
+                  <span className="text-[10px] font-semibold text-[#555555]">U</span>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#0A0A0A]">
+                  <span className="text-[9px] font-bold text-white">AI</span>
+                </div>
+                <div className="max-w-[78%]">
+                  <div className="rounded-[12px] rounded-tl-[4px] bg-[#F4F4F4] px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-[#111111]">
+                    <ThinkingDots />
+                  </div>
+                </div>
+              </div>
+              <div ref={bottomRef} />
             </div>
-          ))
+          ) : (
+            emptyState ?? (
+              <div className="flex h-full items-center justify-center px-8 text-center text-[12.5px] text-[#BBBBBB]">
+                Send a message to get started.
+              </div>
+            )
+          )
         ) : !loaded ? (
           <MessageSkeletons />
         ) : messages.length === 0 && !isRunning ? (
