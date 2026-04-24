@@ -35,6 +35,7 @@ mcp = FastMCP("event-organizer")
 # OnceHub client is resolved lazily so tests can monkeypatch a factory and the
 # production path can attach a Playwright backend on first use.
 _oncehub_client_factory: Any = None
+_oncehub_client_singleton: OnceHubClient | None = None
 
 
 def _default_oncehub_client() -> OnceHubClient:
@@ -61,8 +62,24 @@ def _default_oncehub_client() -> OnceHubClient:
 
 
 def _get_oncehub_client() -> OnceHubClient:
-    factory = _oncehub_client_factory or _default_oncehub_client
-    return factory()
+    """
+    Return the process-wide OnceHub client. When a test has installed a
+    `_oncehub_client_factory` we always honor it (so monkeypatches compose);
+    otherwise the production default is memoized so we don't re-import and
+    re-instantiate the Playwright-backed client on every tool call.
+    """
+    global _oncehub_client_singleton
+    if _oncehub_client_factory is not None:
+        return _oncehub_client_factory()
+    if _oncehub_client_singleton is None:
+        _oncehub_client_singleton = _default_oncehub_client()
+    return _oncehub_client_singleton
+
+
+def _reset_oncehub_client_cache() -> None:
+    """Drop the memoized client. Call after a transient backend failure."""
+    global _oncehub_client_singleton
+    _oncehub_client_singleton = None
 
 
 def _attio_value(v: Any) -> list[dict]:

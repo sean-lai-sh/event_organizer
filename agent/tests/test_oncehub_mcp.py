@@ -324,6 +324,33 @@ def test_approval_title_includes_readable_slot_labels() -> None:
     assert "11:30 AM" in title
 
 
+def test_get_oncehub_client_memoizes_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression guard: the production path must reuse a single OnceHubClient
+    across calls so each tool invocation doesn't spin up a fresh Playwright
+    session. Tests that install a factory still opt out of memoization."""
+    # Drop any cached client from earlier tests or from module import.
+    mcp_service._reset_oncehub_client_cache()
+    monkeypatch.setattr(mcp_service, "_oncehub_client_factory", None, raising=False)
+
+    first = mcp_service._get_oncehub_client()
+    second = mcp_service._get_oncehub_client()
+    assert first is second  # memoized
+
+    # With a factory installed, we always get a fresh client so tests can swap
+    # in new fakes mid-flight.
+    call_count = {"n": 0}
+
+    def _factory():
+        call_count["n"] += 1
+        return OnceHubClient(backend=FakeOnceHubBackend())
+
+    monkeypatch.setattr(mcp_service, "_oncehub_client_factory", _factory, raising=False)
+    a = mcp_service._get_oncehub_client()
+    b = mcp_service._get_oncehub_client()
+    assert call_count["n"] == 2
+    assert a is not b
+
+
 def test_default_oncehub_client_raises_when_backend_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Regression guard for the Codex P1 on PR #54: if the Playwright backend

@@ -274,5 +274,11 @@ export default defineSchema({
     created_at: v.number(),
     updated_at: v.number(),
   })
-    .index("by_event_id", ["event_id"]),
+    .index("by_event_id", ["event_id"])
+    // Lets `getEventRoomBooking` pull the latest row per event via an ordered
+    // indexed query (`.order("desc").first()`) instead of a full event scan.
+    .index("by_event_updated", ["event_id", "updated_at"])
+    // Lets `upsertFromAgent` look up an existing row for (event, provider,
+    // slot) in O(1) so retries don't fan out into a full scan.
+    .index("by_event_slot", ["event_id", "provider", "slot_start_epoch_ms"]),
 });

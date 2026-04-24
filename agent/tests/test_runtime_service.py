@@ -289,6 +289,80 @@ async def test_tool_aware_write_run_pauses_then_executes_exact_tool(monkeypatch:
 
 
 @pytest.mark.asyncio
+async def test_book_oncehub_room_approver_is_injected_server_side(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Regression guard for Copilot's P1 on PR #54: the runtime must overwrite
+    any model-supplied `approved_by_user_id` with the real approver's user id
+    before executing the tool, so the audit field can't be spoofed via
+    tool_input.
+    """
+    executed: list[tuple[str, dict]] = []
+
+    async def fake_execute_tool_call(tool_name: str, tool_input: dict) -> dict:
+        executed.append((tool_name, tool_input))
+        return {"booking_status": "confirmed"}
+
+    monkeypatch.setattr(runtime_service, "execute_tool_call", fake_execute_tool_call)
+
+    # Model passes a FAKE approver id through the tool_input. The runtime
+    # should override it with the actual approver's id on execution.
+    spoofed_payload = {
+        "slot_start_epoch_ms": 1_700_000_000_000,
+        "duration_minutes": 90,
+        "title": "Panel",
+        "num_attendees": 40,
+        "approved_by_user_id": "spoofed-user-from-model",
+    }
+
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeToolAwareAdapter(
+            AgentTurnResult(
+                tool_traces=[
+                    ToolTrace(
+                        name="book_oncehub_room",
+                        tool_input=spoofed_payload,
+                        tool_use_id="tool_b",
+                    )
+                ],
+                blocked_action=ToolAction(
+                    name="book_oncehub_room",
+                    action_class=ActionClass.WRITE,
+                    payload={"tool_input": spoofed_payload},
+                ),
+            )
+        ),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Booking thread"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Book the room")
+    )
+
+    assert response.run.status.value == "paused_approval"
+    state = await service.get_thread_state(thread.external_id)
+    approval = state.approvals[0]
+
+    await service.submit_approval(
+        approval.external_id,
+        ApprovalDecisionRequest(
+            decision=ApprovalStatus.APPROVED,
+            decided_by_user_id="real-approver-42",
+        ),
+    )
+
+    assert len(executed) == 1
+    _, executed_payload = executed[0]
+    assert executed_payload["approved_by_user_id"] == "real-approver-42"
+    # Sanity: other fields still pass through.
+    assert executed_payload["title"] == "Panel"
+    assert executed_payload["slot_start_epoch_ms"] == 1_700_000_000_000
+
+
+@pytest.mark.asyncio
 async def test_latest_event_attendance_retries_when_fake_limitation_skips_tools() -> None:
     adapter = FakeToolAwareAdapter(
         [

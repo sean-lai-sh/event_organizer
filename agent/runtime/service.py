@@ -52,6 +52,13 @@ _POST_APPROVAL_INSTRUCTION = (
     "Continue the same conversation, summarize the outcome, and give next steps if needed."
 )
 
+# Tools that expect the runtime to inject the approver's user id on execution.
+# The model can still pass a value, but the runtime overrides it before the
+# tool runs so the audit field is always authoritative.
+_APPROVER_INJECTED_TOOLS = {
+    "book_oncehub_room",
+}
+
 
 def _now_ms() -> int:
     return int(time() * 1000)
@@ -359,6 +366,14 @@ class AgentRuntimeService:
         tool_payload = pending_action.payload.get("tool_input") if pending_action else None
         if isinstance(tool_payload, dict) and request.override_args:
             tool_payload = {**tool_payload, **request.override_args}
+        # Server-side injection of the approver's user id for tools that record
+        # it. This overrides any model-supplied value so a malicious / mistaken
+        # caller cannot spoof the audit field via tool_input.
+        if isinstance(tool_payload, dict) and action_label in _APPROVER_INJECTED_TOOLS:
+            tool_payload = {
+                **tool_payload,
+                "approved_by_user_id": approval.decided_by_user_id,
+            }
         tool_result: object | None = None
         if isinstance(tool_payload, dict):
             # Emit tool start trace
