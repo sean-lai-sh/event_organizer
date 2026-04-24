@@ -200,6 +200,61 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
             "required": ["event_id"],
         },
     },
+    {
+        "name": "find_oncehub_slots",
+        "description": (
+            "Return live Leslie eLab Lean/Launchpad room availability for a date range. "
+            "Always live — no caching. Read-only, no approval required."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_date":            {"type": "string", "description": "YYYY-MM-DD (inclusive)"},
+                "end_date":              {"type": "string", "description": "YYYY-MM-DD (inclusive)"},
+                "duration_minutes":      {"type": "integer", "description": "Slot length in minutes"},
+                "preferred_time_window": {
+                    "type": "string",
+                    "description": "Optional filter: 'morning', 'afternoon', 'evening', or 'HH:MM-HH:MM'",
+                },
+            },
+            "required": ["start_date", "end_date", "duration_minutes"],
+        },
+    },
+    {
+        "name": "book_oncehub_room",
+        "description": (
+            "Book the Leslie eLab Lean/Launchpad room for a specific slot. "
+            "Approval-gated. On approval, submits to OnceHub under the shared club "
+            "booking profile and persists the receipt to Convex event_room_bookings. "
+            "If event_id is provided, the event's room_confirmed flag is stickied true; "
+            "if event_id is omitted, a new Convex event is created from the booking."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "slot_start_epoch_ms": {"type": "integer", "description": "Slot start in epoch ms (from find_oncehub_slots)"},
+                "duration_minutes":    {"type": "integer"},
+                "title":               {"type": "string", "description": "Event/booking title"},
+                "num_attendees":       {"type": "integer"},
+                "event_id":            {"type": "string", "description": "Optional: existing Convex event id"},
+                "description":         {"type": "string"},
+                "event_type":          {"type": "string"},
+                "target_profile":      {"type": "string"},
+            },
+            "required": ["slot_start_epoch_ms", "duration_minutes", "title", "num_attendees"],
+        },
+    },
+    {
+        "name": "get_event_room_booking",
+        "description": "Return the latest OnceHub booking record for a Convex event, or null.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string"},
+            },
+            "required": ["event_id"],
+        },
+    },
 ]
 
 

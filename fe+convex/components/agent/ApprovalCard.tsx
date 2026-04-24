@@ -25,7 +25,42 @@ export const FIELD_LABELS: Record<string, string> = {
   record_id: "Record ID",
   contact_source: "Contact Source",
   contact_type: "Contact Type",
+  // OnceHub room booking
+  slot_start_epoch_ms: "Slot Start",
+  duration_minutes: "Duration",
+  num_attendees: "Attendees",
+  room_label: "Room",
+  booked_date: "Date",
+  booked_time: "Start Time",
+  booked_end_time: "End Time",
+  page_url: "Booking Page",
 };
+
+const NEW_YORK_TZ = "America/New_York";
+
+function formatSlotStart(epochMs: number): string {
+  try {
+    const date = new Date(epochMs);
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: NEW_YORK_TZ,
+    }).format(date);
+  } catch {
+    return String(epochMs);
+  }
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 60) return `${mins} min`;
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem === 0 ? `${hours} hr` : `${hours} hr ${rem} min`;
+}
 
 export function formatPayload(raw: Record<string, unknown>): Record<string, unknown> {
   const payloadInner = (raw?.payload as Record<string, unknown> | undefined)?.tool_input;
@@ -35,7 +70,16 @@ export function formatPayload(raw: Record<string, unknown>): Record<string, unkn
   return Object.fromEntries(
     Object.entries(inner)
       .filter(([, v]) => v !== null && v !== undefined && v !== "")
-      .map(([k, v]) => [FIELD_LABELS[k] ?? k, v])
+      .map(([k, v]) => {
+        const label = FIELD_LABELS[k] ?? k;
+        if (k === "slot_start_epoch_ms" && typeof v === "number") {
+          return [label, formatSlotStart(v)];
+        }
+        if (k === "duration_minutes" && typeof v === "number") {
+          return [label, formatDuration(v)];
+        }
+        return [label, v];
+      })
   );
 }
 

@@ -7,6 +7,7 @@ import { useMutation } from "convex/react";
 import { CalendarDays, MapPin } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { api } from "@/convex/_generated/api";
+import { launchRoomBookingThread } from "@/components/agent/launchers/roomBooking";
 
 type EventType = "Speaker Panel" | "Workshop" | "Networking" | "Social";
 
@@ -241,7 +242,7 @@ export default function NewEventPage() {
   const createEvent = useMutation(api.events.createEvent);
 
   const [form, setForm] = useState<FormState>(defaultState);
-  const [submittingAction, setSubmittingAction] = useState<null | "create" | "matching">(null);
+  const [submittingAction, setSubmittingAction] = useState<null | "create" | "matching" | "bookRoom">(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [endTimeTouched, setEndTimeTouched] = useState(false);
 
@@ -353,6 +354,31 @@ export default function NewEventPage() {
     }
   }
 
+  async function handleBookRoom() {
+    if (submittingAction !== null) return;
+    setSubmittingAction("bookRoom");
+    setSubmitError(null);
+    try {
+      const { threadId } = await launchRoomBookingThread({
+        seed: {
+          title: form.title.trim() || "Untitled event",
+          eventType: form.eventType,
+          date: form.date.trim() || undefined,
+          startTime: startTimeLabel || undefined,
+          endTime: endTimeLabel || undefined,
+          location: form.location.trim() || undefined,
+          description: form.description.trim() || undefined,
+          targetingNotes: form.targetingNotes.trim() || undefined,
+        },
+      });
+      router.push(`/agent/${threadId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start the room-booking agent.";
+      setSubmitError(message);
+      setSubmittingAction(null);
+    }
+  }
+
   return (
     <DashboardPageShell
       title="Events / Create Event"
@@ -364,6 +390,15 @@ export default function NewEventPage() {
           >
             Cancel
           </Link>
+          <button
+            type="button"
+            disabled={!titleReady || submittingAction !== null}
+            onClick={() => void handleBookRoom()}
+            className="inline-flex h-8 items-center rounded-[8px] border border-[#E0E0E0] px-3 text-[12px] font-medium text-[#3B3B3B] transition hover:bg-[#F4F4F4] disabled:cursor-not-allowed disabled:border-[#E6E6E6] disabled:bg-[#F4F4F4] disabled:text-[#A0A0A0]"
+            title="Open the room-booking agent with this event's details"
+          >
+            {submittingAction === "bookRoom" ? "Opening..." : "Book Room (Agent)"}
+          </button>
           <button
             type="button"
             disabled={!canCreateEvent || submittingAction !== null}
