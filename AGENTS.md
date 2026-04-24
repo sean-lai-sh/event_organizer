@@ -298,10 +298,19 @@ Current MCP tool surface:
 - Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
 - Temporary compatibility read aliases: `search_contacts`, `get_contact` (map to the people reads; do not accept workflow filters)
-- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
+- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`, `get_event_room_booking`
 - Approval-gated Convex writes: `update_event_safe`, `create_event`
+- OnceHub live reads: `find_oncehub_slots`
+- Approval-gated OnceHub writes: `book_oncehub_room`
 
 The historical `create_contact` and `update_contact` tools have been retired because they wrote workflow state onto Attio `people`. Use `upsert_person` + `append_person_note` for identity and audit notes, and `ensure_speaker_for_person` + `update_speaker_workflow` for workflow state.
+
+OnceHub data model:
+
+- `event_room_bookings` (Convex) stores booking receipts — one row per event, upserted from the approved-booking write path. Fields cover the provider metadata (`provider`, `page_url`, `link_name`, `room_label`), the scheduled slot (`booked_date`, `booked_time`, `booked_end_time`, `duration_minutes`, `slot_start_epoch_ms`), and the OnceHub receipt (`booking_status`, `booking_reference`, `raw_response_json`).
+- `events` remains the user-facing event record. An approved OnceHub booking stickies `events.room_confirmed = true` and, if no event existed yet, creates one from the booking details.
+- Availability is always live via `find_oncehub_slots`; do not read the `room_availability` table for this MVP path.
+- Bookings use the shared club booking profile from Doppler (`ONCEHUB_SHARED_BOOKING_PROFILE_ID`). MVP scope covers first-time booking only; cancellation, rebooking, and manual-edit sync are out of scope.
 
 ### Outbound matching
 

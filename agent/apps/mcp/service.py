@@ -15,8 +15,10 @@ have been retired because they wrote workflow state onto `people`.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastmcp import FastMCP
 
@@ -27,6 +29,7 @@ try:
         flatten_speaker_entry,
     )
     from core.clients.convex import ConvexClient
+    from core.clients.oncehub import OnceHubClient, OnceHubSlot
     from core.normalize.attio_vocab import (
         normalize_speaker_source,
         normalize_speaker_status,
@@ -38,6 +41,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import fallback
         flatten_speaker_entry,
     )
     from agent.core.clients.convex import ConvexClient  # type: ignore
+    from agent.core.clients.oncehub import OnceHubClient, OnceHubSlot  # type: ignore
     from agent.core.normalize.attio_vocab import (  # type: ignore
         normalize_speaker_source,
         normalize_speaker_status,
@@ -467,9 +471,160 @@ async def update_event_safe(
         )
 
 
+# ── OnceHub Room Booking ────────────────────────────────────────────────
+
+def _slot_to_row(slot: OnceHubSlot) -> dict[str, Any]:
+    return slot.to_dict()
+
+
+@mcp.tool()
+async def find_oncehub_slots(
+    start_date: str,
+    end_date: str,
+    duration_minutes: int,
+    preferred_time_window: str | None = None,
+) -> dict:
+    """Return live Leslie eLab Lean/Launchpad availability for a date range.
+
+    Returns a dict with `slots` (list of slot descriptors), `room`, and
+    `query` echoing the request. Always live — no caching. This tool is
+    read-only and executes without approval.
+    """
+    async with OnceHubClient() as oncehub:
+        room = await oncehub.resolve_room()
+        slots = await oncehub.list_slots(
+            start_date=start_date,
+            end_date=end_date,
+            duration_minutes=duration_minutes,
+            preferred_time_window=preferred_time_window,
+        )
+    return {
+        "room": {
+            "label": room.label,
+            "page_url": room.page_url,
+            "link_name": room.link_name,
+        },
+        "query": {
+            "start_date": start_date,
+            "end_date": end_date,
+            "duration_minutes": duration_minutes,
+            "preferred_time_window": preferred_time_window,
+        },
+        "slots": [_slot_to_row(slot) for slot in slots],
+    }
+
+
+@mcp.tool()
+async def book_oncehub_room(
+    slot_start_epoch_ms: int,
+    duration_minutes: int,
+    title: str,
+    num_attendees: int,
+    event_id: str | None = None,
+    description: str | None = None,
+    event_type: str | None = None,
+    target_profile: str | None = None,
+    approved_by_user_id: str | None = None,
+) -> dict:
+    """Book the Leslie eLab Lean/Launchpad room for a specific slot.
+
+    Approval-gated: the runtime pauses before this executes. On approval,
+    the booking is submitted to OnceHub under the shared club booking
+    profile, and the receipt is persisted to Convex in
+    `event_room_bookings`. If `event_id` is provided the event's
+    `room_confirmed` milestone is stickied to `true`; if `event_id` is
+    omitted a new event is created from the booking details and the
+    resulting event id is returned.
+    """
+    async with OnceHubClient() as oncehub:
+        room = await oncehub.resolve_room()
+        receipt = await oncehub.submit_booking(
+            slot_start_epoch_ms=slot_start_epoch_ms,
+            duration_minutes=duration_minutes,
+            title=title,
+            num_attendees=num_attendees,
+            description=description,
+            event_type=event_type,
+            target_profile=target_profile,
+        )
+
+    tz = ZoneInfo(oncehub._tz_name)  # noqa: SLF001 — read-only accessor
+    local_start = datetime.fromtimestamp(slot_start_epoch_ms / 1000, tz=timezone.utc).astimezone(tz)
+    local_end = local_start + timedelta(minutes=duration_minutes)
+    booked_date = local_start.date().isoformat()
+    booked_time = local_start.strftime("%-I:%M %p")
+    booked_end_time = local_end.strftime("%-I:%M %p")
+
+    event_created = False
+    async with ConvexClient() as convex:
+        effective_event_id = event_id
+        if not effective_event_id:
+            effective_event_id = await convex.create_event({
+                "title": title,
+                "description": description,
+                "event_date": booked_date,
+                "event_time": booked_time,
+                "event_end_time": booked_end_time,
+                "location": room.label,
+                "event_type": event_type,
+                "target_profile": target_profile,
+                "needs_outreach": False,
+                "status": "draft",
+            })
+            event_created = True
+
+        await convex.upsert_event_room_booking(
+            event_id=effective_event_id,
+            provider="oncehub",
+            page_url=room.page_url,
+            link_name=room.link_name,
+            room_label=room.label,
+            booking_status=receipt.status,
+            booked_date=booked_date,
+            booked_time=booked_time,
+            booked_end_time=booked_end_time,
+            duration_minutes=duration_minutes,
+            slot_start_epoch_ms=slot_start_epoch_ms,
+            booking_reference=receipt.booking_reference,
+            booking_reference_json=(
+                json.dumps({"reference": receipt.booking_reference})
+                if receipt.booking_reference
+                else None
+            ),
+            approver_user_id=approved_by_user_id,
+            raw_response_json=json.dumps(receipt.raw, default=str),
+        )
+        await convex.apply_inbound_milestones(
+            effective_event_id,
+            room_confirmed=True,
+        )
+
+    return {
+        "event_id": effective_event_id,
+        "event_created": event_created,
+        "booking_reference": receipt.booking_reference,
+        "booking_status": receipt.status,
+        "room_label": room.label,
+        "page_url": room.page_url,
+        "booked_date": booked_date,
+        "booked_time": booked_time,
+        "booked_end_time": booked_end_time,
+        "duration_minutes": duration_minutes,
+        "slot_start_epoch_ms": slot_start_epoch_ms,
+    }
+
+
+@mcp.tool()
+async def get_event_room_booking(event_id: str) -> dict | None:
+    """Return the latest OnceHub booking record for a Convex event, or None."""
+    async with ConvexClient() as convex:
+        return await convex.get_event_room_booking(event_id)
+
+
 __all__ = [
     "AttioClient",
     "ConvexClient",
+    "OnceHubClient",
     "flatten_record",
     "flatten_speaker_entry",
     "mcp",
@@ -495,4 +650,7 @@ __all__ = [
     "get_event_attendance",
     "create_event",
     "update_event_safe",
+    "find_oncehub_slots",
+    "book_oncehub_room",
+    "get_event_room_booking",
 ]

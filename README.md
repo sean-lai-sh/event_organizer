@@ -129,8 +129,10 @@ The Modal runtime starts that same MCP server over stdio through the Claude agen
 - Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
 - Compatibility read aliases: `search_contacts`, `get_contact`
-- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
+- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`, `get_event_room_booking`
 - Approval-gated Convex writes: `create_event`, `update_event_safe`
+- OnceHub live reads: `find_oncehub_slots` (Leslie eLab Lean/Launchpad, always live)
+- Approval-gated OnceHub writes: `book_oncehub_room` (booking under the shared club profile; upserts `event_room_bookings` and stickies `events.room_confirmed`)
 
 Deploy or serve Modal functions from the `agent/` package as needed for runtime work.
 
@@ -151,6 +153,10 @@ These live in Doppler.
 | `ANTHROPIC_API_KEY` | `agent/` | Anthropic API key for the Modal runtime |
 | `MODAL_TOKEN_ID` | `agent/` | Modal auth |
 | `MODAL_TOKEN_SECRET` | `agent/` | Modal auth |
+| `ONCEHUB_API_KEY` | `agent/` | OnceHub API key for live room lookup + booking (issue #52) |
+| `ONCEHUB_PAGE_URL` | `agent/` | OnceHub booking page URL for the Leslie eLab Lean/Launchpad room |
+| `ONCEHUB_SHARED_BOOKING_PROFILE_ID` | `agent/` | Shared club booking profile used for every approved OnceHub booking |
+| `ONCEHUB_ROOM_LABEL` | `agent/` | Optional override for the pinned room label (defaults to `Lean/Launchpad`) |
 
 ## Testing
 

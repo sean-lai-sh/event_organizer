@@ -191,6 +191,42 @@ def make_trace_step(
     )
 
 
+def make_table_artifact(
+    *,
+    external_id: str,
+    thread_id: str,
+    run_id: str,
+    title: str,
+    summary: str,
+    columns: list[dict],
+    rows: list[dict],
+    sort_order: int,
+) -> ArtifactRecord:
+    """Build a TABLE artifact from structured rows.
+
+    Each column descriptor is `{"key": str, "label": str}`. Rows are raw
+    dicts with the same keys as the columns. The canvas renders these as
+    a readable grid on the right-hand side of the agent UI.
+    """
+    created_at = now_ms()
+    payload = {"columns": columns, "rows": rows}
+    return ArtifactRecord(
+        external_id=external_id,
+        thread_external_id=thread_id,
+        run_external_id=run_id,
+        kind=ArtifactKind.TABLE,
+        status="ready",
+        sort_order=sort_order,
+        title=title,
+        summary=summary,
+        content_blocks=[
+            json_block("table_data", payload, label="rows"),
+        ],
+        created_at=created_at,
+        updated_at=created_at,
+    )
+
+
 def make_checklist_artifact(
     *,
     external_id: str,

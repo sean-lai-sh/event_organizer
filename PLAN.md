@@ -109,10 +109,21 @@ Current MCP tool surface:
 - Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
 - Temporary compatibility read aliases: `search_contacts`, `get_contact`
-- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
+- Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`, `get_event_room_booking`
 - Approval-gated Convex writes: `update_event_safe`, `create_event`
+- OnceHub live reads: `find_oncehub_slots`
+- Approval-gated OnceHub writes: `book_oncehub_room`
 
 The legacy `create_contact` / `update_contact` tools are retired: they wrote workflow fields onto `people` and violated the identity/workflow split.
+
+OnceHub integration rules (issue #52 MVP):
+
+- MVP is scoped to the Leslie eLab **Lean/Launchpad** room only. Other OnceHub rooms are out of scope.
+- Availability is **always live** from OnceHub on every request. Do not route MVP through `elab_scrape/` or the cached `room_availability` table.
+- Bookings are submitted under a single **shared club booking profile** sourced from Doppler (`ONCEHUB_SHARED_BOOKING_PROFILE_ID`), not per-user NYU identities.
+- Booking receipts live in Convex `event_room_bookings`, not on `events`. The user-facing event record stays in `events`.
+- If no event exists yet, an approved booking may create the event as part of the write. Approved bookings sticky `events.room_confirmed` to `true`.
+- Dashboard entrypoints (new-event page, event-detail page) are **thin launchers** that seed an agent thread and route to `/agent/<thread_id>`. Modal remains the orchestration authority; dashboard pages do not call OnceHub directly.
 
 Application code should depend on an internal runtime adapter, not directly on SDK-specific primitives across the repo.
 
