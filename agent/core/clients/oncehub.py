@@ -213,7 +213,7 @@ class OnceHubClient:
 
     def __init__(self, *, timeout: float = 30.0, tz_name: str = DEFAULT_TIMEZONE) -> None:
         self._timeout = timeout
-        self._tz_name = tz_name
+        self.tz_name = tz_name
         self._tz = ZoneInfo(tz_name)
         self._client: httpx.AsyncClient | None = None
 
@@ -239,37 +239,6 @@ class OnceHubClient:
             await self._client.aclose()
 
     # ── Config accessors ────────────────────────────────────────────────
-
-    @property
-    def tz_name(self) -> str:
-        return self._tz_name
-
-    @property
-    def tz(self) -> ZoneInfo:
-        return self._tz
-
-    def format_slot_labels(
-        self,
-        *,
-        slot_start_epoch_ms: int,
-        duration_minutes: int,
-    ) -> dict[str, str]:
-        """Return human-readable date/time strings for a slot in the client's tz.
-
-        Used when persisting a booking receipt and rendering approval payloads
-        so callers don't have to repeat the local-time formatting (and don't
-        have to reach into private attributes).
-        """
-        local_start = (
-            datetime.fromtimestamp(slot_start_epoch_ms / 1000, tz=timezone.utc)
-            .astimezone(self._tz)
-        )
-        local_end = local_start + timedelta(minutes=duration_minutes)
-        return {
-            "booked_date": local_start.date().isoformat(),
-            "booked_time": local_start.strftime("%-I:%M %p"),
-            "booked_end_time": local_end.strftime("%-I:%M %p"),
-        }
 
     @property
     def page_url(self) -> str:
@@ -338,7 +307,7 @@ class OnceHubClient:
                 "year": year,
                 "month": month,
                 "duration_minutes": duration_minutes,
-                "timezone": self._tz_name,
+                "timezone": self.tz_name,
             },
         )
         payload = resp.json()
@@ -394,7 +363,7 @@ class OnceHubClient:
         # timezone-aware first-of-month anchor for every month the range
         # touches. Use it as the single source of truth for month iteration
         # so tests and production share the same path.
-        ranges = month_ranges(start_date, end_date, tz_name=self._tz_name)
+        ranges = month_ranges(start_date, end_date, tz_name=self.tz_name)
 
         entries: list[dict[str, Any]] = []
         for year, month, _epoch_ms in ranges:
@@ -463,7 +432,7 @@ class OnceHubClient:
             "booking_profile_id": profile_id,
             "start_time": start_dt.isoformat(),
             "duration_minutes": duration_minutes,
-            "timezone": self._tz_name,
+            "timezone": self.tz_name,
             "form": {
                 "title": title,
                 "attendees": num_attendees,

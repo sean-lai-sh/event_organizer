@@ -323,7 +323,7 @@ OnceHub approval gate wiring:
 - `book_oncehub_room` is write-class and **always** approval-gated by `ApprovalPolicy`. The runtime pauses the run, persists an approval record, and renders an approval card with humanized slot/date/time/room labels (not raw `slot_start_epoch_ms`).
 - On approval, the runtime injects `approved_by_user_id` server-side from the resolved decision so a forged tool input cannot spoof the audit field.
 - On approval, OnceHub is called first; the booking response is then upserted into `event_room_bookings` (one row per event, by `by_event_id`), `events.room_confirmed` is stickied to `true`, and an `event` context link is attached to the current thread when the booking created the event.
-- If OnceHub succeeds but Convex sync fails, the tool returns a partial-failure payload (`convex_sync: "failed"`, `convex_failed_step`, `event_created`, `booking_upserted`, `milestone_set`, `booking_reference`) instead of raising — the slot is held on OnceHub's side regardless of local persistence and the operator must see the reference to recover.
+- If OnceHub succeeds but Convex sync fails, the tool returns a partial-failure payload (`convex_sync: "failed"`, `convex_error`, `event_created`, `booking_upserted`, `milestone_set`, `booking_reference`) instead of raising — the booleans tell you which step stopped, and the slot is held on OnceHub's side regardless of local persistence so the operator must see the reference to recover.
 
 ### Outbound matching
 

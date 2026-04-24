@@ -121,7 +121,7 @@ OnceHub integration rules (issue #52 MVP):
 - If no event exists yet, an approved booking may create the event as part of the write. Approved bookings sticky `events.room_confirmed` to `true`.
 - Dashboard entrypoints (new-event page, event-detail page) are **thin launchers** that seed an agent thread and route to `/agent/<thread_id>`. Modal remains the orchestration authority; dashboard pages do not call OnceHub directly.
 - Approval injection: when `book_oncehub_room` resumes after approval, the runtime overwrites `approved_by_user_id` server-side from the resolved approver so the audit field cannot be spoofed via crafted `tool_input`.
-- Partial-failure contract: if OnceHub succeeds but Convex sync fails, `book_oncehub_room` returns `{convex_sync: "failed", convex_failed_step, event_created, booking_upserted, milestone_set, booking_reference, ...}` instead of raising. The agent must surface the booking reference to the user so the held slot can be reconciled manually.
+- Partial-failure contract: if OnceHub succeeds but Convex sync fails, `book_oncehub_room` returns `{convex_sync: "failed", convex_error, event_created, booking_upserted, milestone_set, booking_reference, ...}` instead of raising. The booleans tell the caller which step stopped; the agent must surface the booking reference to the user so the held slot can be reconciled manually.
 
 OnceHub env contract (Doppler): `ONCEHUB_API_KEY` (required), `ONCEHUB_PAGE_URL` (required), `ONCEHUB_SHARED_BOOKING_PROFILE_ID` (required for booking), `ONCEHUB_ROOM_LABEL` (optional, defaults to `Lean/Launchpad`). See README and AGENTS.md for the full table.
 

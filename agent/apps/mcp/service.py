@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastmcp import FastMCP
 
@@ -322,89 +323,70 @@ async def book_oncehub_room(
             event_type=event_type,
             target_profile=target_profile,
         )
-        labels = oncehub.format_slot_labels(
-            slot_start_epoch_ms=slot_start_epoch_ms,
-            duration_minutes=duration_minutes,
-        )
+        tz = ZoneInfo(oncehub.tz_name)
 
-    booked_date = labels["booked_date"]
-    booked_time = labels["booked_time"]
-    booked_end_time = labels["booked_end_time"]
+    local_start = datetime.fromtimestamp(slot_start_epoch_ms / 1000, tz=timezone.utc).astimezone(tz)
+    local_end = local_start + timedelta(minutes=duration_minutes)
+    booked_date = local_start.date().isoformat()
+    booked_time = local_start.strftime("%-I:%M %p")
+    booked_end_time = local_end.strftime("%-I:%M %p")
 
-    # OnceHub booking has succeeded by this point. Any Convex write failure
-    # must NOT raise, because doing so would hide the booking reference from
-    # the operator — the slot is held on OnceHub's side whether or not we
-    # persist it locally. Instead, run the three Convex steps independently
-    # so the response payload distinguishes "event created but booking row
-    # failed" (orphan event) from "neither ran" (clean rollback).
+    # OnceHub has held the slot at this point. Don't raise on Convex failures —
+    # the operator needs to see booking_reference to reconcile manually. The
+    # three booleans below tell the caller exactly which step (if any) failed.
     event_created = False
     booking_upserted = False
     milestone_set = False
     convex_error: str | None = None
-    convex_failed_step: str | None = None
     effective_event_id = event_id
 
     try:
         async with ConvexClient() as convex:
             if not effective_event_id:
-                try:
-                    effective_event_id = await convex.create_event({
-                        "title": title,
-                        "description": description,
-                        "event_date": booked_date,
-                        "event_time": booked_time,
-                        "event_end_time": booked_end_time,
-                        "location": room.label,
-                        "event_type": event_type,
-                        "target_profile": target_profile,
-                        "needs_outreach": False,
-                        "status": "draft",
-                    })
-                    event_created = True
-                except Exception as exc:
-                    convex_failed_step = "create_event"
-                    raise exc
+                effective_event_id = await convex.create_event({
+                    "title": title,
+                    "description": description,
+                    "event_date": booked_date,
+                    "event_time": booked_time,
+                    "event_end_time": booked_end_time,
+                    "location": room.label,
+                    "event_type": event_type,
+                    "target_profile": target_profile,
+                    "needs_outreach": False,
+                    "status": "draft",
+                })
+                event_created = True
 
-            try:
-                await convex.upsert_event_room_booking(
-                    event_id=effective_event_id,
-                    provider="oncehub",
-                    page_url=room.page_url,
-                    link_name=room.link_name,
-                    room_label=room.label,
-                    booking_status=receipt.status,
-                    booked_date=booked_date,
-                    booked_time=booked_time,
-                    booked_end_time=booked_end_time,
-                    duration_minutes=duration_minutes,
-                    slot_start_epoch_ms=slot_start_epoch_ms,
-                    booking_reference=receipt.booking_reference,
-                    booking_reference_json=(
-                        json.dumps({"reference": receipt.booking_reference})
-                        if receipt.booking_reference
-                        else None
-                    ),
-                    approver_user_id=approved_by_user_id,
-                    raw_response_json=json.dumps(receipt.raw, default=str),
-                )
-                booking_upserted = True
-            except Exception as exc:
-                convex_failed_step = "upsert_event_room_booking"
-                raise exc
+            await convex.upsert_event_room_booking(
+                event_id=effective_event_id,
+                provider="oncehub",
+                page_url=room.page_url,
+                link_name=room.link_name,
+                room_label=room.label,
+                booking_status=receipt.status,
+                booked_date=booked_date,
+                booked_time=booked_time,
+                booked_end_time=booked_end_time,
+                duration_minutes=duration_minutes,
+                slot_start_epoch_ms=slot_start_epoch_ms,
+                booking_reference=receipt.booking_reference,
+                booking_reference_json=(
+                    json.dumps({"reference": receipt.booking_reference})
+                    if receipt.booking_reference
+                    else None
+                ),
+                approver_user_id=approved_by_user_id,
+                raw_response_json=json.dumps(receipt.raw, default=str),
+            )
+            booking_upserted = True
 
-            try:
-                await convex.apply_inbound_milestones(
-                    effective_event_id,
-                    room_confirmed=True,
-                )
-                milestone_set = True
-            except Exception as exc:
-                convex_failed_step = "apply_inbound_milestones"
-                raise exc
+            await convex.apply_inbound_milestones(
+                effective_event_id,
+                room_confirmed=True,
+            )
+            milestone_set = True
     except Exception as exc:
         convex_error = str(exc)
-
-    convex_sync = "ok" if convex_error is None else "failed"
 
     return {
         "event_id": effective_event_id,
@@ -413,9 +395,8 @@ async def book_oncehub_room(
         "milestone_set": milestone_set,
         "booking_reference": receipt.booking_reference,
         "booking_status": receipt.status,
-        "convex_sync": convex_sync,
+        "convex_sync": "ok" if convex_error is None else "failed",
         "convex_error": convex_error,
-        "convex_failed_step": convex_failed_step,
         "room_label": room.label,
         "page_url": room.page_url,
         "booked_date": booked_date,
