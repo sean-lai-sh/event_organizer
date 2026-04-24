@@ -295,9 +295,13 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 
 Current MCP tool surface:
 
-- Attio reads/writes: `search_contacts`, `get_contact`, `create_contact`, `update_contact`
+- Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
+- Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
+- Temporary compatibility read aliases: `search_contacts`, `get_contact` (map to the people reads; do not accept workflow filters)
 - Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`
-- Approval-gated Convex writes: `update_event_safe`
+- Approval-gated Convex writes: `update_event_safe`, `create_event`
+
+The historical `create_contact` and `update_contact` tools have been retired because they wrote workflow state onto Attio `people`. Use `upsert_person` + `append_person_note` for identity and audit notes, and `ensure_speaker_for_person` + `update_speaker_workflow` for workflow state.
 
 ### Outbound matching
 

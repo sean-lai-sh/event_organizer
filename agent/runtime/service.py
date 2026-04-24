@@ -65,13 +65,17 @@ def _make_approval_title(action: ToolAction) -> str:
         return f"Create event: {name}" + (f" on {date}" if date else "")
     if action.name == "update_event_safe":
         return "Update event details"
-    if action.name == "create_contact":
+    if action.name == "upsert_person":
         first = tool_input.get("firstname", "")
         last = tool_input.get("lastname", "")
         full = f"{first} {last}".strip()
-        return f"Create contact: {full}" if full else "Create contact"
-    if action.name == "update_contact":
-        return "Update contact"
+        return f"Upsert person: {full}" if full else "Upsert person"
+    if action.name == "append_person_note":
+        return "Append note to person"
+    if action.name == "ensure_speaker_for_person":
+        return "Ensure speaker entry for person"
+    if action.name == "update_speaker_workflow":
+        return "Update speaker workflow"
     return f"Approval required: {action.name}"
 
 

@@ -43,19 +43,30 @@ When a user interacts with the website agent:
 
 The runtime's current MCP tool surface is:
 
-1. **Attio (CRM)**
+1. **Attio `people` (identity only)**
+   - `search_people`
+   - `get_person`
+   - `upsert_person`
+   - `append_person_note`
+2. **Attio `speakers` (workflow)**
+   - `search_speakers`
+   - `get_speaker`
+   - `ensure_speaker_for_person`
+   - `update_speaker_workflow`
+3. **Compatibility read aliases** (temporary, map to the people reads)
    - `search_contacts`
    - `get_contact`
-   - `create_contact`
-   - `update_contact`
-2. **Convex (operational state)**
+4. **Convex (operational state)**
    - `list_events`
    - `get_event`
    - `get_event_inbound_status`
    - `get_event_outreach`
    - `get_attendance_dashboard`
    - `get_event_attendance`
+   - approval-gated `create_event`
    - approval-gated `update_event_safe`
+
+The historical `create_contact` / `update_contact` workflow-authoritative tools have been retired because they wrote workflow fields onto Attio `people`.
 
 ## Supporting Services (Root Files)
 

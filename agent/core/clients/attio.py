@@ -52,6 +52,36 @@ def flatten_record(record: dict) -> dict:
     return flat
 
 
+def flatten_speaker_entry(entry: dict) -> dict:
+    """Convert an Attio speakers list entry into a flat dict for easy access."""
+    values = entry.get("values", {})
+    entry_id_obj = entry.get("id", {})
+    flat: dict[str, Any] = {
+        "entry_id": entry_id_obj.get("entry_id") or entry_id_obj.get("record_id"),
+        "parent_record_id": entry.get("parent_record_id")
+        or _v(entry, "parent_record", key="target_record_id")
+        or _v(entry, "person", key="target_record_id"),
+        "created_at": entry.get("created_at"),
+    }
+
+    for attr in (
+        "status",
+        "source",
+        "active_event_id",
+        "assigned",
+        "managed_poc",
+        "previous_events",
+        "speaker_info",
+        "work_history",
+    ):
+        if values.get(attr):
+            flat[attr] = _v(entry, attr)
+        else:
+            flat[attr] = None
+
+    return flat
+
+
 class AttioClient:
     def __init__(self, timeout: float = 30.0):
         self._timeout = timeout
@@ -114,6 +144,37 @@ class AttioClient:
         """
         payload: dict[str, Any] = {"filter": filter_, "limit": limit, "offset": offset}
         resp = await self._request("POST", "/objects/people/records/query", json=payload)
+        return resp.json().get("data", [])
+
+    # ── Speakers (Workflow) ──────────────────────────────────────────────────
+
+    async def create_speaker_entry(self, values: dict[str, Any]) -> dict:
+        resp = await self._request(
+            "POST",
+            "/lists/speakers/entries",
+            json={"data": {"values": values}},
+        )
+        return resp.json().get("data", {})
+
+    async def get_speaker_entry(self, entry_id: str) -> dict:
+        resp = await self._request("GET", f"/lists/speakers/entries/{entry_id}")
+        return resp.json().get("data", {})
+
+    async def update_speaker_entry(self, entry_id: str, values: dict[str, Any]) -> dict:
+        resp = await self._request(
+            "PATCH",
+            f"/lists/speakers/entries/{entry_id}",
+            json={"data": {"values": values}},
+        )
+        return resp.json().get("data", {})
+
+    async def search_speaker_entries(
+        self, filter_: dict, limit: int = 100, offset: int = 0
+    ) -> list[dict]:
+        payload: dict[str, Any] = {"filter": filter_, "limit": limit, "offset": offset}
+        resp = await self._request(
+            "POST", "/lists/speakers/entries/query", json=payload
+        )
         return resp.json().get("data", [])
 
     # ── Notes ────────────────────────────────────────────────────────────────
