@@ -8,6 +8,7 @@ import { CalendarDays, MapPin } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { launchRoomBookingThread } from "@/components/agent/launchers/roomBooking";
 
 type EventType = "Speaker Panel" | "Workshop" | "Networking" | "Social";
 type EventStatus = "draft" | "matching" | "outreach" | "completed";
@@ -229,7 +230,7 @@ function EventDetailEditor({
 
   const [form, setForm] = useState<FormState>(() => eventToForm(event));
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "deleting">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "deleting" | "launching">("idle");
 
   const normalizedStartTime = normalizeTimeInput(form.startTime);
   const normalizedEndTime = normalizeTimeInput(form.endTime);
@@ -295,6 +296,32 @@ function EventDetailEditor({
     }
   }
 
+  async function handleBookRoom() {
+    if (saveState !== "idle") return;
+    setSaveState("launching");
+    setSaveError(null);
+    try {
+      const { threadId } = await launchRoomBookingThread({
+        eventId,
+        seed: {
+          title: form.title.trim() || event.title,
+          eventType: form.eventType,
+          date: form.date.trim() || undefined,
+          startTime: normalizedStartTime || undefined,
+          endTime: normalizedEndTime || undefined,
+          location: form.location.trim() || undefined,
+          description: form.description.trim() || undefined,
+          targetingNotes: form.targetingNotes.trim() || undefined,
+        },
+      });
+      router.push(`/agent/${threadId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start the room-booking agent.";
+      setSaveError(message);
+      setSaveState("idle");
+    }
+  }
+
   if (event === undefined) {
     return (
       <DashboardPageShell title="Events / Loading">
@@ -336,6 +363,15 @@ function EventDetailEditor({
           >
             Back
           </Link>
+          <button
+            type="button"
+            onClick={() => void handleBookRoom()}
+            disabled={saveState !== "idle"}
+            className="inline-flex h-8 items-center rounded-[8px] border border-[#E0E0E0] px-3 text-[12px] font-medium text-[#3B3B3B] transition hover:bg-[#F4F4F4] disabled:cursor-not-allowed disabled:border-[#E6E6E6] disabled:bg-[#F4F4F4] disabled:text-[#A0A0A0]"
+            title="Open the room-booking agent for this event"
+          >
+            {saveState === "launching" ? "Opening..." : "Book Room (Agent)"}
+          </button>
           <button
             type="button"
             onClick={() => void handleSave()}

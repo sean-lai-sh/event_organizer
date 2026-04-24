@@ -251,4 +251,26 @@ export default defineSchema({
     .index("by_room", ["room"])
     .index("by_date", ["date"])
     .index("by_room_date", ["room", "date"]),
+
+  // OnceHub booking receipts for events. One row per event; upsert semantics.
+  // `events` stays the user-facing event record; provider receipts live here.
+  event_room_bookings: defineTable({
+    event_id: v.id("events"),
+    provider: v.string(),              // "oncehub"
+    page_url: v.string(),
+    link_name: v.string(),
+    room_label: v.string(),            // "Lean/Launchpad"
+    booking_status: v.string(),        // "confirmed" | "pending" | "failed"
+    booked_date: v.string(),           // "YYYY-MM-DD"
+    booked_time: v.string(),           // "6:30 PM"
+    booked_end_time: v.string(),       // "8:00 PM"
+    duration_minutes: v.number(),
+    slot_start_epoch_ms: v.number(),
+    booking_reference: v.optional(v.string()),
+    booking_reference_json: v.optional(v.string()),
+    approver_user_id: v.optional(v.string()),
+    raw_response_json: v.string(),
+    created_at: v.number(),
+    updated_at: v.number(),
+  }).index("by_event_id", ["event_id"]),
 });

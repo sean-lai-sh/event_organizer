@@ -135,7 +135,7 @@ export const deleteEvent = mutation({
       throw new Error("Event not found.");
     }
 
-    const [outreachRows, attendanceRows, contextLinks] = await Promise.all([
+    const [outreachRows, attendanceRows, contextLinks, roomBookings] = await Promise.all([
       ctx.db
         .query("event_outreach")
         .withIndex("by_event_id", (q) => q.eq("event_id", event_id))
@@ -148,12 +148,17 @@ export const deleteEvent = mutation({
         .query("agent_context_links")
         .withIndex("by_entity", (q) => q.eq("entity_type", "event").eq("entity_id", event_id))
         .collect(),
+      ctx.db
+        .query("event_room_bookings")
+        .withIndex("by_event_id", (q) => q.eq("event_id", event_id))
+        .collect(),
     ]);
 
     await Promise.all([
       ...outreachRows.map((row) => ctx.db.delete(row._id)),
       ...attendanceRows.map((row) => ctx.db.delete(row._id)),
       ...contextLinks.map((row) => ctx.db.delete(row._id)),
+      ...roomBookings.map((row) => ctx.db.delete(row._id)),
     ]);
     await ctx.db.delete(event_id);
   },

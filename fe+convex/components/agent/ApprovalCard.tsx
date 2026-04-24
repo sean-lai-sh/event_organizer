@@ -6,12 +6,47 @@ import type { AgentApproval, RiskLevel } from "./types";
 import { submitApproval } from "./adapters/runtime";
 import { FIELD_LABELS, extractInnerPayload } from "./approvalPayload";
 
+const NEW_YORK_TZ = "America/New_York";
+
+function formatSlotStart(epochMs: number): string {
+  try {
+    const date = new Date(epochMs);
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: NEW_YORK_TZ,
+    }).format(date);
+  } catch {
+    return String(epochMs);
+  }
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 60) return `${mins} min`;
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem === 0 ? `${hours} hr` : `${hours} hr ${rem} min`;
+}
+
 export function formatPayload(raw: Record<string, unknown>): Record<string, unknown> {
   const inner = extractInnerPayload(raw);
   return Object.fromEntries(
     Object.entries(inner)
       .filter(([, v]) => v !== null && v !== undefined && v !== "")
-      .map(([k, v]) => [FIELD_LABELS[k] ?? k, v])
+      .map(([k, v]) => {
+        const label = FIELD_LABELS[k] ?? k;
+        if (k === "slot_start_epoch_ms" && typeof v === "number") {
+          return [label, formatSlotStart(v)];
+        }
+        if (k === "duration_minutes" && typeof v === "number") {
+          return [label, formatDuration(v)];
+        }
+        return [label, v];
+      })
   );
 }
 
