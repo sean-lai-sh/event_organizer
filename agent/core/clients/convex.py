@@ -41,14 +41,13 @@ class ConvexClient:
         return value
 
     async def _call(self, kind: str, path: str, args: dict) -> Any:
+        if self._http is None:
+            raise RuntimeError("ConvexClient must be used inside an async context manager")
+
         resp = await self._http.post(
             f"{self._url}/api/{kind}",
             json={"path": path, "args": self._strip_nones(args), "format": "json"},
         )
-
-        body = resp.text
-        print("Convex raw response:", body)
-
         resp.raise_for_status()
 
         data = resp.json()
