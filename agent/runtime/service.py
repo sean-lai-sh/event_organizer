@@ -969,7 +969,7 @@ class AgentRuntimeService:
             return
 
         link_key = f"{thread_id}:event:{event_id}"
-        existing = self._store.context_links.get(link_key) if hasattr(self._store, "context_links") else None
+        existing = await self._store.get_context_link(link_key)
         if existing:
             return
 

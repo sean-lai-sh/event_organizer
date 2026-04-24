@@ -242,6 +242,72 @@ async def test_book_oncehub_room_uses_existing_event_when_provided(monkeypatch: 
     assert result["event_created"] is False
 
 
+@pytest.mark.asyncio
+async def test_book_oncehub_room_preserves_receipt_when_convex_upsert_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OnceHub side succeeded, Convex write failed after create_event — the
+    caller must still see the booking_reference so the operator can recover.
+    """
+    state = _install_fakes(monkeypatch)
+
+    class FlakyConvex(FakeConvexClient):
+        async def upsert_event_room_booking(self, **kwargs):
+            raise RuntimeError("Convex upsert transport failed")
+
+    monkeypatch.setattr(mcp_service, "ConvexClient", lambda: FlakyConvex(state))
+
+    tz = ZoneInfo("America/New_York")
+    epoch = int(datetime(2026, 5, 15, 18, 0, tzinfo=tz).timestamp() * 1000)
+
+    result = await mcp_service.book_oncehub_room(
+        slot_start_epoch_ms=epoch,
+        duration_minutes=90,
+        title="Growth Panel",
+        num_attendees=30,
+    )
+
+    # Tool does NOT raise — it returns the OnceHub receipt with partial-failure info.
+    assert result["booking_reference"] == "bk_1"
+    assert result["booking_status"] == "confirmed"
+    assert result["convex_sync"] == "failed"
+    assert "Convex upsert transport failed" in (result["convex_error"] or "")
+    # create_event ran before the upsert failed, so the event id is still surfaced.
+    assert result["event_id"] == "evt_new_42"
+    assert result["event_created"] is True
+    # No milestone call happened (upsert threw before reaching it).
+    assert state["milestones_calls"] == []
+
+
+@pytest.mark.asyncio
+async def test_book_oncehub_room_partial_failure_when_create_event_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even if create_event itself fails, the receipt reference is preserved."""
+    state = _install_fakes(monkeypatch)
+
+    class FlakyConvex(FakeConvexClient):
+        async def create_event(self, event):
+            raise RuntimeError("Convex create_event failed")
+
+    monkeypatch.setattr(mcp_service, "ConvexClient", lambda: FlakyConvex(state))
+
+    tz = ZoneInfo("America/New_York")
+    epoch = int(datetime(2026, 5, 15, 18, 0, tzinfo=tz).timestamp() * 1000)
+
+    result = await mcp_service.book_oncehub_room(
+        slot_start_epoch_ms=epoch,
+        duration_minutes=60,
+        title="Social",
+        num_attendees=20,
+    )
+
+    assert result["booking_reference"] == "bk_1"
+    assert result["convex_sync"] == "failed"
+    assert result["event_id"] is None
+    assert result["event_created"] is False
+
+
 # ── get_event_room_booking ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
