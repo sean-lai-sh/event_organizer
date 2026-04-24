@@ -215,3 +215,32 @@ Convex type drift after pulling
 Modal auth failures
 
 - Confirm `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` are present in Doppler and that you are logged in locally.
+
+## OnceHub room booking (MVP)
+
+The agent can find and book the Leslie eLab Lean/Launchpad room directly from
+`/agent` or from the event dashboard. Availability is always live; the agent
+pauses for approval before any booking write.
+
+- Dashboards only launch scoped agent threads; orchestration stays on Modal.
+  See `fe+convex/components/agent/launchers/roomBooking.ts`.
+- MCP tools (Modal-side): `find_oncehub_slots`, `book_oncehub_room` (approval
+  gated), `get_event_room_booking`.
+- Convex `event_room_bookings` stores the OnceHub receipt. `events.room_confirmed`
+  flips sticky-true when a booking confirms.
+
+Configure the shared club booking profile in Doppler:
+
+```
+ONCEHUB_PROFILE_FIRST_NAME
+ONCEHUB_PROFILE_LAST_NAME
+ONCEHUB_PROFILE_EMAIL
+ONCEHUB_PROFILE_NETID
+ONCEHUB_PROFILE_AFFILIATION
+ONCEHUB_PROFILE_SCHOOL
+ONCEHUB_PROFILE_ORG_NAME
+```
+
+MVP scope is explicitly limited to first-time booking of the Lean/Launchpad
+room. Rebooking, cancellation, per-user NYU identities, and syncing manual
+OnceHub edits back into Convex are out of scope.

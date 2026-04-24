@@ -4,13 +4,16 @@ from typing import Any, Awaitable, Callable
 
 try:
     from apps.mcp.service import (
+        book_oncehub_room,
         create_contact,
+        find_oncehub_slots,
         get_attendance_dashboard,
         get_contact,
         get_event,
         get_event_attendance,
         get_event_inbound_status,
         get_event_outreach,
+        get_event_room_booking,
         list_events,
         search_contacts,
         update_contact,
@@ -18,13 +21,16 @@ try:
     )
 except ModuleNotFoundError:  # pragma: no cover - package import fallback
     from agent.apps.mcp.service import (  # type: ignore
+        book_oncehub_room,
         create_contact,
+        find_oncehub_slots,
         get_attendance_dashboard,
         get_contact,
         get_event,
         get_event_attendance,
         get_event_inbound_status,
         get_event_outreach,
+        get_event_room_booking,
         list_events,
         search_contacts,
         update_contact,
@@ -45,6 +51,9 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_attendance_dashboard": get_attendance_dashboard,
     "get_event_attendance": get_event_attendance,
     "update_event_safe": update_event_safe,
+    "find_oncehub_slots": find_oncehub_slots,
+    "book_oncehub_room": book_oncehub_room,
+    "get_event_room_booking": get_event_room_booking,
 }
 
 

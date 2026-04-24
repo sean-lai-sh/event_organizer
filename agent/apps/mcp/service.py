@@ -9,11 +9,49 @@ from fastmcp import FastMCP
 try:
     from core.clients.attio import AttioClient, flatten_record
     from core.clients.convex import ConvexClient
+    from core.clients.oncehub import (
+        LEAN_LAUNCHPAD_ROOM_LABEL,
+        ONCEHUB_BASE_URL,
+        PROVIDER_NAME as ONCEHUB_PROVIDER,
+        OnceHubClient,
+        compute_slot_end_epoch_ms,
+        format_slot_labels,
+    )
 except ModuleNotFoundError:  # pragma: no cover - package import fallback
     from agent.core.clients.attio import AttioClient, flatten_record
     from agent.core.clients.convex import ConvexClient
+    from agent.core.clients.oncehub import (  # type: ignore
+        LEAN_LAUNCHPAD_ROOM_LABEL,
+        ONCEHUB_BASE_URL,
+        PROVIDER_NAME as ONCEHUB_PROVIDER,
+        OnceHubClient,
+        compute_slot_end_epoch_ms,
+        format_slot_labels,
+    )
 
 mcp = FastMCP("event-organizer")
+
+
+# OnceHub client is resolved lazily so tests can monkeypatch a factory and the
+# production path can attach a Playwright backend on first use.
+_oncehub_client_factory: Any = None
+
+
+def _default_oncehub_client() -> OnceHubClient:
+    try:
+        from core.clients.oncehub_playwright import PlaywrightSlotBackend  # type: ignore
+    except ModuleNotFoundError:
+        try:
+            from agent.core.clients.oncehub_playwright import PlaywrightSlotBackend  # type: ignore
+        except ModuleNotFoundError:
+            PlaywrightSlotBackend = None  # type: ignore[assignment]
+    backend = PlaywrightSlotBackend() if PlaywrightSlotBackend is not None else None
+    return OnceHubClient(backend=backend)
+
+
+def _get_oncehub_client() -> OnceHubClient:
+    factory = _oncehub_client_factory or _default_oncehub_client
+    return factory()
 
 
 def _attio_value(v: Any) -> list[dict]:
@@ -243,21 +281,165 @@ async def update_event_safe(
         )
 
 
+@mcp.tool()
+async def find_oncehub_slots(
+    start_date: str,
+    end_date: str,
+    duration_minutes: int = 90,
+    preferred_time_window: str | None = None,
+) -> dict:
+    """
+    Return live OnceHub availability for the Leslie eLab Lean/Launchpad room
+    between `start_date` and `end_date` (ISO dates, inclusive). Read-only.
+    """
+    client = _get_oncehub_client()
+    slots = await client.find_slots(
+        start_date=start_date,
+        end_date=end_date,
+        duration_minutes=duration_minutes,
+        preferred_time_window=preferred_time_window,
+    )
+    return {
+        "provider": ONCEHUB_PROVIDER,
+        "room_label": client.room_label,
+        "page_url": client.page_url,
+        "duration_minutes": duration_minutes,
+        "preferred_time_window": preferred_time_window,
+        "slots": [slot.to_dict() for slot in slots],
+    }
+
+
+@mcp.tool()
+async def book_oncehub_room(
+    slot_start_epoch_ms: int,
+    duration_minutes: int,
+    title: str,
+    num_attendees: int,
+    event_id: str | None = None,
+    description: str | None = None,
+    event_type: str | None = None,
+    target_profile: str | None = None,
+    approved_by_user_id: str | None = None,
+) -> dict:
+    """
+    Book the Lean/Launchpad room at the given slot using the shared club profile.
+
+    Write-class tool. MUST be approval-gated by the runtime — the runtime
+    injects `approved_by_user_id` after approval and never calls this directly.
+    If `event_id` is not provided, a Convex event is created as part of the
+    approved write using the booking fields plus the slot's date/time.
+    """
+    client = _get_oncehub_client()
+    booking_result = await client.book_slot(
+        slot_start_epoch_ms=slot_start_epoch_ms,
+        duration_minutes=duration_minutes,
+        title=title,
+        num_attendees=num_attendees,
+        description=description,
+    )
+
+    labels = format_slot_labels(slot_start_epoch_ms, duration_minutes)
+
+    async with ConvexClient() as convex:
+        resolved_event_id = event_id
+        if not resolved_event_id:
+            try:
+                resolved_event_id = await convex.create_event({
+                    "title": title,
+                    "description": description,
+                    "event_date": labels["booked_date"],
+                    "event_time": labels["booked_time"],
+                    "event_end_time": labels["booked_end_time"],
+                    "location": client.room_label,
+                    "event_type": event_type,
+                    "target_profile": target_profile,
+                    "needs_outreach": False,
+                    "status": "draft",
+                })
+            except Exception as exc:
+                # OnceHub booking already succeeded — surface the reference so
+                # ops can reconcile manually.
+                raise RuntimeError(
+                    "OnceHub booking succeeded but Convex event create failed. "
+                    f"Booking reference: {booking_result.booking_reference}. "
+                    f"Original error: {exc}"
+                ) from exc
+
+        import json as _json
+        try:
+            await convex.upsert_event_room_booking({
+                "event_id": resolved_event_id,
+                "provider": ONCEHUB_PROVIDER,
+                "page_url": client.page_url,
+                "link_name": client.room_label,
+                "room_label": client.room_label,
+                "booking_status": booking_result.status,
+                "booked_date": labels["booked_date"],
+                "booked_time": labels["booked_time"],
+                "booked_end_time": labels["booked_end_time"],
+                "duration_minutes": duration_minutes,
+                "slot_start_epoch_ms": slot_start_epoch_ms,
+                "booking_reference": booking_result.booking_reference,
+                "booking_reference_json": (
+                    _json.dumps({"reference": booking_result.booking_reference})
+                    if booking_result.booking_reference
+                    else None
+                ),
+                "approver_user_id": approved_by_user_id,
+                "raw_response_json": _json.dumps(booking_result.raw_response),
+            })
+        except Exception as exc:
+            raise RuntimeError(
+                "OnceHub booking succeeded but Convex upsert failed. "
+                f"Booking reference: {booking_result.booking_reference}. "
+                f"Original error: {exc}"
+            ) from exc
+
+    return {
+        "event_id": resolved_event_id,
+        "provider": ONCEHUB_PROVIDER,
+        "room_label": client.room_label,
+        "booking_status": booking_result.status,
+        "booking_reference": booking_result.booking_reference,
+        "confirmation_url": booking_result.confirmation_url,
+        "booked_date": labels["booked_date"],
+        "booked_time": labels["booked_time"],
+        "booked_end_time": labels["booked_end_time"],
+        "duration_minutes": duration_minutes,
+        "slot_start_epoch_ms": slot_start_epoch_ms,
+        "slot_end_epoch_ms": compute_slot_end_epoch_ms(slot_start_epoch_ms, duration_minutes),
+        "display": labels["display"],
+    }
+
+
+@mcp.tool()
+async def get_event_room_booking(event_id: str) -> dict | None:
+    """Return the stored OnceHub booking record for an event, or None. Read-only."""
+    async with ConvexClient() as convex:
+        return await convex.get_event_room_booking(event_id)
+
+
 __all__ = [
     "AttioClient",
     "ConvexClient",
-    "flatten_record",
-    "mcp",
-    "search_contacts",
-    "get_contact",
+    "LEAN_LAUNCHPAD_ROOM_LABEL",
+    "ONCEHUB_BASE_URL",
+    "OnceHubClient",
+    "book_oncehub_room",
     "create_contact",
-    "update_contact",
-    "list_events",
+    "create_event",
+    "find_oncehub_slots",
+    "flatten_record",
+    "get_attendance_dashboard",
+    "get_contact",
     "get_event",
+    "get_event_attendance",
     "get_event_inbound_status",
     "get_event_outreach",
-    "get_attendance_dashboard",
-    "get_event_attendance",
-    "create_event",
+    "get_event_room_booking",
+    "list_events",
+    "mcp",
+    "search_contacts",
+    "update_contact",
     "update_event_safe",
 ]

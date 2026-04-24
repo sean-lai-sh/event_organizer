@@ -248,3 +248,19 @@ class ConvexClient:
     async def get_event_attendance(self, event_id: str) -> dict:
         rows = await self.query("attendance:listEventAttendance", {"event_id": event_id})
         return rows if isinstance(rows, dict) else {}
+
+    # ── Room Bookings (OnceHub) ──
+
+    async def get_event_room_booking(self, event_id: str) -> dict | None:
+        return await self.query(
+            "roomBookings:getEventRoomBooking", {"event_id": event_id}
+        )
+
+    async def upsert_event_room_booking(self, row: dict) -> str:
+        """
+        Insert or update the `event_room_bookings` record for an event and set
+        `events.room_confirmed = true` atomically on the Convex side.
+
+        Returns the document id of the upserted booking.
+        """
+        return await self.mutation("roomBookings:upsertFromAgent", row)

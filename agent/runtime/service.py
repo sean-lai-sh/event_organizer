@@ -72,7 +72,35 @@ def _make_approval_title(action: ToolAction) -> str:
         return f"Create contact: {full}" if full else "Create contact"
     if action.name == "update_contact":
         return "Update contact"
+    if action.name == "book_oncehub_room":
+        return _make_oncehub_booking_approval_title(tool_input)
     return f"Approval required: {action.name}"
+
+
+def _make_oncehub_booking_approval_title(tool_input: dict) -> str:
+    """
+    Render a human-readable title for a OnceHub booking approval. Uses
+    `format_slot_labels` so the date/time match what the user saw when asking
+    the agent to book.
+    """
+    try:
+        from core.clients.oncehub import (  # type: ignore
+            LEAN_LAUNCHPAD_ROOM_LABEL,
+            format_slot_labels,
+        )
+    except ModuleNotFoundError:  # pragma: no cover - package import fallback
+        from agent.core.clients.oncehub import (  # type: ignore
+            LEAN_LAUNCHPAD_ROOM_LABEL,
+            format_slot_labels,
+        )
+
+    title = tool_input.get("title") or "untitled event"
+    slot_start = tool_input.get("slot_start_epoch_ms")
+    duration = tool_input.get("duration_minutes") or 0
+    if isinstance(slot_start, int) and isinstance(duration, int) and duration > 0:
+        labels = format_slot_labels(slot_start, duration)
+        return f"Book {LEAN_LAUNCHPAD_ROOM_LABEL} for {title}: {labels['display']}"
+    return f"Book {LEAN_LAUNCHPAD_ROOM_LABEL} for {title}"
 
 
 class AgentRuntimeService:

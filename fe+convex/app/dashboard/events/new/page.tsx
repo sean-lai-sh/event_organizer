@@ -7,6 +7,7 @@ import { useMutation } from "convex/react";
 import { CalendarDays, MapPin } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { api } from "@/convex/_generated/api";
+import { launchRoomBookingThread } from "@/components/agent/launchers/roomBooking";
 
 type EventType = "Speaker Panel" | "Workshop" | "Networking" | "Social";
 
@@ -241,7 +242,9 @@ export default function NewEventPage() {
   const createEvent = useMutation(api.events.createEvent);
 
   const [form, setForm] = useState<FormState>(defaultState);
-  const [submittingAction, setSubmittingAction] = useState<null | "create" | "matching">(null);
+  const [submittingAction, setSubmittingAction] = useState<
+    null | "create" | "matching" | "room"
+  >(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [endTimeTouched, setEndTimeTouched] = useState(false);
 
@@ -353,6 +356,38 @@ export default function NewEventPage() {
     }
   }
 
+  async function handleBookRoom() {
+    if (!titleReady) return;
+
+    setSubmittingAction("room");
+    setSubmitError(null);
+
+    try {
+      const { threadId } = await launchRoomBookingThread({
+        form: {
+          title: form.title,
+          eventType: form.eventType,
+          date: form.date,
+          startTime: startTimeLabel,
+          endTime: endTimeLabel,
+          location: form.location,
+          description: form.description,
+          targetingNotes: form.targetingNotes,
+        },
+        threadTitleFallback: form.title,
+      });
+
+      router.push(`/agent/${threadId}`);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not launch the room-booking agent. Try again.";
+      setSubmitError(message);
+      setSubmittingAction(null);
+    }
+  }
+
   return (
     <DashboardPageShell
       title="Events / Create Event"
@@ -372,6 +407,15 @@ export default function NewEventPage() {
             title={timeValidationError ?? "Requires title + date"}
           >
             {submittingAction === "create" ? "Creating..." : "Create Event"}
+          </button>
+          <button
+            type="button"
+            disabled={!titleReady || submittingAction !== null}
+            onClick={() => void handleBookRoom()}
+            className="inline-flex h-8 items-center rounded-[8px] border border-[#E0E0E0] px-3 text-[12px] font-medium text-[#3B3B3B] transition hover:bg-[#F4F4F4] disabled:cursor-not-allowed disabled:border-[#E6E6E6] disabled:bg-[#F4F4F4] disabled:text-[#A0A0A0]"
+            title="Launch the agent to find and book the Leslie eLab Lean/Launchpad room"
+          >
+            {submittingAction === "room" ? "Launching..." : "Book Room"}
           </button>
           <button
             type="button"

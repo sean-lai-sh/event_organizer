@@ -251,4 +251,28 @@ export default defineSchema({
     .index("by_room", ["room"])
     .index("by_date", ["date"])
     .index("by_room_date", ["room", "date"]),
+
+  // OnceHub (or future-provider) room bookings submitted by the agent on
+  // behalf of the shared club profile. Receipt/reference data stays here;
+  // `events.room_confirmed` flips true when an approved booking lands.
+  event_room_bookings: defineTable({
+    event_id: v.id("events"),
+    provider: v.string(),              // "oncehub"
+    page_url: v.string(),              // "https://go.oncehub.com/NYULeslie"
+    link_name: v.string(),
+    room_label: v.string(),            // "Lean/Launchpad (fits 30 - 50 people)"
+    booking_status: v.string(),        // "confirmed" | "failed" | "pending"
+    booked_date: v.string(),           // "YYYY-MM-DD" in event TZ
+    booked_time: v.string(),           // "10:00 AM"
+    booked_end_time: v.string(),       // "11:30 AM"
+    duration_minutes: v.number(),
+    slot_start_epoch_ms: v.number(),
+    booking_reference: v.optional(v.string()),
+    booking_reference_json: v.optional(v.string()),
+    approver_user_id: v.optional(v.string()),
+    raw_response_json: v.string(),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_event_id", ["event_id"]),
 });

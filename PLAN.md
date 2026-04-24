@@ -516,6 +516,33 @@ Triage rule:
 
 - if an issue does not directly advance `/agent`, Modal runtime, Anthropic harness, approvals, artifacts, Discord parity, scoped launchers, or the required doc rewrite, move it out of MVP
 
+## MVP: OnceHub Live Room Booking (Leslie eLab Lean/Launchpad)
+
+- Live OnceHub reads on every agent request. Do not route MVP through
+  `elab_scrape/` or the cached `room_availability` table.
+- Scope is locked to the Leslie eLab `Lean/Launchpad` room for MVP. Pre-money
+  and other rooms are out of scope until a second room is intentionally added.
+- Bookings submit through a shared club profile pulled from Doppler:
+  `ONCEHUB_PROFILE_FIRST_NAME`, `ONCEHUB_PROFILE_LAST_NAME`,
+  `ONCEHUB_PROFILE_EMAIL`, `ONCEHUB_PROFILE_NETID`,
+  `ONCEHUB_PROFILE_AFFILIATION`, `ONCEHUB_PROFILE_SCHOOL`,
+  `ONCEHUB_PROFILE_ORG_NAME`. No per-user NYU identity is collected.
+- MCP tool surface (Modal-side):
+  - `find_oncehub_slots(start_date, end_date, duration_minutes, preferred_time_window?)` – read-only
+  - `book_oncehub_room(slot_start_epoch_ms, duration_minutes, title, num_attendees, event_id?, description?, event_type?, target_profile?, approved_by_user_id?)` – write, always approval-gated
+  - `get_event_room_booking(event_id)` – read-only
+- Approval payloads for OnceHub bookings are enriched with human-readable
+  date, time, room, and title so approvers do not see raw epoch ms.
+- OnceHub receipts live in Convex `event_room_bookings`. `events.room_confirmed`
+  flips sticky-true when a booking confirms; the receipt never bleeds onto
+  `events`.
+- If a booking approval lands without a pre-existing `event_id`, the
+  approved write creates the Convex event in the same transaction using the
+  slot's date, time, and room label.
+- Dashboard pages only launch thread-seeded agent conversations via
+  `components/agent/launchers/roomBooking.ts`. They MUST NOT duplicate
+  OnceHub logic locally; orchestration stays Modal-side.
+
 ## Non-Negotiable Rules
 
 - Do not add new workflow fields to Attio `people`.

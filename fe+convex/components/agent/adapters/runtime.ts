@@ -317,16 +317,50 @@ export async function getThreadApprovals(threadId: string): Promise<AgentApprova
   return state.approvals;
 }
 
-export async function createThread(title?: string): Promise<AgentThread> {
+export type CreateThreadContextLink = {
+  relation?: string;
+  entityType: "event" | "contact" | string;
+  entityId: string;
+  label?: string;
+  url?: string;
+  metadataJson?: string;
+};
+
+export type CreateThreadOptions = {
+  title?: string;
+  contextLinks?: CreateThreadContextLink[];
+};
+
+export async function createThread(
+  titleOrOptions?: string | CreateThreadOptions,
+): Promise<AgentThread> {
+  const options: CreateThreadOptions =
+    typeof titleOrOptions === "string" || titleOrOptions === undefined
+      ? { title: titleOrOptions }
+      : titleOrOptions;
+
+  const body: Record<string, unknown> = {
+    channel: "web",
+    title: options.title ?? "New conversation",
+  };
+
+  if (options.contextLinks && options.contextLinks.length > 0) {
+    body.context_links = options.contextLinks.map((link) => ({
+      relation: link.relation ?? "context",
+      entity_type: link.entityType,
+      entity_id: link.entityId,
+      label: link.label,
+      url: link.url,
+      metadata_json: link.metadataJson,
+    }));
+  }
+
   const thread = await request<BackendThread>("/threads", {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      channel: "web",
-      title: title ?? "New conversation",
-    }),
+    body: JSON.stringify(body),
   });
   return mapThread(thread);
 }

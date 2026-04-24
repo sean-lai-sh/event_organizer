@@ -419,3 +419,49 @@ If you change any of the following, update `PLAN.md` and this file in the same c
 - id mappings between Attio and Convex
 - source or status vocabularies
 - inbound or outbound synchronization behavior
+- OnceHub MCP tool surface or shared-profile env contract
+
+## OnceHub Booking Runtime
+
+Agent-side room booking is implemented entirely Modal-side. Dashboard pages
+are thin launchers that seed an agent thread and route to `/agent/{threadId}`.
+
+**Client.** `agent/core/clients/oncehub.py` exposes an async `OnceHubClient`
+with a pluggable `SlotBackend`. The production backend drives Playwright; unit
+tests inject fakes. Scope is locked to the Lean/Launchpad room (see
+`LEAN_LAUNCHPAD_ROOM_LABEL`) and times are computed in `America/New_York`.
+
+**MCP tools** (registered in `agent/apps/mcp/service.py`):
+
+- `find_oncehub_slots(start_date, end_date, duration_minutes, preferred_time_window?)`
+  – read-only live availability for Lean/Launchpad.
+- `book_oncehub_room(slot_start_epoch_ms, duration_minutes, title,
+  num_attendees, event_id?, description?, event_type?, target_profile?,
+  approved_by_user_id?)` – write-class; the runtime pauses for approval before
+  execution and injects `approved_by_user_id` after resolution. If `event_id`
+  is omitted the approved write creates the Convex event using the slot's
+  date/time and the room label.
+- `get_event_room_booking(event_id)` – read-only access to the stored
+  `event_room_bookings` row.
+
+**Policy.** `READ_ONLY_TOOL_NAMES` includes `find_oncehub_slots` and
+`get_event_room_booking`; `WRITE_TOOL_NAMES` includes `book_oncehub_room`.
+`_make_approval_title` renders OnceHub approvals as
+`"Book Lean/Launchpad (fits 30 - 50 people) for <title>: <weekday, date, start–end ET>"`.
+
+**Shared booking profile env (Doppler).** `book_oncehub_room` reads the club
+identity from: `ONCEHUB_PROFILE_FIRST_NAME`, `ONCEHUB_PROFILE_LAST_NAME`,
+`ONCEHUB_PROFILE_EMAIL`, `ONCEHUB_PROFILE_NETID`,
+`ONCEHUB_PROFILE_AFFILIATION`, `ONCEHUB_PROFILE_SCHOOL`,
+`ONCEHUB_PROFILE_ORG_NAME`. No per-user NYU credentials are collected.
+
+**Convex.** `event_room_bookings` holds the receipt/reference data; see
+`fe+convex/convex/schema.ts` and `fe+convex/convex/roomBookings.ts`. The
+mutation `roomBookings:upsertFromAgent` flips `events.room_confirmed` true
+(sticky semantics) on successful confirmation — never on failure.
+
+**Frontend launchers.** `components/agent/launchers/roomBooking.ts` builds the
+seed prompt and calls `createThread({ contextLinks })` so event-scoped threads
+carry an `event` context link. Dashboard pages (`dashboard/events/new` and
+`dashboard/events/[eventId]`) use this helper directly and must not duplicate
+OnceHub logic.
