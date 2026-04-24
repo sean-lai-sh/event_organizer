@@ -324,6 +324,37 @@ def test_approval_title_includes_readable_slot_labels() -> None:
     assert "11:30 AM" in title
 
 
+def test_default_oncehub_client_raises_when_backend_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Regression guard for the Codex P1 on PR #54: if the Playwright backend
+    module cannot be imported, `_default_oncehub_client()` must fail loudly
+    rather than hand back an OnceHubClient with `backend=None` that blows up
+    deep inside `_resolve_backend()` at first tool call.
+    """
+    import builtins
+    real_import = builtins.__import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name.endswith("oncehub_playwright") or name == "core.clients.oncehub_playwright":
+            raise ModuleNotFoundError(name)
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+    with pytest.raises(RuntimeError) as exc:
+        mcp_service._default_oncehub_client()
+
+    assert "OnceHub backend module not importable" in str(exc.value)
+
+
+def test_default_oncehub_client_returns_live_client_when_backend_present() -> None:
+    """Happy path: the Playwright backend module exists, so we get a usable client."""
+    client = mcp_service._default_oncehub_client()
+    assert client.room_label.startswith("Lean/Launchpad")
+    # Backend is a real SlotBackend instance, not None.
+    assert client._backend is not None  # type: ignore[attr-defined]
+
+
 def test_approval_title_falls_back_without_slot() -> None:
     action = ToolAction(
         name="book_oncehub_room",

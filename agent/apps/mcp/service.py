@@ -38,15 +38,26 @@ _oncehub_client_factory: Any = None
 
 
 def _default_oncehub_client() -> OnceHubClient:
+    """
+    Build the production OnceHub client. Fails loudly if the Playwright-backed
+    `PlaywrightSlotBackend` cannot be imported, rather than silently returning
+    a client with no backend — the tool would then raise a cryptic error from
+    deep inside `OnceHubClient._resolve_backend()` at first use.
+    """
     try:
-        from core.clients.oncehub_playwright import PlaywrightSlotBackend  # type: ignore
+        from core.clients.oncehub_playwright import PlaywrightSlotBackend
     except ModuleNotFoundError:
         try:
             from agent.core.clients.oncehub_playwright import PlaywrightSlotBackend  # type: ignore
-        except ModuleNotFoundError:
-            PlaywrightSlotBackend = None  # type: ignore[assignment]
-    backend = PlaywrightSlotBackend() if PlaywrightSlotBackend is not None else None
-    return OnceHubClient(backend=backend)
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "OnceHub backend module not importable "
+                "(core.clients.oncehub_playwright). Either install the "
+                "Playwright-backed implementation, or set a test backend via "
+                "`_oncehub_client_factory` before calling OnceHub MCP tools."
+            ) from exc
+
+    return OnceHubClient(backend=PlaywrightSlotBackend())
 
 
 def _get_oncehub_client() -> OnceHubClient:
