@@ -76,12 +76,21 @@ def _attio_value(v: Any) -> list[dict]:
     return [{"value": v}]
 
 
+def _validate_identity_fields(values: dict[str, Any]) -> None:
+    unexpected = sorted(k for k in values if k not in _PERSON_IDENTITY_FIELDS)
+    if unexpected:
+        raise ValueError(
+            f"Unknown identity fields for Attio people: {unexpected}. "
+            f"Allowed: {sorted(_PERSON_IDENTITY_FIELDS)}"
+        )
+
+
 def _reject_workflow_fields(values: dict[str, Any]) -> None:
     bad = sorted(k for k in values if k in _PERSON_FORBIDDEN_WORKFLOW_FIELDS)
     if bad:
         raise ValueError(
             "Workflow fields are not allowed on Attio people; move them to "
-            f"the speakers workflow tool: {bad}"
+            f"`update_speaker_workflow` or `ensure_speaker_for_person`: {bad}"
         )
 
 
@@ -97,6 +106,7 @@ async def search_people(
     """Search Attio people by identity fields such as email or free-text query."""
     conditions: list[dict] = []
     if email:
+        email = email.strip().lower()
         conditions.append(
             {
                 "attribute": {"slug": "email_addresses"},
@@ -161,11 +171,21 @@ async def upsert_person(
     if description is not None:
         values["description"] = _attio_value(description)
 
+    _validate_identity_fields(values)
     _reject_workflow_fields(values)
 
     async with AttioClient() as attio:
         existing = await attio.search_contacts(
-            {"email_addresses": {"$eq": email}}, limit=1
+            {
+                "$and": [
+                    {
+                        "attribute": {"slug": "email_addresses"},
+                        "condition": "equals",
+                        "value": email,
+                    }
+                ]
+            },
+            limit=1,
         )
         if existing:
             record_id = existing[0].get("id", {}).get("record_id")
