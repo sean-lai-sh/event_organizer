@@ -88,6 +88,9 @@ class InMemoryRuntimeStore:
         async with self._lock:
             self.context_links[link.link_key] = link
 
+    async def get_context_link(self, link_key: str) -> ContextLinkRecord | None:
+        return self.context_links.get(link_key)
+
     async def set_pending_action(self, run_id: str, action: ToolAction) -> None:
         async with self._lock:
             self._pending_actions[run_id] = action

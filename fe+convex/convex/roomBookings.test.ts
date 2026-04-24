@@ -1,17 +1,8 @@
-import { beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 
 type TableName = "events" | "event_room_bookings";
 type TableRow = { _id: string } & Record<string, unknown>;
 type Tables = Record<TableName, TableRow[]>;
-
-let requireAdminMemberImpl = async () => ({
-  authUser: { _id: "user:1" },
-  member: { role: "admin" },
-});
-
-mock.module("./eboard", () => ({
-  requireAdminMember: () => requireAdminMemberImpl(),
-}));
 
 class FakeIndexRangeBuilder {
   readonly filters: Array<[string, unknown]> = [];
@@ -136,13 +127,6 @@ const moduleP = import("./roomBookings");
 beforeAll(async () => {
   const { getEventRoomBooking, upsertEventRoomBooking } = await moduleP;
   installConvexHandlerAliases([getEventRoomBooking, upsertEventRoomBooking]);
-});
-
-beforeEach(() => {
-  requireAdminMemberImpl = async () => ({
-    authUser: { _id: "user:1" },
-    member: { role: "admin" },
-  });
 });
 
 describe("roomBookings", () => {

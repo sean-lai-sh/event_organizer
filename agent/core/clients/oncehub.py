@@ -275,6 +275,21 @@ class OnceHubClient:
         return resp
 
     # ── Raw transport hooks (tests mock these) ──────────────────────────
+    #
+    # CAVEAT: The exact endpoint paths, query-param names, and request body
+    # shape below are placeholders for the OnceHub v2 HTTP API. OnceHub's
+    # current v2 surface uses endpoints like `/booking_pages/{id}/availability`
+    # and `/scheduled_events` with a `{booking_page, event_type_id, invitee,
+    # form_submission, ...}` body. These hooks have NOT been validated
+    # against a live OnceHub deployment — they are designed to be mockable
+    # at the method boundary (see `agent/tests/test_oncehub_client.py`'s
+    # `_StubClient`) so the parse/filter/receipt-mapping logic can be
+    # exercised in isolation.
+    #
+    # Before flipping this on against real secrets, confirm the payload
+    # shape against current OnceHub v2 docs and adjust here. The public
+    # client methods (`resolve_room`, `list_slots`, `submit_booking`) are
+    # the stable contract — only these two raw hooks should change.
 
     async def _raw_list_slots(
         self,
@@ -344,10 +359,14 @@ class OnceHubClient:
         room = await self.resolve_room()
         start = date.fromisoformat(start_date)
         end = date.fromisoformat(end_date)
-        months = _iter_months(start, end)
+        # month_ranges validates the ordering (end >= start) and yields a
+        # timezone-aware first-of-month anchor for every month the range
+        # touches. Use it as the single source of truth for month iteration
+        # so tests and production share the same path.
+        ranges = month_ranges(start_date, end_date, tz_name=self._tz_name)
 
         entries: list[dict[str, Any]] = []
-        for year, month in months:
+        for year, month, _epoch_ms in ranges:
             entries.extend(
                 await self._raw_list_slots(
                     page_url=room.page_url,
