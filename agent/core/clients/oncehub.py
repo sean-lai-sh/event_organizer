@@ -241,6 +241,37 @@ class OnceHubClient:
     # ── Config accessors ────────────────────────────────────────────────
 
     @property
+    def tz_name(self) -> str:
+        return self._tz_name
+
+    @property
+    def tz(self) -> ZoneInfo:
+        return self._tz
+
+    def format_slot_labels(
+        self,
+        *,
+        slot_start_epoch_ms: int,
+        duration_minutes: int,
+    ) -> dict[str, str]:
+        """Return human-readable date/time strings for a slot in the client's tz.
+
+        Used when persisting a booking receipt and rendering approval payloads
+        so callers don't have to repeat the local-time formatting (and don't
+        have to reach into private attributes).
+        """
+        local_start = (
+            datetime.fromtimestamp(slot_start_epoch_ms / 1000, tz=timezone.utc)
+            .astimezone(self._tz)
+        )
+        local_end = local_start + timedelta(minutes=duration_minutes)
+        return {
+            "booked_date": local_start.date().isoformat(),
+            "booked_time": local_start.strftime("%-I:%M %p"),
+            "booked_end_time": local_end.strftime("%-I:%M %p"),
+        }
+
+    @property
     def page_url(self) -> str:
         url = _env("ONCEHUB_PAGE_URL")
         if not url:

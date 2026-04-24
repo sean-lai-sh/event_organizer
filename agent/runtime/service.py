@@ -53,6 +53,13 @@ _POST_APPROVAL_INSTRUCTION = (
     "Continue the same conversation, summarize the outcome, and give next steps if needed."
 )
 
+# Tools that record an audit field naming the user who approved the action.
+# The runtime injects the resolved approver id server-side so a forged
+# tool_input cannot spoof the audit trail.
+_APPROVER_INJECTED_TOOLS: dict[str, str] = {
+    "book_oncehub_room": "approved_by_user_id",
+}
+
 
 def _now_ms() -> int:
     return int(time() * 1000)
@@ -357,6 +364,12 @@ class AgentRuntimeService:
         tool_payload = pending_action.payload.get("tool_input") if pending_action else None
         if isinstance(tool_payload, dict) and request.override_args:
             tool_payload = {**tool_payload, **request.override_args}
+        # Server-injected approver fields. Applied AFTER override_args so the
+        # client cannot spoof who approved the action — the audit field
+        # always reflects the resolved approver from this decision.
+        approver_field = _APPROVER_INJECTED_TOOLS.get(action_label)
+        if approver_field and isinstance(tool_payload, dict):
+            tool_payload = {**tool_payload, approver_field: request.decided_by_user_id}
         tool_result: object | None = None
         if isinstance(tool_payload, dict):
             # Emit tool start trace

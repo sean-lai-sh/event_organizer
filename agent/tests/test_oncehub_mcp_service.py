@@ -7,7 +7,7 @@ payload-shaping, event-creation, and booking-receipt persistence logic.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -20,12 +20,28 @@ class FakeOnceHubClient:
     def __init__(self, state: dict) -> None:
         self.state = state
         self._tz_name = "America/New_York"
+        self.tz_name = self._tz_name
 
     async def __aenter__(self) -> "FakeOnceHubClient":
         return self
 
     async def __aexit__(self, *_args) -> None:
         return None
+
+    def format_slot_labels(
+        self,
+        *,
+        slot_start_epoch_ms: int,
+        duration_minutes: int,
+    ) -> dict[str, str]:
+        tz = ZoneInfo(self._tz_name)
+        local_start = datetime.fromtimestamp(slot_start_epoch_ms / 1000, tz=timezone.utc).astimezone(tz)
+        local_end = local_start + timedelta(minutes=duration_minutes)
+        return {
+            "booked_date": local_start.date().isoformat(),
+            "booked_time": local_start.strftime("%-I:%M %p"),
+            "booked_end_time": local_end.strftime("%-I:%M %p"),
+        }
 
     async def resolve_room(self) -> OnceHubRoom:
         return OnceHubRoom(

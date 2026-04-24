@@ -308,6 +308,23 @@ OnceHub data model:
 - Availability is always live via `find_oncehub_slots`; do not read the `room_availability` table for this MVP path.
 - Bookings use the shared club booking profile from Doppler (`ONCEHUB_SHARED_BOOKING_PROFILE_ID`). MVP scope covers first-time booking only; cancellation, rebooking, and manual-edit sync are out of scope.
 
+OnceHub env contract (Doppler):
+
+| Env var | Required | Purpose |
+| --- | --- | --- |
+| `ONCEHUB_API_KEY` | yes | Auth for live OnceHub HTTP calls (sent as `API-Key` header). |
+| `ONCEHUB_PAGE_URL` | yes | Booking page URL pinned to the Leslie eLab booking surface. |
+| `ONCEHUB_SHARED_BOOKING_PROFILE_ID` | yes (booking only) | Identity used for every approved booking. |
+| `ONCEHUB_ROOM_LABEL` | no | Override for the pinned room label (defaults to `Lean/Launchpad`). |
+
+OnceHub approval gate wiring:
+
+- `find_oncehub_slots` and `get_event_room_booking` are read-only and execute without approval. Successful slot searches emit a table artifact onto the right-side canvas.
+- `book_oncehub_room` is write-class and **always** approval-gated by `ApprovalPolicy`. The runtime pauses the run, persists an approval record, and renders an approval card with humanized slot/date/time/room labels (not raw `slot_start_epoch_ms`).
+- On approval, the runtime injects `approved_by_user_id` server-side from the resolved decision so a forged tool input cannot spoof the audit field.
+- On approval, OnceHub is called first; the booking response is then upserted into `event_room_bookings` (one row per event, by `by_event_id`), `events.room_confirmed` is stickied to `true`, and an `event` context link is attached to the current thread when the booking created the event.
+- If OnceHub succeeds but Convex sync fails, the tool returns a partial-failure payload (`convex_sync: "failed"`, `convex_failed_step`, `event_created`, `booking_upserted`, `milestone_set`, `booking_reference`) instead of raising — the slot is held on OnceHub's side regardless of local persistence and the operator must see the reference to recover.
+
 ### Outbound matching
 
 1. Read event context from Convex `events`.

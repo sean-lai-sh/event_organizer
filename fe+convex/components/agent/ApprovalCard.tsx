@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, X } from "lucide-react";
 import type { AgentApproval, RiskLevel } from "./types";
 import { submitApproval } from "./adapters/runtime";
+import { formatOnceHubFieldValue } from "./formatOnceHubField";
 
 export const FIELD_LABELS: Record<string, string> = {
   title: "Event Name",
@@ -36,32 +37,6 @@ export const FIELD_LABELS: Record<string, string> = {
   page_url: "Booking Page",
 };
 
-const NEW_YORK_TZ = "America/New_York";
-
-function formatSlotStart(epochMs: number): string {
-  try {
-    const date = new Date(epochMs);
-    return new Intl.DateTimeFormat("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: NEW_YORK_TZ,
-    }).format(date);
-  } catch {
-    return String(epochMs);
-  }
-}
-
-function formatDuration(mins: number): string {
-  if (mins < 60) return `${mins} min`;
-  const hours = Math.floor(mins / 60);
-  const rem = mins % 60;
-  return rem === 0 ? `${hours} hr` : `${hours} hr ${rem} min`;
-}
-
 export function formatPayload(raw: Record<string, unknown>): Record<string, unknown> {
   const payloadInner = (raw?.payload as Record<string, unknown> | undefined)?.tool_input;
   const inner = (payloadInner && typeof payloadInner === "object")
@@ -72,13 +47,8 @@ export function formatPayload(raw: Record<string, unknown>): Record<string, unkn
       .filter(([, v]) => v !== null && v !== undefined && v !== "")
       .map(([k, v]) => {
         const label = FIELD_LABELS[k] ?? k;
-        if (k === "slot_start_epoch_ms" && typeof v === "number") {
-          return [label, formatSlotStart(v)];
-        }
-        if (k === "duration_minutes" && typeof v === "number") {
-          return [label, formatDuration(v)];
-        }
-        return [label, v];
+        const formatted = formatOnceHubFieldValue(k, v);
+        return [label, formatted ?? v];
       })
   );
 }
