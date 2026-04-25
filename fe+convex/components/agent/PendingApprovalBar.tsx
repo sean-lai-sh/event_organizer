@@ -97,7 +97,7 @@ export function PendingApprovalBar({ approvals, onDecision }: PendingApprovalBar
       step,
       overrides_json: JSON.stringify(overrides),
     });
-  }, [approval?.id, userId, step, overrides]);
+  }, [approval?.id, userId, step, overrides, saveDraft]);
 
   useEffect(() => {
     if (editing) editInputRef.current?.focus();

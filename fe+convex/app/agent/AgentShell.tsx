@@ -46,6 +46,16 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
   const [artifacts, setArtifacts] = useState<AgentArtifact[]>([]);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [draftValue, setDraftValue] = useState("");
+  const [trackedThreadId, setTrackedThreadId] = useState<string | null>(activeThreadId);
+
+  // Reset transient view state during render when the active thread changes,
+  // following React's "resetting state when a prop changes" guidance.
+  if (trackedThreadId !== activeThreadId) {
+    setTrackedThreadId(activeThreadId);
+    setCanvasOpen(false);
+    setDraftValue("");
+    setArtifacts([]);
+  }
 
   // Same query ThreadRail uses — Convex deduplicates the subscription.
   const rawThreads = useQuery(api.agentState.listThreads, { limit: 50 });
@@ -63,11 +73,8 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
       : { id: activeThreadId, title: "Conversation", channel: "web", lastActivityAt: 0 };
   }, [activeThreadId, threadList]);
 
-  // Reset canvas and load artifacts whenever the active thread changes.
+  // Load artifacts asynchronously when the active thread changes.
   useEffect(() => {
-    setCanvasOpen(false);
-    setDraftValue("");
-    setArtifacts([]);
     if (!activeThreadId) return;
     let cancelled = false;
     getThreadArtifacts(activeThreadId).then((arts) => {

@@ -156,7 +156,8 @@ export function ConversationTimeline({
   const runThreadIdRef = useRef<string | null>(null);
   // Captures the latestRunInternalId at send time so old-run traces aren't
   // shown during the gap between send and Convex delivering the new run.
-  const lastRunIdBeforeSend = useRef<string | null>(null);
+  // Stored as state so the render-time comparison stays out of refs.
+  const [lastRunIdBeforeSend, setLastRunIdBeforeSend] = useState<string | null>(null);
   // Prevents the run-in-progress initializer from firing more than once per mount.
   const runInitialized = useRef(false);
 
@@ -197,6 +198,8 @@ export function ConversationTimeline({
       latestRunStatus === "error" ||
       latestRunStatus === "paused_approval"
     ) {
+      // Sync local "isRunning" flag with Convex run status (external system).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsRunning(false);
       onArtifactsChange?.(thread?.id);
       // Fade traces out 30s after run completes.
@@ -226,6 +229,8 @@ export function ConversationTimeline({
     if (runInitialized.current || latestRunStatus === undefined) return;
     runInitialized.current = true;
     if (latestRunStatus === "running") {
+      // Bootstrap local UI flags from the external Convex run status.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsRunning(true);
       setTracesVisible(true);
     }
@@ -237,6 +242,8 @@ export function ConversationTimeline({
   useEffect(() => {
     if (thread?.id !== runThreadIdRef.current) {
       if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
+      // Reset local UI flags when navigating to a different thread.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTracesVisible(false);
       // Clear isRunning so AgentInput isn't stuck disabled on the new thread.
       setIsRunning(false);
@@ -250,6 +257,8 @@ export function ConversationTimeline({
   // Once Convex delivers messages beyond what we had at send time, retire the optimistic bubble.
   useEffect(() => {
     if (pendingMessage !== null && messages.length > messagesAtSend.current) {
+      // Retire optimistic bubble once Convex delivers the new message.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPendingMessage(null);
     }
   }, [messages.length, pendingMessage]);
@@ -269,7 +278,7 @@ export function ConversationTimeline({
     let workingThread = thread;
 
     messagesAtSend.current = messages.length;
-    lastRunIdBeforeSend.current = latestRunInternalId;
+    setLastRunIdBeforeSend(latestRunInternalId);
     setIsRunning(true);
     setTracesVisible(true);
     if (traceHideTimer.current) clearTimeout(traceHideTimer.current);
@@ -319,7 +328,7 @@ export function ConversationTimeline({
   const displayTraces =
     tracesVisible &&
     latestRunInternalId &&
-    latestRunInternalId !== lastRunIdBeforeSend.current
+    latestRunInternalId !== lastRunIdBeforeSend
       ? traces.filter((t) => t.runId === latestRunInternalId)
       : [];
 

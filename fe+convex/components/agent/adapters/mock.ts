@@ -18,7 +18,6 @@ import type {
   AgentMessage,
   AgentArtifact,
   AgentApproval,
-  AgentRun,
 } from "../types";
 
 // ---------------------------------------------------------------------------
