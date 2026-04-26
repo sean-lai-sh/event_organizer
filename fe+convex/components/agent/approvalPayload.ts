@@ -37,6 +37,10 @@ const LONG_TEXT_KEYS = new Set(["description", "summary", "notes"]);
 // Keys that should be interpreted as a date (YYYY-MM-DD or full ISO string).
 const DATE_KEYS = new Set(["event_date", "date"]);
 
+// YYYY-MM-DD without a time/zone component. `new Date()` would parse this as
+// UTC midnight, which can display as the previous day in negative-UTC zones.
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 export interface ApprovalField {
   key: string;
   label: string;
@@ -77,6 +81,14 @@ export function formatFieldValue(key: string, value: unknown): string {
 
   if (typeof value === "string") {
     if (DATE_KEYS.has(key)) {
+      const dateOnly = DATE_ONLY_PATTERN.exec(value);
+      if (dateOnly) {
+        // Construct in local time so the calendar date never drifts a day
+        // across timezones. month is 0-indexed.
+        const [, y, m, d] = dateOnly;
+        const local = new Date(Number(y), Number(m) - 1, Number(d));
+        return local.toLocaleDateString();
+      }
       const parsed = new Date(value);
       if (!Number.isNaN(parsed.getTime())) {
         return parsed.toLocaleDateString();

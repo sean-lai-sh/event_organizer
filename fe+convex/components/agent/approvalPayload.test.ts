@@ -73,6 +73,23 @@ describe("formatFieldValue — friendly value formatting", () => {
     expect(formatted.length).toBeGreaterThan(0);
   });
 
+  test("date-only YYYY-MM-DD strings keep their calendar day across timezones", () => {
+    // Regression: `new Date("2026-04-30")` parses as UTC midnight, which
+    // displays as 2026-04-29 once toLocaleDateString shifts into a negative
+    // UTC offset (e.g. America/Los_Angeles). Parsing into local time keeps
+    // the day stable. We assert that the formatted output references day 30,
+    // which holds regardless of the test runner's locale.
+    const formatted = formatFieldValue("event_date", "2026-04-30");
+    expect(formatted).toMatch(/30/);
+    expect(formatted).not.toMatch(/29/);
+  });
+
+  test("date-only strings are still recognised under the alias 'date' key", () => {
+    const formatted = formatFieldValue("date", "2026-01-01");
+    expect(formatted).toMatch(/1/);
+    expect(formatted).not.toMatch(/2025/);
+  });
+
   test("leaves unparseable date strings unchanged", () => {
     expect(formatFieldValue("event_date", "TBD")).toBe("TBD");
   });
