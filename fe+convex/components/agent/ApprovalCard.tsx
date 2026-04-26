@@ -4,34 +4,10 @@ import { useState } from "react";
 import { AlertTriangle, Check, X } from "lucide-react";
 import type { AgentApproval, RiskLevel } from "./types";
 import { submitApproval } from "./adapters/runtime";
-
-export const FIELD_LABELS: Record<string, string> = {
-  title: "Event Name",
-  event_date: "Date",
-  event_time: "Start Time",
-  event_end_time: "End Time",
-  location: "Location",
-  event_type: "Event Type",
-  description: "Description",
-  status: "Status",
-  needs_outreach: "Needs Outreach",
-  target_profile: "Target Audience",
-  speaker_confirmed: "Speaker Confirmed",
-  room_confirmed: "Room Confirmed",
-  event_id: "Event ID",
-  firstname: "First Name",
-  lastname: "Last Name",
-  email: "Email",
-  record_id: "Record ID",
-  contact_source: "Contact Source",
-  contact_type: "Contact Type",
-};
+import { FIELD_LABELS, extractInnerPayload } from "./approvalPayload";
 
 export function formatPayload(raw: Record<string, unknown>): Record<string, unknown> {
-  const payloadInner = (raw?.payload as Record<string, unknown> | undefined)?.tool_input;
-  const inner = (payloadInner && typeof payloadInner === "object")
-    ? (payloadInner as Record<string, unknown>)
-    : raw;
+  const inner = extractInnerPayload(raw);
   return Object.fromEntries(
     Object.entries(inner)
       .filter(([, v]) => v !== null && v !== undefined && v !== "")

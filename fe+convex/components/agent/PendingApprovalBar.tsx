@@ -6,24 +6,13 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/lib/auth-client";
 import type { AgentApproval, RiskLevel } from "./types";
-import { FIELD_LABELS } from "./ApprovalCard";
+import { extractApprovalFields, type ApprovalField } from "./approvalPayload";
 import { submitApproval } from "./adapters/runtime";
 
-type FieldEntry = { key: string; label: string; rawValue: string };
+type FieldEntry = ApprovalField;
 
 function getRawFields(payload: Record<string, unknown>): FieldEntry[] {
-  const payloadInner = (payload?.payload as Record<string, unknown> | undefined)?.tool_input;
-  const inner =
-    payloadInner && typeof payloadInner === "object"
-      ? (payloadInner as Record<string, unknown>)
-      : payload;
-  return Object.entries(inner)
-    .filter(([, v]) => v !== null && v !== undefined && v !== "")
-    .map(([k, v]) => ({
-      key: k,
-      label: FIELD_LABELS[k] ?? k,
-      rawValue: typeof v === "boolean" ? (v ? "Yes" : "No") : String(v),
-    }));
+  return extractApprovalFields(payload);
 }
 
 interface PendingApprovalBarProps {
