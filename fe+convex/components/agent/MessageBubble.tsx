@@ -3,6 +3,7 @@
 import { Wrench } from "lucide-react";
 import type { AgentMessage, ContentBlock } from "./types";
 import { RichAgentMarkdown } from "./RichAgentMarkdown";
+import { stabilizeMarkdownPreview } from "./streamingMarkdown";
 
 interface MessageBubbleProps {
   message: AgentMessage;
@@ -107,18 +108,29 @@ function AssistantTextBlock({
   text: string;
   isStreaming: boolean;
 }) {
-  if (isStreaming) {
+  if (!isStreaming) {
     return (
       <div className="text-[13.5px] leading-[1.65] text-[#111111]">
-        {text}
-        <StreamingCursor />
+        <RichAgentMarkdown markdown={text} variant="bubble" />
       </div>
     );
   }
 
+  const { stableMarkdown, unstableTail } = stabilizeMarkdownPreview(text);
+
   return (
     <div className="text-[13.5px] leading-[1.65] text-[#111111]">
-      <RichAgentMarkdown markdown={text} variant="bubble" />
+      {stableMarkdown ? (
+        <RichAgentMarkdown markdown={stableMarkdown} variant="bubble" />
+      ) : null}
+      {unstableTail ? (
+        <span className="whitespace-pre-wrap">
+          {unstableTail}
+          <StreamingCursor />
+        </span>
+      ) : (
+        <StreamingCursor />
+      )}
     </div>
   );
 }
