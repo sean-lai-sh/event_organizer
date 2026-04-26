@@ -94,6 +94,9 @@ class FakeConvexClient:
             }
         )
 
+    async def get_event(self, event_id: str) -> dict | None:
+        return self.state.get("get_event_result", {"_id": event_id, "title": "stub"})
+
     async def get_event_room_booking(self, event_id: str) -> dict | None:
         self.state["get_booking_calls"].append(event_id)
         return self.state.get("get_booking_result")

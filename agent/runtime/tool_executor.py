@@ -6,7 +6,6 @@ try:
     from apps.mcp.service import (
         append_person_note,
         book_oncehub_room,
-        create_contact,
         create_event,
         ensure_speaker_for_person,
         find_oncehub_slots,
@@ -31,7 +30,6 @@ except ModuleNotFoundError:  # pragma: no cover - package import fallback
     from agent.apps.mcp.service import (  # type: ignore
         append_person_note,
         book_oncehub_room,
-        create_contact,
         create_event,
         ensure_speaker_for_person,
         find_oncehub_slots,
