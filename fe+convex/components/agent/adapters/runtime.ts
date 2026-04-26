@@ -203,9 +203,36 @@ function mapArtifact(artifact: BackendArtifact): AgentArtifact {
           }
         : artifact.kind === "checklist"
           ? mapChecklistArtifact(blocks)
-        : { blocks },
+          : artifact.kind === "table"
+            ? mapTableArtifact(blocks)
+            : { blocks },
     createdAt: artifact.created_at,
   };
+}
+
+function mapTableArtifact(blocks: ReportBlock[]) {
+  const payload = blocks.find((block) => block.kind === "table_data")?.dataJson;
+  const parsed = parseJson<{
+    columns?: Array<{ key: string; label: string } | string>;
+    rows?: Array<Record<string, unknown>>;
+  }>(payload);
+  if (!parsed) return { columns: [], rows: [] };
+
+  const columns = (parsed.columns ?? []).map((col) =>
+    typeof col === "string" ? col : col.label,
+  );
+  const keys = (parsed.columns ?? []).map((col) =>
+    typeof col === "string" ? col : col.key,
+  );
+  const rows = (parsed.rows ?? []).map((row) =>
+    keys.map((k) => {
+      const v = row[k];
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number" || typeof v === "string") return v;
+      return String(v);
+    }),
+  );
+  return { columns, rows };
 }
 
 function mapChecklistArtifact(blocks: ReportBlock[]) {
@@ -317,16 +344,56 @@ export async function getThreadApprovals(threadId: string): Promise<AgentApprova
   return state.approvals;
 }
 
-export async function createThread(title?: string): Promise<AgentThread> {
+export type CreateThreadContextLink = {
+  relation?: string;
+  entityType: string;
+  entityId: string;
+  label?: string;
+  url?: string;
+  metadataJson?: string;
+};
+
+export type CreateThreadOptions = {
+  title?: string;
+  contextLinks?: CreateThreadContextLink[];
+};
+
+function normalizeCreateThreadArg(
+  arg?: string | CreateThreadOptions,
+): { title: string; contextLinks?: CreateThreadContextLink[] } {
+  if (typeof arg === "string" || arg === undefined) {
+    return { title: arg ?? "New conversation" };
+  }
+  return {
+    title: arg.title ?? "New conversation",
+    contextLinks: arg.contextLinks,
+  };
+}
+
+export async function createThread(
+  arg?: string | CreateThreadOptions,
+): Promise<AgentThread> {
+  const { title, contextLinks } = normalizeCreateThreadArg(arg);
+  const body: Record<string, unknown> = {
+    channel: "web",
+    title,
+  };
+  if (contextLinks && contextLinks.length > 0) {
+    body.context_links = contextLinks.map((link) => ({
+      relation: link.relation ?? "subject",
+      entity_type: link.entityType,
+      entity_id: link.entityId,
+      label: link.label,
+      url: link.url,
+      metadata_json: link.metadataJson,
+    }));
+  }
   const thread = await request<BackendThread>("/threads", {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      channel: "web",
-      title: title ?? "New conversation",
-    }),
+    body: JSON.stringify(body),
   });
   return mapThread(thread);
 }

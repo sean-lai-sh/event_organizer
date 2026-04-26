@@ -1,6 +1,11 @@
 import { beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
-type TableName = "events" | "event_outreach" | "attendance" | "agent_context_links";
+type TableName =
+  | "events"
+  | "event_outreach"
+  | "attendance"
+  | "agent_context_links"
+  | "event_room_bookings";
 type TableRow = { _id: string } & Record<string, unknown>;
 type Tables = Record<TableName, TableRow[]>;
 
@@ -57,6 +62,7 @@ class FakeDb {
     event_outreach: 0,
     attendance: 0,
     agent_context_links: 0,
+    event_room_bookings: 0,
   };
 
   readonly tables: Tables = {
@@ -64,6 +70,7 @@ class FakeDb {
     event_outreach: [],
     attendance: [],
     agent_context_links: [],
+    event_room_bookings: [],
   };
 
   query(table: TableName) {

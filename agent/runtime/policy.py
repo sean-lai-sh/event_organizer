@@ -72,6 +72,8 @@ READ_ONLY_TOOL_NAMES = {
     "get_event_outreach",
     "get_attendance_dashboard",
     "get_event_attendance",
+    "find_oncehub_slots",
+    "get_event_room_booking",
 }
 
 WRITE_TOOL_NAMES = {
@@ -84,6 +86,7 @@ WRITE_TOOL_NAMES = {
     # convex event writes
     "create_event",
     "update_event_safe",
+    "book_oncehub_room",
 }
 
 

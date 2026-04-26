@@ -11,6 +11,34 @@ import { submitApproval } from "./adapters/runtime";
 
 type FieldEntry = ApprovalField;
 
+const NEW_YORK_TZ = "America/New_York";
+
+function humanizeValue(key: string, value: unknown): string {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (key === "slot_start_epoch_ms" && typeof value === "number") {
+    try {
+      return new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: NEW_YORK_TZ,
+      }).format(new Date(value));
+    } catch {
+      return String(value);
+    }
+  }
+  if (key === "duration_minutes" && typeof value === "number") {
+    if (value < 60) return `${value} min`;
+    const hours = Math.floor(value / 60);
+    const rem = value % 60;
+    return rem === 0 ? `${hours} hr` : `${hours} hr ${rem} min`;
+  }
+  return String(value);
+}
+
 function getRawFields(payload: Record<string, unknown>): FieldEntry[] {
   return extractApprovalFields(payload);
 }

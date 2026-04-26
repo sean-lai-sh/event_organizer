@@ -41,14 +41,13 @@ class ConvexClient:
         return value
 
     async def _call(self, kind: str, path: str, args: dict) -> Any:
+        if self._http is None:
+            raise RuntimeError("ConvexClient must be used inside an async context manager")
+
         resp = await self._http.post(
             f"{self._url}/api/{kind}",
             json={"path": path, "args": self._strip_nones(args), "format": "json"},
         )
-
-        body = resp.text
-        print("Convex raw response:", body)
-
         resp.raise_for_status()
 
         data = resp.json()
@@ -248,3 +247,51 @@ class ConvexClient:
     async def get_event_attendance(self, event_id: str) -> dict:
         rows = await self.query("attendance:listEventAttendance", {"event_id": event_id})
         return rows if isinstance(rows, dict) else {}
+
+    # ── OnceHub Room Bookings ──
+
+    async def get_event_room_booking(self, event_id: str) -> dict | None:
+        return await self.query(
+            "roomBookings:getEventRoomBooking",
+            {"event_id": event_id},
+        )
+
+    async def upsert_event_room_booking(
+        self,
+        *,
+        event_id: str,
+        provider: str,
+        page_url: str,
+        link_name: str,
+        room_label: str,
+        booking_status: str,
+        booked_date: str,
+        booked_time: str,
+        booked_end_time: str,
+        duration_minutes: int,
+        slot_start_epoch_ms: int,
+        booking_reference: str | None,
+        booking_reference_json: str | None,
+        approver_user_id: str | None,
+        raw_response_json: str,
+    ) -> str:
+        return await self.mutation(
+            "roomBookings:upsertEventRoomBooking",
+            {
+                "event_id": event_id,
+                "provider": provider,
+                "page_url": page_url,
+                "link_name": link_name,
+                "room_label": room_label,
+                "booking_status": booking_status,
+                "booked_date": booked_date,
+                "booked_time": booked_time,
+                "booked_end_time": booked_end_time,
+                "duration_minutes": duration_minutes,
+                "slot_start_epoch_ms": slot_start_epoch_ms,
+                "booking_reference": booking_reference,
+                "booking_reference_json": booking_reference_json,
+                "approver_user_id": approver_user_id,
+                "raw_response_json": raw_response_json,
+            },
+        )

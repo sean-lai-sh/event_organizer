@@ -31,6 +31,7 @@ from .normalize import (
     extract_action_items,
     make_checklist_artifact,
     make_report_artifact,
+    make_table_artifact,
     make_trace_step,
     summarize_text_for_run,
     summarize_text_for_thread,
@@ -57,6 +58,23 @@ def _now_ms() -> int:
     return int(time() * 1000)
 
 
+def _format_slot_label(slot_start_epoch_ms: int | None, duration_minutes: int | None) -> str:
+    if not slot_start_epoch_ms:
+        return ""
+    try:
+        from datetime import datetime, timedelta, timezone
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("America/New_York")
+        start = datetime.fromtimestamp(int(slot_start_epoch_ms) / 1000, tz=timezone.utc).astimezone(tz)
+        label = start.strftime("%a %b %-d, %-I:%M %p")
+        if duration_minutes:
+            end = start + timedelta(minutes=int(duration_minutes))
+            label = f"{label} – {end.strftime('%-I:%M %p')}"
+        return label
+    except Exception:  # pragma: no cover - defensive
+        return ""
+
+
 def _make_approval_title(action: ToolAction) -> str:
     tool_input = action.payload.get("tool_input", {})
     if action.name == "create_event":
@@ -76,6 +94,14 @@ def _make_approval_title(action: ToolAction) -> str:
         return "Ensure speaker entry for person"
     if action.name == "update_speaker_workflow":
         return "Update speaker workflow"
+    if action.name == "book_oncehub_room":
+        title = tool_input.get("title", "room booking")
+        slot_label = _format_slot_label(
+            tool_input.get("slot_start_epoch_ms"),
+            tool_input.get("duration_minutes"),
+        )
+        base = f"Book Leslie eLab Lean/Launchpad: {title}"
+        return f"{base} ({slot_label})" if slot_label else base
     return f"Approval required: {action.name}"
 
 
@@ -373,6 +399,11 @@ class AgentRuntimeService:
                 summary=f"Tool {action_label} completed successfully.",
                 detail_json=json.dumps({"tool": action_label, "result": self._serialize_tool_result(tool_result)}),
             )
+            if action_label == "book_oncehub_room" and isinstance(tool_result, dict):
+                await self._attach_event_context_link_from_booking(
+                    thread_id=run.thread_external_id,
+                    booking_result=tool_result,
+                )
             await self._append_message(
                 thread_id=run.thread_external_id,
                 run_id=run.external_id,
@@ -640,6 +671,8 @@ class AgentRuntimeService:
                         "is_error": is_error,
                     }),
                 )
+                if not is_error and trace.name == "find_oncehub_slots":
+                    await self._maybe_emit_slot_table_artifact(run=run, tool_result=trace.result)
 
         if result.blocked_action:
             # Finalize the streaming message before pausing
@@ -869,6 +902,106 @@ class AgentRuntimeService:
             kind=TraceStepKind.RUN_ERROR,
             summary=f"Run failed: {message[:200]}",
         )
+
+    async def _maybe_emit_slot_table_artifact(
+        self, *, run: RunRecord, tool_result: object
+    ) -> None:
+        """Emit a table artifact from a successful find_oncehub_slots call."""
+        if not isinstance(tool_result, dict):
+            return
+        slots = tool_result.get("slots")
+        if not isinstance(slots, list) or not slots:
+            return
+
+        columns = [
+            {"key": "date", "label": "Date"},
+            {"key": "day_of_week", "label": "Day"},
+            {"key": "start_time", "label": "Start"},
+            {"key": "end_time", "label": "End"},
+            {"key": "duration_minutes", "label": "Minutes"},
+        ]
+        rows = [
+            {
+                "date": slot.get("date"),
+                "day_of_week": slot.get("day_of_week"),
+                "start_time": slot.get("start_time"),
+                "end_time": slot.get("end_time"),
+                "duration_minutes": slot.get("duration_minutes"),
+                "slot_start_epoch_ms": slot.get("slot_start_epoch_ms"),
+            }
+            for slot in slots
+            if isinstance(slot, dict)
+        ]
+        room = tool_result.get("room") or {}
+        room_label = room.get("label") if isinstance(room, dict) else None
+        title = f"Available Slots: {room_label}" if room_label else "Available Slots"
+
+        artifact = make_table_artifact(
+            external_id=f"artifact_{uuid4().hex}",
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            title=title,
+            summary=f"{len(rows)} live slots",
+            columns=columns,
+            rows=rows,
+            sort_order=1,
+        )
+        await self._store.upsert_artifact(artifact)
+        await self._sync.upsert_artifact(artifact)
+        await self._store.append_stream_event(
+            run_id=run.external_id,
+            event="artifact.created",
+            created_at=_now_ms(),
+            data={"artifact_id": artifact.external_id, "kind": artifact.kind.value},
+        )
+        await self._emit_trace(
+            thread_id=run.thread_external_id,
+            run_id=run.external_id,
+            kind=TraceStepKind.ARTIFACT_GENERATION,
+            summary=f"Generated artifact: {title}",
+            detail_json=json.dumps(
+                {"artifact_id": artifact.external_id, "kind": artifact.kind.value}
+            ),
+        )
+
+    async def _attach_event_context_link_from_booking(
+        self, *, thread_id: str, booking_result: dict
+    ) -> None:
+        """On a successful OnceHub booking, link the (possibly newly-created) event to the thread."""
+        event_id = booking_result.get("event_id")
+        if not isinstance(event_id, str) or not event_id:
+            return
+
+        link_key = f"{thread_id}:event:{event_id}"
+        existing = await self._store.get_context_link(link_key)
+        if existing:
+            return
+
+        label = booking_result.get("title") or "Event"
+        booked_date = booking_result.get("booked_date")
+        if booked_date:
+            label = f"{label} · {booked_date}"
+
+        now = _now_ms()
+        link = ContextLinkRecord(
+            link_key=link_key,
+            relation="subject",
+            entity_type="event",
+            entity_id=event_id,
+            label=label,
+            url=None,
+            metadata_json=json.dumps(
+                {
+                    "source": "book_oncehub_room",
+                    "booking_reference": booking_result.get("booking_reference"),
+                    "room_label": booking_result.get("room_label"),
+                }
+            ),
+            created_at=now,
+            updated_at=now,
+        )
+        await self._store.put_context_link(link)
+        await self._sync.upsert_context_link(thread_id, link)
 
     async def _emit_trace(
         self,
