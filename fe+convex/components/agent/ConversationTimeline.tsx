@@ -6,7 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from "./types";
 import { MessageBubble } from "./MessageBubble";
-import { ApprovalCard } from "./ApprovalCard";
+import { ResolvedApprovalCard } from "./ResolvedApprovalCard";
 import { PendingApprovalBar } from "./PendingApprovalBar";
 import { AgentInput } from "./AgentInput";
 import {
@@ -384,7 +384,7 @@ export function ConversationTimeline({
             )}
 
             {resolvedApprovals.map((approval) => (
-              <ApprovalCard
+              <ResolvedApprovalCard
                 key={approval.id}
                 approval={approval}
               />
