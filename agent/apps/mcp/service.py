@@ -536,6 +536,13 @@ async def book_oncehub_room(
     omitted a new event is created from the booking details and the
     resulting event id is returned.
     """
+    # Validate the event exists before the irreversible OnceHub booking so a
+    # stale event_id fails fast rather than leaving a booking with no receipt.
+    if event_id:
+        async with ConvexClient() as convex:
+            if not await convex.get_event(event_id):
+                raise ValueError(f"Event not found: {event_id}")
+
     async with OnceHubClient() as oncehub:
         room = await oncehub.resolve_room()
         receipt = await oncehub.submit_booking(
