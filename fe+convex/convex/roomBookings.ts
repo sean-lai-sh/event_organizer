@@ -7,7 +7,6 @@ export const getEventRoomBooking = query({
     const row = await ctx.db
       .query("event_room_bookings")
       .withIndex("by_event_id", (q) => q.eq("event_id", event_id))
-      .order("desc")
       .first();
     return row ?? null;
   },
@@ -52,7 +51,7 @@ export const upsertEventRoomBooking = mutation({
 
     const now = Date.now();
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      const patch: Record<string, unknown> = {
         provider: args.provider,
         page_url: args.page_url,
         link_name: args.link_name,
@@ -63,12 +62,13 @@ export const upsertEventRoomBooking = mutation({
         booked_end_time: args.booked_end_time,
         duration_minutes: args.duration_minutes,
         slot_start_epoch_ms: args.slot_start_epoch_ms,
-        booking_reference: args.booking_reference,
-        booking_reference_json: args.booking_reference_json,
-        approver_user_id: args.approver_user_id,
         raw_response_json: args.raw_response_json,
         updated_at: now,
-      });
+      };
+      if (args.booking_reference !== undefined) patch.booking_reference = args.booking_reference;
+      if (args.booking_reference_json !== undefined) patch.booking_reference_json = args.booking_reference_json;
+      if (args.approver_user_id !== undefined) patch.approver_user_id = args.approver_user_id;
+      await ctx.db.patch(existing._id, patch);
     } else {
       await ctx.db.insert("event_room_bookings", {
         ...args,

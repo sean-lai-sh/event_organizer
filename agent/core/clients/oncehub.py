@@ -198,7 +198,7 @@ def _within_window(slot: OnceHubSlot, window: str | None) -> bool:
         except Exception:
             return True
     slot_dt = datetime.fromisoformat(slot.start_iso)
-    slot_t = slot_dt.time()
+    slot_t = slot_dt.timetz().replace(tzinfo=None)
     return start_t <= slot_t < end_t
 
 
@@ -359,6 +359,8 @@ class OnceHubClient:
         room = await self.resolve_room()
         start = date.fromisoformat(start_date)
         end = date.fromisoformat(end_date)
+        if end < start:
+            raise ValueError("end_date must be on or after start_date")
         # month_ranges validates the ordering (end >= start) and yields a
         # timezone-aware first-of-month anchor for every month the range
         # touches. Use it as the single source of truth for month iteration

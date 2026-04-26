@@ -203,9 +203,36 @@ function mapArtifact(artifact: BackendArtifact): AgentArtifact {
           }
         : artifact.kind === "checklist"
           ? mapChecklistArtifact(blocks)
-        : { blocks },
+          : artifact.kind === "table"
+            ? mapTableArtifact(blocks)
+            : { blocks },
     createdAt: artifact.created_at,
   };
+}
+
+function mapTableArtifact(blocks: ReportBlock[]) {
+  const payload = blocks.find((block) => block.kind === "table_data")?.dataJson;
+  const parsed = parseJson<{
+    columns?: Array<{ key: string; label: string } | string>;
+    rows?: Array<Record<string, unknown>>;
+  }>(payload);
+  if (!parsed) return { columns: [], rows: [] };
+
+  const columns = (parsed.columns ?? []).map((col) =>
+    typeof col === "string" ? col : col.label,
+  );
+  const keys = (parsed.columns ?? []).map((col) =>
+    typeof col === "string" ? col : col.key,
+  );
+  const rows = (parsed.rows ?? []).map((row) =>
+    keys.map((k) => {
+      const v = row[k];
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number" || typeof v === "string") return v;
+      return String(v);
+    }),
+  );
+  return { columns, rows };
 }
 
 function mapChecklistArtifact(blocks: ReportBlock[]) {

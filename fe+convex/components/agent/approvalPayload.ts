@@ -29,6 +29,15 @@ export const FIELD_LABELS: Record<string, string> = {
   record_id: "Record ID",
   contact_source: "Contact Source",
   contact_type: "Contact Type",
+  // OnceHub room booking
+  slot_start_epoch_ms: "Slot Start",
+  duration_minutes: "Duration",
+  num_attendees: "Attendees",
+  room_label: "Room",
+  booked_date: "Date",
+  booked_time: "Start Time",
+  booked_end_time: "End Time",
+  page_url: "Booking Page",
 };
 
 // Keys whose values can be long enough to warrant clamping in the receipt UI.
@@ -77,7 +86,24 @@ export function extractInnerPayload(
 export function formatFieldValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number") {
+    if (key === "slot_start_epoch_ms") {
+      try {
+        return new Intl.DateTimeFormat("en-US", {
+          weekday: "short", month: "short", day: "numeric",
+          hour: "numeric", minute: "2-digit", hour12: true,
+          timeZone: "America/New_York",
+        }).format(new Date(value));
+      } catch { return String(value); }
+    }
+    if (key === "duration_minutes") {
+      if (value < 60) return `${value} min`;
+      const hours = Math.floor(value / 60);
+      const rem = value % 60;
+      return rem === 0 ? `${hours} hr` : `${hours} hr ${rem} min`;
+    }
+    return String(value);
+  }
 
   if (typeof value === "string") {
     if (DATE_KEYS.has(key)) {
