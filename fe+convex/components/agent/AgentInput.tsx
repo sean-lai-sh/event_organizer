@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowUp } from "lucide-react";
 
 interface AgentInputProps {
@@ -11,16 +11,43 @@ interface AgentInputProps {
   onValueChange?: (value: string) => void;
 }
 
-export function AgentInput({
-  onSubmit,
-  disabled = false,
-  placeholder = "Message the agent...",
-  value,
-  onValueChange,
-}: AgentInputProps) {
+export interface AgentInputHandle {
+  focus(): void;
+}
+
+export const AgentInput = forwardRef<AgentInputHandle, AgentInputProps>(function AgentInput(
+  {
+    onSubmit,
+    disabled = false,
+    placeholder = "Message the agent...",
+    value,
+    onValueChange,
+  },
+  ref,
+) {
   const [internalValue, setInternalValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerValue = value ?? internalValue;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus() {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        // Place the caret at the end so a seeded draft doesn't drop the user
+        // mid-text.
+        const len = el.value.length;
+        try {
+          el.setSelectionRange(len, len);
+        } catch {
+          /* setSelectionRange isn't supported on every textarea state */
+        }
+      },
+    }),
+    [],
+  );
 
   function setComposerValue(nextValue: string) {
     if (value === undefined) {
@@ -85,4 +112,4 @@ export function AgentInput({
       </p>
     </div>
   );
-}
+});

@@ -1,8 +1,8 @@
 /**
  * Shared helpers for extracting and formatting approval payload fields.
  *
- * Used by both the pending approval surfaces (ApprovalCard, PendingApprovalBar)
- * and the resolved approval receipt (ResolvedApprovalCard) so a single place
+ * Used by the composer-attached approval prompt (ComposerApprovalPrompt) and
+ * the resolved approval receipt (ResolvedApprovalCard) so a single place
  * decides field labels, value formatting, and which fields to surface.
  *
  * The raw `proposedPayload` shape is unchanged — these helpers are presentation
