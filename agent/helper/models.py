@@ -1,7 +1,6 @@
-"""Pydantic models for Attio contact data."""
+"""Pydantic models for Attio people identity and speaker workflow data."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr
@@ -30,35 +29,31 @@ class CareerProfile(BaseModel):
     linkedin_url: str | None = None
 
 
-RelationshipStage = Literal["cold", "active", "spoken", "persistent"]
-ContactSource = Literal["warm_intro", "agent_outreach", "inbound", "event"]
-ContactType = Literal["prospect", "alumni", "speaker", "mentor", "partner"]
-OutreachStatus = Literal[
-    "pending",
-    "agent_active",
-    "human_assigned",
-    "in_conversation",
-    "converted",
-    "paused",
-    "archived",
-]
-EnrichmentStatus = Literal["pending", "enriched", "stale", "failed"]
+SpeakerStatus = Literal["Prospect", "Engaged", "Confirmed", "Declined"]
+SpeakerSource = Literal["outreach", "warm", "in bound", "event", "alumni"]
 
 
 class AttioContact(BaseModel):
-    """Represents an Attio people record with club-specific custom attributes."""
+    """Represents an Attio people record with identity/profile attributes only."""
 
     firstname: str
     lastname: str
     email: EmailStr
     phone: str | None = None
+    company: str | None = None
+    job_title: str | None = None
+    description: str | None = None
 
-    career_profile: CareerProfile | None = None
-    relationship_stage: RelationshipStage = "cold"
-    contact_source: ContactSource = "agent_outreach"
-    warm_intro_by: str | None = None
-    assigned_members: list[str] = []
-    contact_type: ContactType = "prospect"
-    outreach_status: OutreachStatus = "pending"
-    last_agent_action_at: datetime | None = None
-    enrichment_status: EnrichmentStatus = "pending"
+
+class AttioSpeakerWorkflow(BaseModel):
+    """Represents an Attio speakers list entry with workflow attributes."""
+
+    person_record_id: str
+    status: SpeakerStatus = "Prospect"
+    source: SpeakerSource | None = None
+    active_event_id: str | None = None
+    assigned: str | None = None
+    managed_poc: str | None = None
+    previous_events: str | None = None
+    speaker_info: str | None = None
+    work_history: str | None = None

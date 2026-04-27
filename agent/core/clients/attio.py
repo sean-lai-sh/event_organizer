@@ -17,7 +17,7 @@ def _v(record: dict, attr: str, key: str = "value") -> Any:
 
 
 def flatten_record(record: dict) -> dict:
-    """Convert an Attio record's nested values into a flat dict for easy access."""
+    """Convert an Attio people record into identity/profile fields only."""
     values = record.get("values", {})
     flat: dict[str, Any] = {
         "id": record.get("id", {}).get("record_id"),
@@ -35,18 +35,7 @@ def flatten_record(record: dict) -> dict:
     phone_vals = values.get("phone_numbers", [])
     flat["phone"] = phone_vals[0].get("phone_number") if phone_vals else None
 
-    # Custom club fields
-    for attr in (
-        "career_profile",
-        "relationship_stage",
-        "contact_source",
-        "warm_intro_by",
-        "assigned_members",
-        "contact_type",
-        "outreach_status",
-        "enrichment_status",
-        "last_agent_action_at",
-    ):
+    for attr in ("company", "job_title", "description"):
         flat[attr] = _v(record, attr)
 
     return flat

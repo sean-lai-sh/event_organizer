@@ -47,9 +47,11 @@ async def _get_inbox_id() -> str:
 )
 async def send_outreach_for_event(event_id: str, record_ids: list[str]) -> dict:
     try:
-        from helper.attio import AttioClient, flatten_record
+        from core.normalize.attio_vocab import normalize_speaker_source, normalize_speaker_status
+        from helper.attio import AttioClient, flatten_record, flatten_speaker_entry
     except ModuleNotFoundError:  # pragma: no cover - package import fallback
-        from agent.helper.attio import AttioClient, flatten_record
+        from agent.core.normalize.attio_vocab import normalize_speaker_source, normalize_speaker_status
+        from agent.helper.attio import AttioClient, flatten_record, flatten_speaker_entry
 
     async with ConvexClient() as sb:
         await sb.approve_contacts(event_id, record_ids)
@@ -87,8 +89,9 @@ async def send_outreach_for_event(event_id: str, record_ids: list[str]) -> dict:
             user_prompt = (
                 f"## Contact\n"
                 f"Name: {name}\n"
-                f"Type: {props.get('contact_type', 'prospect')}\n"
-                f"Career Profile: {props.get('career_profile', 'N/A')}\n\n"
+                f"Company: {props.get('company') or 'N/A'}\n"
+                f"Job Title: {props.get('job_title') or 'N/A'}\n"
+                f"Description: {props.get('description') or 'N/A'}\n\n"
                 f"## Event\n{event_details}"
             )
             email_body = await llm_call(COMPOSE_SYSTEM_PROMPT, user_prompt, max_tokens=1024)
@@ -112,8 +115,39 @@ async def send_outreach_for_event(event_id: str, record_ids: list[str]) -> dict:
             await append_attio_note(
                 record_id,
                 f"Invited to {event['title']}. thread_id={message.thread_id}",
-                outreach_status="agent_active",
             )
+
+            async with AttioClient() as attio:
+                rows = await attio.search_speaker_entries(
+                    {
+                        "$and": [
+                            {
+                                "attribute": {"slug": "parent_record"},
+                                "condition": "equals",
+                                "value": record_id,
+                            }
+                        ]
+                    },
+                    limit=1,
+                )
+                if rows:
+                    speaker_entry_id = flatten_speaker_entry(rows[0])["entry_id"]
+                else:
+                    created = await attio.create_speaker_entry(
+                        {
+                            "parent_record": [{"target_record_id": record_id}],
+                            "source": [{"value": normalize_speaker_source("outreach")}],
+                        }
+                    )
+                    speaker_entry_id = flatten_speaker_entry(created)["entry_id"]
+                await attio.update_speaker_entry(
+                    speaker_entry_id,
+                    {
+                        "status": [{"value": normalize_speaker_status("Engaged")}],
+                        "source": [{"value": normalize_speaker_source("outreach")}],
+                        "active_event_id": [{"value": event_id}],
+                    },
+                )
 
             sent.append(
                 {

@@ -10,10 +10,12 @@ import anthropic
 
 try:
     from core.clients.convex import ConvexClient
-    from helper.attio import AttioClient, flatten_record
+    from core.normalize.attio_vocab import normalize_speaker_source, normalize_speaker_status
+    from helper.attio import AttioClient, flatten_record, flatten_speaker_entry
 except ModuleNotFoundError:  # pragma: no cover - package import fallback
     from agent.core.clients.convex import ConvexClient
-    from agent.helper.attio import AttioClient, flatten_record
+    from agent.core.normalize.attio_vocab import normalize_speaker_source, normalize_speaker_status
+    from agent.helper.attio import AttioClient, flatten_record, flatten_speaker_entry
 
 
 async def llm_call(system: str, user_prompt: str, max_tokens: int = 1024) -> str:
@@ -37,44 +39,83 @@ def get_agentmail_client():
     return AgentMail(api_key=os.environ["AGENTMAIL_API_KEY"])
 
 
-async def fetch_enriched_contacts() -> list[dict]:
-    """Fetch people records with enrichment_status=enriched and non-excluded outreach status."""
-    filter_ = {
-        "$and": [
-            {
-                "attribute": {"slug": "enrichment_status"},
-                "condition": "equals",
-                "value": "enriched",
-            },
-        ]
-    }
-    async with AttioClient() as attio:
-        records = await attio.search_contacts(filter_, limit=100)
+def _attio_value(value: Any) -> list[dict[str, Any]]:
+    return [{"value": value}]
 
-    excluded = {"archived", "paused"}
+
+async def _ensure_speaker_entry(
+    attio: AttioClient,
+    person_record_id: str,
+    *,
+    source: str | None = None,
+    status: str | None = None,
+) -> dict:
+    rows = await attio.search_speaker_entries(
+        {
+            "$and": [
+                {
+                    "attribute": {"slug": "parent_record"},
+                    "condition": "equals",
+                    "value": person_record_id,
+                }
+            ]
+        },
+        limit=1,
+    )
+    if rows:
+        return rows[0]
+
+    values: dict[str, Any] = {
+        "parent_record": [{"target_record_id": person_record_id}],
+    }
+    if source is not None:
+        values["source"] = _attio_value(normalize_speaker_source(source))
+    if status is not None:
+        values["status"] = _attio_value(normalize_speaker_status(status))
+    return await attio.create_speaker_entry(values)
+
+
+async def fetch_enriched_contacts() -> list[dict]:
+    """Fetch speaker workflow rows and join each to its parent people record."""
+    async with AttioClient() as attio:
+        speakers = await attio.search_speaker_entries({}, limit=100)
+
     result = []
-    for row in records:
-        flat = flatten_record(row)
-        if flat.get("outreach_status") not in excluded:
-            result.append({"id": flat["id"], "properties": flat, "_raw": row})
+    async with AttioClient() as attio:
+        for speaker_row in speakers:
+            speaker = flatten_speaker_entry(speaker_row)
+            if speaker.get("status") == "Declined":
+                continue
+            record_id = speaker.get("parent_record_id")
+            if not record_id:
+                continue
+            person_row = await attio.get_contact(record_id)
+            person = flatten_record(person_row)
+            result.append(
+                {
+                    "id": person["id"],
+                    "speaker_entry_id": speaker.get("entry_id"),
+                    "properties": person,
+                    "speaker": speaker,
+                    "_raw": {"person": person_row, "speaker": speaker_row},
+                }
+            )
     return result
 
 
 async def append_attio_note(
     record_id: str, note: str, outreach_status: str | None = None
 ) -> None:
-    """Create a timestamped note on an Attio people record and optionally update outreach status."""
+    """Create a timestamped note on an Attio people record.
+
+    `outreach_status` is accepted only for legacy callers and is intentionally
+    ignored; workflow state belongs on Attio `speakers`.
+    """
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     content = f"[{ts}] {note}"
 
-    updates: dict[str, Any] = {}
-    if outreach_status:
-        updates["outreach_status"] = [{"value": outreach_status}]
-
     async with AttioClient() as attio:
         await attio.create_note(record_id, title="Agent Note", content=content)
-        if updates:
-            await attio.update_contact(record_id, updates)
 
 
 def _split_name(name: str | None) -> tuple[str, str]:
@@ -88,7 +129,7 @@ def _split_name(name: str | None) -> tuple[str, str]:
 
 
 async def upsert_inbound_contact(email: str, sender_name: str | None = None) -> dict:
-    """Find or create an inbound Attio contact, using email as the stable key."""
+    """Find or create an inbound Attio person and ensure a speaker workflow row."""
     email = email.strip().lower()
     if not email:
         raise ValueError("email is required")
@@ -100,6 +141,14 @@ async def upsert_inbound_contact(email: str, sender_name: str | None = None) -> 
             existing_record = rows[0]
 
         if existing_record:
+            record_id = existing_record.get("id", {}).get("record_id")
+            if record_id:
+                await _ensure_speaker_entry(
+                    attio,
+                    record_id,
+                    source="in bound",
+                    status="Prospect",
+                )
             return flatten_record(existing_record)
 
         parsed_name, parsed_email = parseaddr(sender_name or "")
@@ -109,13 +158,16 @@ async def upsert_inbound_contact(email: str, sender_name: str | None = None) -> 
             {
                 "name": [{"first_name": firstname, "last_name": lastname}],
                 "email_addresses": [{"email_address": email}],
-                "contact_source": [{"value": "inbound"}],
-                "contact_type": [{"value": "prospect"}],
-                "outreach_status": [{"value": "pending"}],
-                "enrichment_status": [{"value": "pending"}],
-                "relationship_stage": [{"value": "cold"}],
             }
         )
+        record_id = created.get("id", {}).get("record_id")
+        if record_id:
+            await _ensure_speaker_entry(
+                attio,
+                record_id,
+                source="in bound",
+                status="Prospect",
+            )
         return flatten_record(created)
 
 
