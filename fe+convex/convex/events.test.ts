@@ -153,6 +153,7 @@ async function seedEvent(db: FakeDb, overrides: Record<string, unknown> = {}) {
 }
 
 const eventsModulePromise = import("./events");
+const agentEventToolsModulePromise = import("./agentEventTools");
 
 beforeAll(async () => {
   const {
@@ -173,6 +174,8 @@ beforeAll(async () => {
     updateEvent,
     updateEventStatus,
   ]);
+  const { createEventSafe, updateEventSafe } = await agentEventToolsModulePromise;
+  installConvexHandlerAliases([createEventSafe, updateEventSafe]);
 });
 
 beforeEach(() => {
@@ -183,6 +186,158 @@ beforeEach(() => {
 });
 
 describe("events", () => {
+  test("createEventSafe inserts a runtime event with forced milestone defaults", async () => {
+    const { createEventSafe } = await agentEventToolsModulePromise;
+    const { db, ctx } = createHarness();
+
+    requireAdminMemberImpl = async () => {
+      throw new Error("Admin access required");
+    };
+
+    const eventId = await getHandler<
+      {
+        title: string;
+        description?: string;
+        event_date?: string;
+        event_time?: string;
+        event_end_time?: string;
+        location?: string;
+        event_type?: string;
+        target_profile?: string;
+        needs_outreach?: boolean;
+        status?: string;
+        created_by?: string;
+      },
+      string
+    >(createEventSafe)(ctx as never, {
+      title: "Runtime Event",
+      description: "Created after approval",
+      event_date: "2026-05-10",
+      needs_outreach: true,
+      status: "outreach",
+      created_by: "modal-runtime",
+    });
+
+    expect(await db.get(eventId)).toMatchObject({
+      _id: eventId,
+      title: "Runtime Event",
+      description: "Created after approval",
+      event_date: "2026-05-10",
+      needs_outreach: true,
+      status: "outreach",
+      created_by: "modal-runtime",
+      speaker_confirmed: false,
+      room_confirmed: false,
+    });
+  });
+
+  test("createEventSafe defaults omitted service fields", async () => {
+    const { createEventSafe } = await agentEventToolsModulePromise;
+    const { db, ctx } = createHarness();
+
+    const eventId = await getHandler<{ title: string }, string>(createEventSafe)(
+      ctx as never,
+      { title: "Minimal Runtime Event" }
+    );
+
+    expect(await db.get(eventId)).toMatchObject({
+      _id: eventId,
+      title: "Minimal Runtime Event",
+      needs_outreach: false,
+      status: "draft",
+      speaker_confirmed: false,
+      room_confirmed: false,
+    });
+  });
+
+  test("createEventSafe rejects invalid event status", async () => {
+    const { createEventSafe } = await agentEventToolsModulePromise;
+    const { ctx } = createHarness();
+
+    await expect(
+      getHandler<{ title: string; status?: string }, string>(createEventSafe)(ctx as never, {
+        title: "Bad Status Event",
+        status: "confirmed",
+      })
+    ).rejects.toThrow("Invalid event status: confirmed");
+  });
+
+  test("updateEventSafe patches allowlisted fields and keeps milestone booleans sticky", async () => {
+    const { updateEventSafe } = await agentEventToolsModulePromise;
+    const { db, ctx } = createHarness();
+    const eventId = await seedEvent(db, {
+      speaker_confirmed: false,
+      room_confirmed: false,
+      needs_outreach: false,
+    });
+
+    requireAdminMemberImpl = async () => {
+      throw new Error("Admin access required");
+    };
+
+    await getHandler<
+      {
+        event_id: string;
+        title?: string;
+        status?: string;
+        needs_outreach?: boolean;
+        speaker_confirmed?: boolean;
+        room_confirmed?: boolean;
+      },
+      unknown
+    >(updateEventSafe)(ctx as never, {
+      event_id: eventId,
+      title: "Runtime Updated",
+      status: "matching",
+      needs_outreach: true,
+      speaker_confirmed: true,
+      room_confirmed: true,
+    });
+
+    expect(await db.get(eventId)).toMatchObject({
+      _id: eventId,
+      title: "Runtime Updated",
+      status: "matching",
+      needs_outreach: true,
+      speaker_confirmed: true,
+      room_confirmed: true,
+    });
+
+    await getHandler<
+      { event_id: string; speaker_confirmed?: boolean; room_confirmed?: boolean },
+      unknown
+    >(updateEventSafe)(ctx as never, {
+      event_id: eventId,
+      speaker_confirmed: false,
+      room_confirmed: false,
+    });
+
+    expect(await db.get(eventId)).toMatchObject({
+      speaker_confirmed: true,
+      room_confirmed: true,
+    });
+  });
+
+  test("updateEventSafe rejects invalid status and missing events", async () => {
+    const { updateEventSafe } = await agentEventToolsModulePromise;
+    const { db, ctx } = createHarness();
+    const eventId = await seedEvent(db);
+
+    await expect(
+      getHandler<{ event_id: string; status?: string }, unknown>(updateEventSafe)(
+        ctx as never,
+        { event_id: eventId, status: "confirmed" }
+      )
+    ).rejects.toThrow("Invalid event status: confirmed");
+
+    await expect(
+      getHandler<{ event_id: string; title?: string }, unknown>(updateEventSafe)(
+        ctx as never,
+        { event_id: "events:999", title: "Missing" }
+      )
+    ).rejects.toThrow("Event not found: events:999");
+  });
+
   test("createEvent requires admin auth and sets default fields", async () => {
     const { createEvent } = await eventsModulePromise;
     const { db, ctx } = createHarness();

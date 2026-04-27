@@ -84,6 +84,7 @@ WRITE_TOOL_NAMES = {
     "ensure_speaker_for_person",
     "update_speaker_workflow",
     # convex event writes
+    "create_event_safe",
     "create_event",
     "update_event_safe",
     "book_oncehub_room",

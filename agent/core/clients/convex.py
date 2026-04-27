@@ -75,7 +75,39 @@ class ConvexClient:
         await self.mutation("events:updateEventStatus", {"event_id": event_id, "status": status})
 
     async def create_event(self, event: dict) -> str:
-        return await self.mutation("events:createEvent", event)
+        return await self.create_event_safe(**event)
+
+    async def create_event_safe(
+        self,
+        *,
+        title: str,
+        description: str | None = None,
+        event_date: str | None = None,
+        event_time: str | None = None,
+        event_end_time: str | None = None,
+        location: str | None = None,
+        event_type: str | None = None,
+        target_profile: str | None = None,
+        needs_outreach: bool | None = None,
+        status: str | None = None,
+        created_by: str | None = None,
+    ) -> str:
+        return await self.mutation(
+            "agentEventTools:createEventSafe",
+            {
+                "title": title,
+                "description": description,
+                "event_date": event_date,
+                "event_time": event_time,
+                "event_end_time": event_end_time,
+                "location": location,
+                "event_type": event_type,
+                "target_profile": target_profile,
+                "needs_outreach": needs_outreach,
+                "status": status,
+                "created_by": created_by,
+            },
+        )
 
     async def apply_inbound_milestones(
         self,
@@ -106,11 +138,12 @@ class ConvexClient:
         status: str | None = None,
         event_type: str | None = None,
         target_profile: str | None = None,
+        needs_outreach: bool | None = None,
         speaker_confirmed: bool | None = None,
         room_confirmed: bool | None = None,
     ) -> dict | None:
         return await self.mutation(
-            "events:updateEvent",
+            "agentEventTools:updateEventSafe",
             {
                 "event_id": event_id,
                 "title": title,
@@ -122,6 +155,7 @@ class ConvexClient:
                 "status": status,
                 "event_type": event_type,
                 "target_profile": target_profile,
+                "needs_outreach": needs_outreach,
                 "speaker_confirmed": speaker_confirmed,
                 "room_confirmed": room_confirmed,
             },

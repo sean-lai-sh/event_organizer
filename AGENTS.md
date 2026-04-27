@@ -299,7 +299,7 @@ Current MCP tool surface:
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
 - Temporary compatibility read aliases: `search_contacts`, `get_contact` (map to the people reads; do not accept workflow filters)
 - Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`, `get_event_room_booking`
-- Approval-gated Convex writes: `update_event_safe`, `create_event`
+- Approval-gated Convex writes: `create_event_safe`, `update_event_safe` (`create_event` remains a compatibility alias)
 - OnceHub live reads: `find_oncehub_slots`
 - Approval-gated OnceHub writes: `book_oncehub_room`
 

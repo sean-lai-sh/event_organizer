@@ -63,8 +63,10 @@ The runtime's current MCP tool surface is:
    - `get_event_outreach`
    - `get_attendance_dashboard`
    - `get_event_attendance`
-   - approval-gated `create_event`
+   - approval-gated `create_event_safe`
    - approval-gated `update_event_safe`
+
+`create_event` remains available as a compatibility alias for `create_event_safe`.
 
 The historical `create_contact` / `update_contact` workflow-authoritative tools have been retired because they wrote workflow fields onto Attio `people`.
 

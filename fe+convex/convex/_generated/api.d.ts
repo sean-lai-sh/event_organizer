@@ -9,6 +9,7 @@
  */
 
 import type * as agent from "../agent.js";
+import type * as agentEventTools from "../agentEventTools.js";
 import type * as agentState from "../agentState.js";
 import type * as agentStateValidators from "../agentStateValidators.js";
 import type * as attendance from "../attendance.js";
@@ -32,6 +33,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agent: typeof agent;
+  agentEventTools: typeof agentEventTools;
   agentState: typeof agentState;
   agentStateValidators: typeof agentStateValidators;
   attendance: typeof attendance;
