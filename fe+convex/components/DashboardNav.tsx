@@ -28,8 +28,8 @@ export default function DashboardNav({ pathname }: { pathname?: string }) {
         href="/dashboard/account"
         className={`flex min-h-[42px] items-center gap-3 rounded-[12px] px-2.5 text-[13px] font-medium transition ${
           accountActive
-            ? "bg-[#111111] text-[#FFFFFF]"
-            : "text-[#2B2B2B] hover:bg-[#F5F5F5]"
+            ? "bg-[#111111] text-[#FFFFFF] hover:bg-[#1A1A1A] hover:text-[#FFFFFF]"
+            : "text-[#2B2B2B] hover:bg-[#F5F5F5] hover:text-[#111111]"
         }`}
       >
         <div

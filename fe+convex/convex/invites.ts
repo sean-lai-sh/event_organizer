@@ -115,14 +115,24 @@ export const consume = mutation({
       });
     }
 
-    // Assign role if the invite grants one
-    if (invite.grants_role && user) {
+    // Upsert an eboard_members row for every new signup so they appear in the User Directory.
+    if (user) {
       const member = await ctx.db
         .query("eboard_members")
         .withIndex("by_userId", (q) => q.eq("userId", user._id))
         .first();
       if (member) {
-        await ctx.db.patch(member._id, { role: invite.grants_role });
+        await ctx.db.patch(member._id, {
+          ...(invite.grants_role ? { role: invite.grants_role } : {}),
+          active: true,
+        });
+      } else {
+        await ctx.db.insert("eboard_members", {
+          userId: user._id,
+          role: invite.grants_role ?? "member",
+          active: true,
+          created_at: Date.now(),
+        });
       }
     }
   },
