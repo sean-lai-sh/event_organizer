@@ -32,6 +32,7 @@ Avoid per-page ad hoc header wrappers unless intentionally introducing a new glo
 
 ## Typography
 
+- App surfaces and canonical screen specs use `Inter` only. Do not introduce alternate display or navigation fonts.
 - Page title (dashboard shell): `text-lg`, `font-semibold`, subtle tracking
 - Sidebar brand: `text-[14px]`, `font-semibold`
 - Nav labels: `text-[13px]`

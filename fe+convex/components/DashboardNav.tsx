@@ -40,7 +40,7 @@ export default function DashboardNav({ pathname }: { pathname?: string }) {
           <Settings2 className="h-4 w-4" strokeWidth={1.8} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-[var(--font-geist-sans)] font-semibold">Manage Account</div>
+          <div className="font-sans font-semibold">Manage Account</div>
         </div>
         <ChevronRight
           className={`h-4 w-4 ${accountActive ? "text-[#D6D6D6]" : "text-[#A0A0A0]"}`}
@@ -55,7 +55,7 @@ export default function DashboardNav({ pathname }: { pathname?: string }) {
         <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-[#F6F6F6] text-[#7A7A7A]">
           <LogOut className="h-4 w-4" strokeWidth={1.8} />
         </div>
-        <div className="min-w-0 flex-1 font-[var(--font-geist-sans)] font-semibold">
+        <div className="min-w-0 flex-1 font-sans font-semibold">
           {loading ? "Signing out..." : "Sign out"}
         </div>
       </button>

@@ -121,7 +121,7 @@ export default function DashboardLayout({
               <div className="h-4 w-4 rounded-full border border-[#FFFFFF]/35 bg-[#0A0A0A]" />
             </div>
             <div>
-              <div className="font-[var(--font-geist-sans)] text-[14px] font-semibold tracking-[-0.02em] text-[#111111]">
+              <div className="font-sans text-[14px] font-semibold tracking-[-0.02em] text-[#111111]">
                 event.organizer
               </div>
               <div className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-[#A2A2A2]">
@@ -131,7 +131,7 @@ export default function DashboardLayout({
           </div>
 
           <nav className="flex-1 px-4 py-5">
-            <div className="px-2 pb-3 font-[var(--font-geist-sans)] text-[10px] font-semibold tracking-[0.14em] text-[#B3B3B3]">
+            <div className="px-2 pb-3 font-sans text-[10px] font-semibold tracking-[0.14em] text-[#B3B3B3]">
               PRIMARY WORKSPACE
             </div>
             <Link
@@ -165,7 +165,7 @@ export default function DashboardLayout({
               </div>
             </Link>
 
-            <div className="mt-6 px-2 pb-3 font-[var(--font-geist-sans)] text-[10px] font-semibold tracking-[0.14em] text-[#B3B3B3]">
+            <div className="mt-6 px-2 pb-3 font-sans text-[10px] font-semibold tracking-[0.14em] text-[#B3B3B3]">
               DASHBOARD TOOLS
             </div>
             <div className="space-y-1.5 rounded-[18px] border border-[#ECECEC] bg-[#FCFCFC] p-2">
@@ -175,7 +175,7 @@ export default function DashboardLayout({
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`flex min-h-[42px] items-center gap-3 rounded-[12px] px-3 font-[var(--font-geist-sans)] text-[13px] leading-none transition ${
+                    className={`flex min-h-[42px] items-center gap-3 rounded-[12px] px-3 font-sans text-[13px] leading-none transition ${
                       active
                         ? "border border-[#D9D9D9] bg-[#FFFFFF] font-semibold text-[#0A0A0A]"
                         : "border border-transparent text-[#6F6F6F] hover:bg-[#F1F1F1] hover:text-[#1F1F1F]"

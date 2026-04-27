@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { authComponent, getAuthUser, safeGetAuthUser } from "./auth";
+import { components } from "./_generated/api";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 function generateCode(): string {
@@ -115,11 +116,18 @@ export const consume = mutation({
       });
     }
 
-    // Upsert an eboard_members row for every new signup so they appear in the User Directory.
-    if (user) {
+    // Look up the user by email directly — safeGetAuthUser returns null here
+    // because the Convex client hasn't received the new session JWT yet
+    // (signUp.email() just completed but the token hasn't propagated).
+    const authUser = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+      model: "user",
+      where: [{ field: "email", value: normalizedEmail }],
+    }) as { _id: string } | null;
+
+    if (authUser) {
       const member = await ctx.db
         .query("eboard_members")
-        .withIndex("by_userId", (q) => q.eq("userId", user._id))
+        .withIndex("by_userId", (q) => q.eq("userId", authUser._id))
         .first();
       if (member) {
         await ctx.db.patch(member._id, {
@@ -128,7 +136,7 @@ export const consume = mutation({
         });
       } else {
         await ctx.db.insert("eboard_members", {
-          userId: user._id,
+          userId: authUser._id,
           role: invite.grants_role ?? "member",
           active: true,
           created_at: Date.now(),

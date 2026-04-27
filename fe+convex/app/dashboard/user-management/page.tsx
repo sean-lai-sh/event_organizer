@@ -159,7 +159,7 @@ export default function UserManagementPage() {
             key={metric.label}
             className="flex flex-col gap-2 rounded-[18px] border border-[#E8E8E8] bg-[#F4F4F4] p-4"
           >
-            <span className="font-[var(--font-outfit)] text-[34px] font-light leading-none tracking-[-0.04em] text-[#1F1F1F]">
+            <span className="font-sans text-[34px] font-light leading-none tracking-[-0.04em] text-[#1F1F1F]">
               {metric.value}
             </span>
             <span className="text-[13px] font-medium text-[#767676]">{metric.label}</span>

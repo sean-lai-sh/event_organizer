@@ -39,7 +39,7 @@ export function ArtifactCanvas({ artifacts, onClose }: ArtifactCanvasProps) {
         <div className="min-w-0 flex-1">
           <p
             className="truncate text-[12.5px] font-semibold text-[#111111]"
-            style={{ fontFamily: "var(--font-geist-sans)" }}
+            style={{ fontFamily: "var(--font-app-sans)" }}
           >
             {artifact.title}
           </p>

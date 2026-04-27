@@ -40,7 +40,7 @@ export default function DashboardPage() {
             key={k.label}
             className="flex flex-col gap-2 rounded-[18px] border border-[#e8e8e8] bg-[#f4f4f4] p-4"
           >
-            <span className="font-[var(--font-outfit)] text-[34px] font-light leading-none tracking-[-0.04em] text-[#1f1f1f]">
+            <span className="font-sans text-[34px] font-light leading-none tracking-[-0.04em] text-[#1f1f1f]">
               {k.value}
             </span>
             <span className="text-[13px] font-medium text-[#767676]">{k.label}</span>

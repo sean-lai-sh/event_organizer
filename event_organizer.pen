@@ -63,7 +63,7 @@
                   "name": "LogoText",
                   "fill": "#111111",
                   "content": "event.organizer",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 13,
                   "fontWeight": "600"
                 }
@@ -88,7 +88,7 @@
                   "name": "NavLabel",
                   "fill": "#BBBBBB",
                   "content": "NAVIGATION",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.8
@@ -127,7 +127,7 @@
                       "id": "wke6I",
                       "fill": "#7B7B7B",
                       "content": "Dashboard",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -167,7 +167,7 @@
                       "id": "Mfc7b",
                       "fill": "#7B7B7B",
                       "content": "Events",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -201,7 +201,7 @@
                       "id": "9XKy6",
                       "fill": "#7B7B7B",
                       "content": "Outreach",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -243,7 +243,7 @@
                       "id": "KTIkm",
                       "fill": "#3B3B3B",
                       "content": "Member Management",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
                     }
@@ -307,7 +307,7 @@
                       "id": "atNZf",
                       "fill": "#111111",
                       "content": "Sean Lai",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "500"
                     },
@@ -316,7 +316,7 @@
                       "id": "pIDXw",
                       "fill": "#7B7B7B",
                       "content": "Admin · tech@nyu",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 11,
                       "fontWeight": "normal"
                     }
@@ -369,7 +369,7 @@
                       "name": "title",
                       "fill": "#111111",
                       "content": "Member Management (Admin Only)",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 16,
                       "fontWeight": "600"
                     },
@@ -379,7 +379,7 @@
                       "name": "subtitle",
                       "fill": "#7B7B7B",
                       "content": "Invite or remove members, and assign admin access for the organization.",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 12,
                       "fontWeight": "normal"
                     }
@@ -415,7 +415,7 @@
                           "name": "changeBtnText",
                           "fill": "#111111",
                           "content": "Change Admin",
-                          "fontFamily": "Geist",
+                          "fontFamily": "Inter",
                           "fontSize": 13,
                           "fontWeight": "500"
                         }
@@ -460,7 +460,7 @@
                           "name": "inviteBtnText",
                           "fill": "#FFFFFF",
                           "content": "Invite Member",
-                          "fontFamily": "Geist",
+                          "fontFamily": "Inter",
                           "fontSize": 13,
                           "fontWeight": "500"
                         }
@@ -512,7 +512,7 @@
                           "name": "m1LblA",
                           "fill": "#7B7B7B",
                           "content": "Total Members",
-                          "fontFamily": "Geist",
+                          "fontFamily": "Inter",
                           "fontSize": 11,
                           "fontWeight": "500"
                         },
@@ -553,7 +553,7 @@
                           "name": "m2LblA",
                           "fill": "#7B7B7B",
                           "content": "Admins",
-                          "fontFamily": "Geist",
+                          "fontFamily": "Inter",
                           "fontSize": 11,
                           "fontWeight": "500"
                         },
@@ -594,7 +594,7 @@
                           "name": "m3LblA",
                           "fill": "#7B7B7B",
                           "content": "Pending Invites",
-                          "fontFamily": "Geist",
+                          "fontFamily": "Inter",
                           "fontSize": 11,
                           "fontWeight": "500"
                         },
@@ -635,7 +635,7 @@
                           "name": "m4LblA",
                           "fill": "#7B7B7B",
                           "content": "Needs Review",
-                          "fontFamily": "Geist",
+                          "fontFamily": "Inter",
                           "fontSize": 11,
                           "fontWeight": "500"
                         },
@@ -684,7 +684,7 @@
                               "name": "introTitle",
                               "fill": "#111111",
                               "content": "Member Directory",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 14,
                               "fontWeight": "600"
                             },
@@ -696,7 +696,7 @@
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
                               "content": "Review access, monitor invite status, and remove members who should no longer have organizer access.",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 12,
                               "fontWeight": "normal"
                             }
@@ -745,7 +745,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
                                   "content": "MEMBER",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "500",
                                   "letterSpacing": 0.5
@@ -758,7 +758,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "ROLE",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "500",
                                   "letterSpacing": 0.5
@@ -771,7 +771,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "LAST ACTIVE",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "500",
                                   "letterSpacing": 0.5
@@ -784,7 +784,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 160,
                                   "content": "STATUS",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "500",
                                   "letterSpacing": 0.5
@@ -797,7 +797,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 100,
                                   "content": "ACTION",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "500",
                                   "letterSpacing": 0.5
@@ -831,7 +831,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
                                   "content": "Sean Lai",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 },
@@ -843,7 +843,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "Primary Admin",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -855,7 +855,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "Today",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -867,7 +867,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 160,
                                   "content": "Full access",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -889,7 +889,7 @@
                                       "name": "r1st",
                                       "fill": "#FFFFFF",
                                       "content": "Primary",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     }
@@ -924,7 +924,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
                                   "content": "Amina Yusuf",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 },
@@ -936,7 +936,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "Admin",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -948,7 +948,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "2h ago",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -960,7 +960,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 160,
                                   "content": "Can invite + edit",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -987,7 +987,7 @@
                                       "name": "r2st",
                                       "fill": "#E7000B",
                                       "content": "Delete",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     }
@@ -1022,7 +1022,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
                                   "content": "Lucas Chen",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 },
@@ -1034,7 +1034,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "Member",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1046,7 +1046,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "1d ago",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1058,7 +1058,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 160,
                                   "content": "Active",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1085,7 +1085,7 @@
                                       "name": "r3st",
                                       "fill": "#E7000B",
                                       "content": "Delete",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     }
@@ -1120,7 +1120,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
                                   "content": "Priya Patel",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 },
@@ -1132,7 +1132,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "Member",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1144,7 +1144,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "Pending",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1156,7 +1156,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 160,
                                   "content": "Invite sent",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1183,7 +1183,7 @@
                                       "name": "r4st",
                                       "fill": "#AAAAAA",
                                       "content": "Delete",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "500"
                                     }
@@ -1211,7 +1211,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
                                   "content": "Mateo Ruiz",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 },
@@ -1223,7 +1223,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "Member",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1235,7 +1235,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 120,
                                   "content": "3d ago",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1247,7 +1247,7 @@
                                   "textGrowth": "fixed-width",
                                   "width": 160,
                                   "content": "Needs review",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "normal"
                                 },
@@ -1274,7 +1274,7 @@
                                       "name": "r5st",
                                       "fill": "#E7000B",
                                       "content": "Delete",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "500"
                                     }
@@ -1317,7 +1317,7 @@
                               "name": "adminTitle",
                               "fill": "#111111",
                               "content": "Admin Controls",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 14,
                               "fontWeight": "600"
                             },
@@ -1329,7 +1329,7 @@
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
                               "content": "Add co-admins or transfer ownership when the leadership team changes.",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 12,
                               "fontWeight": "normal"
                             },
@@ -1366,7 +1366,7 @@
                                       "name": "adminName",
                                       "fill": "#111111",
                                       "content": "Sean Lai",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 13,
                                       "fontWeight": "500"
                                     },
@@ -1376,7 +1376,7 @@
                                       "name": "adminMeta",
                                       "fill": "#7B7B7B",
                                       "content": "Primary admin · tech@nyu.edu",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "normal"
                                     }
@@ -1403,7 +1403,7 @@
                                       "name": "transferText",
                                       "fill": "#111111",
                                       "content": "Change",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "500"
                                     }
@@ -1430,7 +1430,7 @@
                                   "name": "addAdminText",
                                   "fill": "#FFFFFF",
                                   "content": "Add Co-Admin",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 }
@@ -1460,7 +1460,7 @@
                               "name": "pendingTitle",
                               "fill": "#111111",
                               "content": "Pending Invites",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 14,
                               "fontWeight": "600"
                             },
@@ -1472,7 +1472,7 @@
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
                               "content": "11 invites are still waiting for acceptance.",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 12,
                               "fontWeight": "normal"
                             },
@@ -1500,7 +1500,7 @@
                                   "name": "invite1Name",
                                   "fill": "#111111",
                                   "content": "jordan.kim@nyu.edu",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 },
@@ -1510,7 +1510,7 @@
                                   "name": "invite1Meta",
                                   "fill": "#7B7B7B",
                                   "content": "Sent 2 days ago · Member",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "normal"
                                 }
@@ -1540,7 +1540,7 @@
                                   "name": "invite2Name",
                                   "fill": "#111111",
                                   "content": "maria.lopez@stern.nyu.edu",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "500"
                                 },
@@ -1550,7 +1550,7 @@
                                   "name": "invite2Meta",
                                   "fill": "#7B7B7B",
                                   "content": "Sent 5 hours ago · Admin",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "normal"
                                 }
@@ -1599,7 +1599,7 @@
               "name": "brand",
               "fill": "#0A0A0A",
               "content": "eventclub",
-              "fontFamily": "Outfit",
+              "fontFamily": "Inter",
               "fontSize": 18,
               "fontWeight": "700",
               "letterSpacing": -0.72
@@ -1712,7 +1712,7 @@
                   "width": 640,
                   "content": "Run standout events\nwithout the chaos.",
                   "lineHeight": 0.97,
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 72,
                   "fontWeight": "300",
                   "letterSpacing": -3.6
@@ -1926,7 +1926,7 @@
                           "name": "mini1Val",
                           "fill": "#18212C",
                           "content": "82%",
-                          "fontFamily": "Outfit",
+                          "fontFamily": "Inter",
                           "fontSize": 34,
                           "fontWeight": "300"
                         },
@@ -1964,7 +1964,7 @@
                           "name": "mini2Val",
                           "fill": "#18212C",
                           "content": "6",
-                          "fontFamily": "Outfit",
+                          "fontFamily": "Inter",
                           "fontSize": 34,
                           "fontWeight": "300"
                         },
@@ -2511,7 +2511,7 @@
                   "width": 620,
                   "content": "A platform built to connect everything your club needs.",
                   "textAlign": "center",
-                  "fontFamily": "Outfit",
+                  "fontFamily": "Inter",
                   "fontSize": 44,
                   "fontWeight": "300",
                   "letterSpacing": -2.4
@@ -2771,7 +2771,7 @@
                   "name": "stat1Val",
                   "fill": "#0A0A0A",
                   "content": "2,400+",
-                  "fontFamily": "Outfit",
+                  "fontFamily": "Inter",
                   "fontSize": 48,
                   "fontWeight": "300",
                   "letterSpacing": -2.4
@@ -2802,7 +2802,7 @@
                   "name": "stat2Val",
                   "fill": "#0A0A0A",
                   "content": "18K+",
-                  "fontFamily": "Outfit",
+                  "fontFamily": "Inter",
                   "fontSize": 48,
                   "fontWeight": "300",
                   "letterSpacing": -2.4
@@ -2833,7 +2833,7 @@
                   "name": "stat3Val",
                   "fill": "#0A0A0A",
                   "content": "340+",
-                  "fontFamily": "Outfit",
+                  "fontFamily": "Inter",
                   "fontSize": 48,
                   "fontWeight": "300",
                   "letterSpacing": -2.4
@@ -2864,7 +2864,7 @@
                   "name": "stat4Val",
                   "fill": "#0A0A0A",
                   "content": "98%",
-                  "fontFamily": "Outfit",
+                  "fontFamily": "Inter",
                   "fontSize": 48,
                   "fontWeight": "300",
                   "letterSpacing": -2.4
@@ -2906,7 +2906,7 @@
               "width": 620,
               "content": "Ready to run\nyour next\nclub event?",
               "lineHeight": 0.97,
-              "fontFamily": "Geist",
+              "fontFamily": "Inter",
               "fontSize": 64,
               "fontWeight": "300",
               "letterSpacing": -3.2
@@ -2986,7 +2986,7 @@
               "name": "footBrand",
               "fill": "#0A0A0A",
               "content": "eventclub",
-              "fontFamily": "Outfit",
+              "fontFamily": "Inter",
               "fontSize": 16,
               "fontWeight": "700"
             },
@@ -3050,7 +3050,7 @@
               "name": "authBrand",
               "fill": "#0A0A0A",
               "content": "eventclub",
-              "fontFamily": "Geist",
+              "fontFamily": "Inter",
               "fontSize": 18,
               "fontWeight": "600",
               "letterSpacing": -0.72
@@ -3072,7 +3072,7 @@
                   "width": 520,
                   "content": "Run event ops\nwithout chaos.",
                   "lineHeight": 0.97,
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 76,
                   "fontWeight": "300",
                   "letterSpacing": -3.2
@@ -3140,7 +3140,7 @@
                       "name": "loginTitle",
                       "fill": "#0A0A0A",
                       "content": "Welcome back",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 36,
                       "fontWeight": "600",
                       "letterSpacing": -1.4
@@ -3374,7 +3374,7 @@
               "name": "authBrand",
               "fill": "#0A0A0A",
               "content": "eventclub",
-              "fontFamily": "Geist",
+              "fontFamily": "Inter",
               "fontSize": 18,
               "fontWeight": "600",
               "letterSpacing": -0.72
@@ -3396,7 +3396,7 @@
                   "width": 520,
                   "content": "Build better events\ntogether.",
                   "lineHeight": 0.97,
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 76,
                   "fontWeight": "300",
                   "letterSpacing": -3.2
@@ -3464,7 +3464,7 @@
                       "name": "loginTitle",
                       "fill": "#0A0A0A",
                       "content": "Join the team",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 36,
                       "fontWeight": "600",
                       "letterSpacing": -1.4
@@ -3702,7 +3702,7 @@
               "name": "authBrand",
               "fill": "#0A0A0A",
               "content": "eventclub",
-              "fontFamily": "Geist",
+              "fontFamily": "Inter",
               "fontSize": 18,
               "fontWeight": "600",
               "letterSpacing": -0.72
@@ -3724,7 +3724,7 @@
                   "width": 520,
                   "content": "Build better events\ntogether.",
                   "lineHeight": 0.97,
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 76,
                   "fontWeight": "300",
                   "letterSpacing": -3.2
@@ -3802,7 +3802,7 @@
                       "name": "regTitle",
                       "fill": "#0A0A0A",
                       "content": "Create account",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 36,
                       "fontWeight": "600",
                       "letterSpacing": -1.4
@@ -4162,7 +4162,7 @@
                   "name": "logoText",
                   "fill": "#111111",
                   "content": "event.organizer",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600",
                   "letterSpacing": -0.28
@@ -4185,7 +4185,7 @@
                   "name": "navLabel",
                   "fill": "#BBBBBB",
                   "content": "NAVIGATION",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.8
@@ -4226,7 +4226,7 @@
                       "name": "navDashText",
                       "fill": "#0A0A0A",
                       "content": "Dashboard",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
                     }
@@ -4262,7 +4262,7 @@
                       "name": "navEventsText",
                       "fill": "#7B7B7B",
                       "content": "Events",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -4298,7 +4298,7 @@
                       "name": "navSpeakText",
                       "fill": "#7B7B7B",
                       "content": "Speakers",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -4334,7 +4334,7 @@
                       "name": "navCommsText",
                       "fill": "#7B7B7B",
                       "content": "Communications",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -4370,7 +4370,7 @@
                       "name": "navInvitesText",
                       "fill": "#7B7B7B",
                       "content": "Invites",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -4517,7 +4517,7 @@
                   "name": "headTitle",
                   "fill": "#0A0A0A",
                   "content": "Dashboard",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 18,
                   "fontWeight": "600"
                 },
@@ -4606,7 +4606,7 @@
                           "name": "k1Val",
                           "fill": "#1F1F1F",
                           "content": "24",
-                          "fontFamily": "Outfit",
+                          "fontFamily": "Inter",
                           "fontSize": 34,
                           "fontWeight": "300",
                           "letterSpacing": -1.36
@@ -4645,7 +4645,7 @@
                           "name": "k2Val",
                           "fill": "#1F1F1F",
                           "content": "8",
-                          "fontFamily": "Outfit",
+                          "fontFamily": "Inter",
                           "fontSize": 34,
                           "fontWeight": "300",
                           "letterSpacing": -1.36
@@ -4684,7 +4684,7 @@
                           "name": "k3Val",
                           "fill": "#1F1F1F",
                           "content": "12",
-                          "fontFamily": "Outfit",
+                          "fontFamily": "Inter",
                           "fontSize": 34,
                           "fontWeight": "300",
                           "letterSpacing": -1.36
@@ -4723,7 +4723,7 @@
                           "name": "k4Val",
                           "fill": "#1F1F1F",
                           "content": "5",
-                          "fontFamily": "Outfit",
+                          "fontFamily": "Inter",
                           "fontSize": 34,
                           "fontWeight": "300",
                           "letterSpacing": -1.36
@@ -5374,7 +5374,7 @@
                   "name": "logoText",
                   "fill": "#111111",
                   "content": "event.organizer",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600",
                   "letterSpacing": -0.28
@@ -5397,7 +5397,7 @@
                   "name": "navLabel",
                   "fill": "#BBBBBB",
                   "content": "NAVIGATION",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.8
@@ -5438,7 +5438,7 @@
                       "name": "navDashText",
                       "fill": "#7B7B7B",
                       "content": "Dashboard",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -5480,7 +5480,7 @@
                       "name": "navEventsText",
                       "fill": "#0A0A0A",
                       "content": "Events",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
                     }
@@ -5516,7 +5516,7 @@
                       "name": "navSpeakText",
                       "fill": "#7B7B7B",
                       "content": "Speakers",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -5552,7 +5552,7 @@
                       "name": "navCommsText",
                       "fill": "#7B7B7B",
                       "content": "Communications",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -5588,7 +5588,7 @@
                       "name": "navInvitesText",
                       "fill": "#7B7B7B",
                       "content": "Invites",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -5735,7 +5735,7 @@
                   "name": "eventsTitle",
                   "fill": "#0A0A0A",
                   "content": "Events",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 18,
                   "fontWeight": "600"
                 },
@@ -6368,7 +6368,7 @@
                   "name": "logoText",
                   "fill": "#111111",
                   "content": "event.organizer",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600",
                   "letterSpacing": -0.28
@@ -6391,7 +6391,7 @@
                   "name": "navLabel",
                   "fill": "#BBBBBB",
                   "content": "NAVIGATION",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.8
@@ -6432,7 +6432,7 @@
                       "name": "navDashText",
                       "fill": "#7B7B7B",
                       "content": "Dashboard",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -6474,7 +6474,7 @@
                       "name": "navEventsText",
                       "fill": "#0A0A0A",
                       "content": "Events",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
                     }
@@ -6510,7 +6510,7 @@
                       "name": "navSpeakText",
                       "fill": "#7B7B7B",
                       "content": "Speakers",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -6546,7 +6546,7 @@
                       "name": "navCommsText",
                       "fill": "#7B7B7B",
                       "content": "Communications",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -6582,7 +6582,7 @@
                       "name": "navInvitesText",
                       "fill": "#7B7B7B",
                       "content": "Invites",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -6729,7 +6729,7 @@
                   "name": "createHeadTitle",
                   "fill": "#0A0A0A",
                   "content": "Events / Create Event",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 18,
                   "fontWeight": "600"
                 },
@@ -7611,7 +7611,7 @@
                   "name": "logoText",
                   "fill": "#111111",
                   "content": "event.organizer",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600",
                   "letterSpacing": -0.28
@@ -7634,7 +7634,7 @@
                   "name": "navLabel",
                   "fill": "#BBBBBB",
                   "content": "NAVIGATION",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.8
@@ -7675,7 +7675,7 @@
                       "name": "navDashText",
                       "fill": "#7B7B7B",
                       "content": "Dashboard",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -7711,7 +7711,7 @@
                       "name": "navEventsText",
                       "fill": "#7B7B7B",
                       "content": "Events",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -7747,7 +7747,7 @@
                       "name": "navSpeakText",
                       "fill": "#7B7B7B",
                       "content": "Speakers",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -7783,7 +7783,7 @@
                       "name": "navCommsText",
                       "fill": "#7B7B7B",
                       "content": "Communications",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -7825,7 +7825,7 @@
                       "name": "navInvitesText",
                       "fill": "#0A0A0A",
                       "content": "Invites",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
                     }
@@ -7972,7 +7972,7 @@
                   "name": "inviteTitle",
                   "fill": "#0A0A0A",
                   "content": "Invites",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 18,
                   "fontWeight": "600"
                 },
@@ -8277,7 +8277,7 @@
                   "name": "sharedTitle",
                   "fill": "#0A0A0A",
                   "content": "Code Import — Shared UI Components",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 24,
                   "fontWeight": "600"
                 },
@@ -9052,7 +9052,7 @@
                   "name": "logoText",
                   "fill": "#111111",
                   "content": "event.organizer",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600",
                   "letterSpacing": -0.28
@@ -9075,7 +9075,7 @@
                   "name": "navLabel",
                   "fill": "#BBBBBB",
                   "content": "NAVIGATION",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.8
@@ -9110,7 +9110,7 @@
                       "name": "navDashText",
                       "fill": "#7B7B7B",
                       "content": "Dashboard",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -9146,7 +9146,7 @@
                       "name": "navEventsText",
                       "fill": "#7B7B7B",
                       "content": "Events",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -9188,7 +9188,7 @@
                       "name": "navDataText",
                       "fill": "#0A0A0A",
                       "content": "Data",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
                     }
@@ -9224,7 +9224,7 @@
                       "name": "navSpeakText",
                       "fill": "#7B7B7B",
                       "content": "Speakers",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -9260,7 +9260,7 @@
                       "name": "navCommsText",
                       "fill": "#7B7B7B",
                       "content": "Communications",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -9296,7 +9296,7 @@
                       "name": "navInvitesText",
                       "fill": "#7B7B7B",
                       "content": "Invites",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "normal"
                     }
@@ -9443,7 +9443,7 @@
                   "name": "headTitle",
                   "fill": "#0A0A0A",
                   "content": "Data Insights",
-                  "fontFamily": "Geist",
+                  "fontFamily": "Inter",
                   "fontSize": 18,
                   "fontWeight": "600"
                 },
@@ -9470,7 +9470,7 @@
                       "id": "93st4",
                       "fill": "#9A9A9A",
                       "content": "LATEST SNAPSHOT",
-                      "fontFamily": "Geist",
+                      "fontFamily": "Inter",
                       "fontSize": 10,
                       "fontWeight": "600",
                       "letterSpacing": 1.2
@@ -9537,7 +9537,7 @@
                               "id": "QB8JZ",
                               "fill": "#8F8F8F",
                               "content": "ATTENDANCE INTELLIGENCE",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 10,
                               "fontWeight": "600",
                               "letterSpacing": 1.2
@@ -9549,7 +9549,7 @@
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
                               "content": "See the story behind turnout before you touch the ledger.",
-                              "fontFamily": "Outfit",
+                              "fontFamily": "Inter",
                               "fontSize": 46,
                               "fontWeight": "300",
                               "letterSpacing": -2.8
@@ -9604,7 +9604,7 @@
                                   "id": "p61vZ",
                                   "fill": "#979797",
                                   "content": "SOURCE MIX",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "600",
                                   "letterSpacing": 1.2
@@ -9810,7 +9810,7 @@
                               "id": "Vsosm",
                               "fill": "#A0A0A0",
                               "content": "TRACKED EVENTS",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 10,
                               "fontWeight": "600",
                               "letterSpacing": 1.2
@@ -9820,7 +9820,7 @@
                               "id": "t1nqg",
                               "fill": "#111111",
                               "content": "24",
-                              "fontFamily": "Outfit",
+                              "fontFamily": "Inter",
                               "fontSize": 34,
                               "fontWeight": "300",
                               "letterSpacing": -2.4
@@ -9858,7 +9858,7 @@
                               "id": "b1kr6",
                               "fill": "#A0A0A0",
                               "content": "UNIQUE ATTENDEES",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 10,
                               "fontWeight": "600",
                               "letterSpacing": 1.2
@@ -9868,7 +9868,7 @@
                               "id": "2dLrE",
                               "fill": "#111111",
                               "content": "61",
-                              "fontFamily": "Outfit",
+                              "fontFamily": "Inter",
                               "fontSize": 34,
                               "fontWeight": "300",
                               "letterSpacing": -2.4
@@ -9906,7 +9906,7 @@
                               "id": "JFxxO",
                               "fill": "#A0A0A0",
                               "content": "TOTAL CHECK-INS",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 10,
                               "fontWeight": "600",
                               "letterSpacing": 1.2
@@ -9916,7 +9916,7 @@
                               "id": "AUdg3",
                               "fill": "#111111",
                               "content": "83",
-                              "fontFamily": "Outfit",
+                              "fontFamily": "Inter",
                               "fontSize": 34,
                               "fontWeight": "300",
                               "letterSpacing": -2.4
@@ -9954,7 +9954,7 @@
                               "id": "GGCvT",
                               "fill": "#A0A0A0",
                               "content": "LATEST ACTIVITY",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 10,
                               "fontWeight": "600",
                               "letterSpacing": 1.2
@@ -10025,7 +10025,7 @@
                                       "id": "bEkWF",
                                       "fill": "#BEBEBE",
                                       "content": "LATEST NARRATIVE",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "600",
                                       "letterSpacing": 1.2
@@ -10035,7 +10035,7 @@
                                       "id": "tcPl4",
                                       "fill": "#FFFFFF",
                                       "content": "Current attendance read",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 19,
                                       "fontWeight": "600"
                                     }
@@ -10060,7 +10060,7 @@
                                       "id": "lGKmr",
                                       "fill": "#C7C7C7",
                                       "content": "SAVED",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "500",
                                       "letterSpacing": 1
@@ -10107,7 +10107,7 @@
                                       "id": "0zOhg",
                                       "fill": "#A9A9A9",
                                       "content": "EVENTS IN SNAPSHOT",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "600",
                                       "letterSpacing": 1
@@ -10117,7 +10117,7 @@
                                       "id": "BguPd",
                                       "fill": "#FFFFFF",
                                       "content": "24",
-                                      "fontFamily": "Outfit",
+                                      "fontFamily": "Inter",
                                       "fontSize": 30,
                                       "fontWeight": "300"
                                     }
@@ -10143,7 +10143,7 @@
                                       "id": "oUoBt",
                                       "fill": "#A9A9A9",
                                       "content": "ATTENDEES IN SNAPSHOT",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "600",
                                       "letterSpacing": 1
@@ -10153,7 +10153,7 @@
                                       "id": "2Qxrx",
                                       "fill": "#FFFFFF",
                                       "content": "61",
-                                      "fontFamily": "Outfit",
+                                      "fontFamily": "Inter",
                                       "fontSize": 30,
                                       "fontWeight": "300"
                                     }
@@ -10208,7 +10208,7 @@
                                   "id": "ctfzr",
                                   "fill": "#989898",
                                   "content": "OPERATOR TOOLS",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "600",
                                   "letterSpacing": 1.2
@@ -10222,7 +10222,7 @@
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
                               "content": "Capture updates without overwhelming the readout",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 20,
                               "fontWeight": "600"
                             },
@@ -10299,7 +10299,7 @@
                                       "id": "1RoZq",
                                       "fill": "#9F9F9F",
                                       "content": "ANALYTICS",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "600",
                                       "letterSpacing": 1.2
@@ -10309,7 +10309,7 @@
                                       "id": "gY53p",
                                       "fill": "#111111",
                                       "content": "Attendance by event",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 20,
                                       "fontWeight": "600"
                                     },
@@ -10370,7 +10370,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": 280,
                                       "content": "Event",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     },
@@ -10381,7 +10381,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": 120,
                                       "content": "Date",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     },
@@ -10392,7 +10392,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": 120,
                                       "content": "Attendees",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     },
@@ -10403,7 +10403,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": 190,
                                       "content": "Latest check-in",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     },
@@ -10414,7 +10414,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
                                       "content": "Sources",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "600"
                                     }
@@ -10483,7 +10483,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": 120,
                                       "content": "31",
-                                      "fontFamily": "Outfit",
+                                      "fontFamily": "Inter",
                                       "fontSize": 30,
                                       "fontWeight": "300"
                                     },
@@ -10623,7 +10623,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": 120,
                                       "content": "19",
-                                      "fontFamily": "Outfit",
+                                      "fontFamily": "Inter",
                                       "fontSize": 30,
                                       "fontWeight": "300"
                                     },
@@ -10756,7 +10756,7 @@
                                       "textGrowth": "fixed-width",
                                       "width": 120,
                                       "content": "13",
-                                      "fontFamily": "Outfit",
+                                      "fontFamily": "Inter",
                                       "fontSize": 30,
                                       "fontWeight": "300"
                                     },
@@ -10852,7 +10852,7 @@
                                       "id": "O9Toh",
                                       "fill": "#9F9F9F",
                                       "content": "BEHAVIOR",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "600",
                                       "letterSpacing": 1.2
@@ -10862,7 +10862,7 @@
                                       "id": "nyHNV",
                                       "fill": "#111111",
                                       "content": "Repeat attendees",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 20,
                                       "fontWeight": "600"
                                     },
@@ -10931,7 +10931,7 @@
                                                   "id": "o10nH",
                                                   "fill": "#6A6A6A",
                                                   "content": "AL",
-                                                  "fontFamily": "Geist",
+                                                  "fontFamily": "Inter",
                                                   "fontSize": 12,
                                                   "fontWeight": "600"
                                                 }
@@ -10978,7 +10978,7 @@
                                                           "id": "w8qPj",
                                                           "fill": "#6F6F6F",
                                                           "content": "STRONGEST RETURNER",
-                                                          "fontFamily": "Geist",
+                                                          "fontFamily": "Inter",
                                                           "fontSize": 10,
                                                           "fontWeight": "600",
                                                           "letterSpacing": 0.8
@@ -11019,7 +11019,7 @@
                                               "id": "7WgJ4",
                                               "fill": "#111111",
                                               "content": "5",
-                                              "fontFamily": "Outfit",
+                                              "fontFamily": "Inter",
                                               "fontSize": 30,
                                               "fontWeight": "300"
                                             },
@@ -11028,7 +11028,7 @@
                                               "id": "AcIV1",
                                               "fill": "#9A9A9A",
                                               "content": "EVENTS ATTENDED",
-                                              "fontFamily": "Geist",
+                                              "fontFamily": "Inter",
                                               "fontSize": 10,
                                               "fontWeight": "600",
                                               "letterSpacing": 1
@@ -11082,7 +11082,7 @@
                                                   "id": "e6YaV",
                                                   "fill": "#6A6A6A",
                                                   "content": "MK",
-                                                  "fontFamily": "Geist",
+                                                  "fontFamily": "Inter",
                                                   "fontSize": 12,
                                                   "fontWeight": "600"
                                                 }
@@ -11135,7 +11135,7 @@
                                               "id": "acKN2",
                                               "fill": "#111111",
                                               "content": "4",
-                                              "fontFamily": "Outfit",
+                                              "fontFamily": "Inter",
                                               "fontSize": 30,
                                               "fontWeight": "300"
                                             },
@@ -11144,7 +11144,7 @@
                                               "id": "fU1fN",
                                               "fill": "#9A9A9A",
                                               "content": "EVENTS ATTENDED",
-                                              "fontFamily": "Geist",
+                                              "fontFamily": "Inter",
                                               "fontSize": 10,
                                               "fontWeight": "600",
                                               "letterSpacing": 1
@@ -11191,7 +11191,7 @@
                                                   "id": "djOe9",
                                                   "fill": "#6A6A6A",
                                                   "content": "JS",
-                                                  "fontFamily": "Geist",
+                                                  "fontFamily": "Inter",
                                                   "fontSize": 12,
                                                   "fontWeight": "600"
                                                 }
@@ -11244,7 +11244,7 @@
                                               "id": "QAP67",
                                               "fill": "#111111",
                                               "content": "3",
-                                              "fontFamily": "Outfit",
+                                              "fontFamily": "Inter",
                                               "fontSize": 30,
                                               "fontWeight": "300"
                                             },
@@ -11253,7 +11253,7 @@
                                               "id": "UjzrQ",
                                               "fill": "#9A9A9A",
                                               "content": "EVENTS ATTENDED",
-                                              "fontFamily": "Geist",
+                                              "fontFamily": "Inter",
                                               "fontSize": 10,
                                               "fontWeight": "600",
                                               "letterSpacing": 1
@@ -11300,7 +11300,7 @@
                                       "id": "OTSdC",
                                       "fill": "#9F9F9F",
                                       "content": "ACTIVITY",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "600",
                                       "letterSpacing": 1.2
@@ -11310,7 +11310,7 @@
                                       "id": "TIgNX",
                                       "fill": "#111111",
                                       "content": "Recent check-ins",
-                                      "fontFamily": "Geist",
+                                      "fontFamily": "Inter",
                                       "fontSize": 20,
                                       "fontWeight": "600"
                                     },
@@ -11440,7 +11440,7 @@
                                                   "id": "kpsvS",
                                                   "fill": "#707070",
                                                   "content": "MANUAL",
-                                                  "fontFamily": "Geist",
+                                                  "fontFamily": "Inter",
                                                   "fontSize": 10,
                                                   "fontWeight": "600",
                                                   "letterSpacing": 0.8
@@ -11566,7 +11566,7 @@
                                                   "id": "iQ9bY",
                                                   "fill": "#707070",
                                                   "content": "DOOR LIST",
-                                                  "fontFamily": "Geist",
+                                                  "fontFamily": "Inter",
                                                   "fontSize": 10,
                                                   "fontWeight": "600",
                                                   "letterSpacing": 0.8
@@ -11685,7 +11685,7 @@
                                                   "id": "9ffmX",
                                                   "fill": "#707070",
                                                   "content": "MANUAL",
-                                                  "fontFamily": "Geist",
+                                                  "fontFamily": "Inter",
                                                   "fontSize": 10,
                                                   "fontWeight": "600",
                                                   "letterSpacing": 0.8
@@ -11757,7 +11757,7 @@
                                   "id": "EE6lJ",
                                   "fill": "#989898",
                                   "content": "OPERATOR TOOLS",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "600",
                                   "letterSpacing": 1.2
@@ -11771,7 +11771,7 @@
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
                               "content": "Capture updates without overwhelming the readout",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 20,
                               "fontWeight": "600"
                             },
@@ -11825,7 +11825,7 @@
                                   "id": "QEdmt",
                                   "fill": "#999999",
                                   "content": "MANUAL CHECK-IN",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "600",
                                   "letterSpacing": 1.2
@@ -11837,7 +11837,7 @@
                               "id": "MoJbC",
                               "fill": "#111111",
                               "content": "Log one attendee",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 17,
                               "fontWeight": "600"
                             },
@@ -12032,7 +12032,7 @@
                                   "id": "aZjWv",
                                   "fill": "#999999",
                                   "content": "SNAPSHOT NOTE",
-                                  "fontFamily": "Geist",
+                                  "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "600",
                                   "letterSpacing": 1.2
@@ -12044,7 +12044,7 @@
                               "id": "43msN",
                               "fill": "#111111",
                               "content": "Save the takeaway",
-                              "fontFamily": "Geist",
+                              "fontFamily": "Inter",
                               "fontSize": 17,
                               "fontWeight": "600"
                             },
