@@ -153,10 +153,13 @@ These live in Doppler.
 | `ANTHROPIC_API_KEY` | `agent/` | Anthropic API key for the Modal runtime |
 | `MODAL_TOKEN_ID` | `agent/` | Modal auth |
 | `MODAL_TOKEN_SECRET` | `agent/` | Modal auth |
-| `ONCEHUB_API_KEY` | `agent/` | OnceHub API key for live room lookup + booking (issue #52) |
-| `ONCEHUB_PAGE_URL` | `agent/` | OnceHub booking page URL for the Leslie eLab Lean/Launchpad room |
-| `ONCEHUB_SHARED_BOOKING_PROFILE_ID` | `agent/` | Shared club booking profile used for every approved OnceHub booking |
+| `ONCEHUB_PAGE_URL` | `agent/` | OnceHub booking page URL (e.g. `https://go.oncehub.com/NYULeslie`) |
 | `ONCEHUB_ROOM_LABEL` | `agent/` | Optional override for the pinned room label (defaults to `Lean/Launchpad`) |
+
+OnceHub uses the **internal browser API** (no API key required). The shared club
+booking profile is stored in `agent/core/clients/booking_profile.json` — edit
+that file to set the default booking identity (name, email, NetID, affiliation,
+school, etc.).
 
 ## Testing
 

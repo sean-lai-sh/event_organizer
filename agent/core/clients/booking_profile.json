@@ -1,0 +1,59 @@
+{
+  "_comment": "Shared club booking profile for OnceHub room reservations. Edit these fields to match your club's default booking identity. All fields except pronouns_id are required.",
+
+  "first_name": "FILL_IN",
+  "last_name": "FILL_IN",
+  "email": "FILL_IN@nyu.edu",
+  "net_id": "FILL_IN",
+  "subject": "FILL_IN",
+  "event_name": "FILL_IN",
+  "organization": "FILL_IN",
+  "num_attendees": "10",
+  "graduation_year": "2027",
+  "location": "16 Washington Place",
+
+  "affiliation_id": "457707",
+  "school_id": "453247",
+  "pronouns_id": "",
+
+  "_affiliation_options": {
+    "457707": "Undergrad",
+    "457708": "Masters/MD/JD",
+    "457709": "PhD Student/Candidate",
+    "457710": "Post-doc Fellow/Researcher",
+    "457714": "Alumni",
+    "457715": "Faculty",
+    "457716": "Staff/Administrator",
+    "457717": "Non-NYU"
+  },
+  "_school_options": {
+    "453231": "Abu Dhabi",
+    "453232": "CAS",
+    "453233": "Courant",
+    "453234": "Dentistry",
+    "453235": "Gallatin",
+    "453236": "GSAS/FAS",
+    "453237": "Langone/Grossman",
+    "453238": "Law",
+    "453239": "Liberal Studies",
+    "453240": "Meyers",
+    "453241": "Public Health",
+    "453242": "Shanghai",
+    "453243": "Silver",
+    "453244": "SPS",
+    "453245": "Steinhardt",
+    "453246": "Stern",
+    "453247": "Tandon",
+    "453248": "Tisch",
+    "453249": "Wagner",
+    "453250": "Non-NYU",
+    "453251": "Other (at NYU)"
+  },
+  "_pronouns_options": {
+    "168918": "He",
+    "168919": "She",
+    "168920": "They",
+    "168482": "Other",
+    "": "Skip"
+  }
+}
