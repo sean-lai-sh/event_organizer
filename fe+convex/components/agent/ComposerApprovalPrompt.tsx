@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { AgentApproval } from "./types";
 import { extractInnerPayload } from "./approvalPayload";
 import { submitApproval } from "./adapters/runtime";
@@ -33,20 +33,32 @@ export function ComposerApprovalPrompt({
   onTellMeSomethingElse,
 }: ComposerApprovalPromptProps) {
   const [loading, setLoading] = useState(false);
+  // Ref-based lock so two clicks dispatched in the same React tick — before
+  // `disabled={loading}` propagates — still cannot double-submit.
+  const lockRef = useRef(false);
   const summary = summarizeApproval(approval);
   const inner = extractInnerPayload(approval.proposedPayload);
   const olderPending = Math.max(0, pendingCount - 1);
 
   async function handleCta(cta: ComposerCta) {
-    await runDecision({
+    const decision = decisionForCta(cta);
+    const result = await runDecision({
       approvalId: approval.id,
-      decision: decisionForCta(cta),
+      decision,
       submit: submitApproval,
-      isLoading: loading,
+      lock: lockRef,
       setLoading,
       onResolved,
     });
-    if (cta === "tell_me_something_else") {
+    // Only seed the composer / return focus when the rejection actually
+    // reached the backend. A skipped (already in-flight) or failed submit
+    // means the approval is still pending on the server, so behaving as if
+    // it had resolved would be misleading.
+    if (
+      cta === "tell_me_something_else" &&
+      result.status === "submitted" &&
+      result.decision === "rejected"
+    ) {
       onTellMeSomethingElse?.();
     }
   }

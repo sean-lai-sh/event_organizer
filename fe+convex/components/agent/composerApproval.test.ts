@@ -221,87 +221,132 @@ describe("decisionForCta — CTA → submitApproval decision mapping", () => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 describe("runDecision — single-flight submit", () => {
-  test("Yes calls submitApproval(id, 'approved') exactly once", async () => {
+  function makeLock(initial = false): { current: boolean } {
+    return { current: initial };
+  }
+
+  test("Yes calls submitApproval(id, 'approved') exactly once and reports submitted", async () => {
     const calls: Array<[string, "approved" | "rejected"]> = [];
     let loading = false;
-    await runDecision({
+    const result = await runDecision({
       approvalId: "appr_1",
       decision: "approved",
       submit: async (id, d) => {
         calls.push([id, d]);
       },
-      isLoading: loading,
+      lock: makeLock(),
       setLoading: (next) => {
         loading = next;
       },
     });
     expect(calls).toEqual([["appr_1", "approved"]]);
     expect(loading).toBe(false);
+    expect(result).toEqual({ status: "submitted", decision: "approved" });
   });
 
-  test("No calls submitApproval(id, 'rejected') exactly once", async () => {
+  test("No calls submitApproval(id, 'rejected') exactly once and reports submitted", async () => {
     const calls: Array<[string, "approved" | "rejected"]> = [];
-    let loading = false;
-    await runDecision({
+    const result = await runDecision({
       approvalId: "appr_2",
       decision: "rejected",
       submit: async (id, d) => {
         calls.push([id, d]);
       },
-      isLoading: loading,
-      setLoading: (next) => {
-        loading = next;
-      },
+      lock: makeLock(),
     });
     expect(calls).toEqual([["appr_2", "rejected"]]);
+    expect(result).toEqual({ status: "submitted", decision: "rejected" });
   });
 
   test("Tell me something else rejects the approval and notifies the parent", async () => {
     const calls: Array<[string, "approved" | "rejected"]> = [];
     const resolvedWith: Array<"approved" | "rejected"> = [];
-    let loading = false;
-    await runDecision({
+    const result = await runDecision({
       approvalId: "appr_3",
       decision: decisionForCta("tell_me_something_else"),
       submit: async (id, d) => {
         calls.push([id, d]);
       },
-      isLoading: loading,
-      setLoading: (next) => {
-        loading = next;
-      },
+      lock: makeLock(),
       onResolved: async (d) => {
         resolvedWith.push(d);
       },
     });
     expect(calls).toEqual([["appr_3", "rejected"]]);
     expect(resolvedWith).toEqual(["rejected"]);
+    expect(result.status).toBe("submitted");
+    expect(result.decision).toBe("rejected");
   });
 
-  test("ignores duplicate submissions while a request is in flight", async () => {
+  test("returns status=skipped when the lock is already held", async () => {
     const calls: Array<[string, "approved" | "rejected"]> = [];
-    await runDecision({
+    const lock = makeLock(true); // simulate a request already in flight
+    const result = await runDecision({
       approvalId: "appr_4",
       decision: "approved",
       submit: async (id, d) => {
         calls.push([id, d]);
       },
-      isLoading: true, // simulate a request already in flight
-      setLoading: () => {},
+      lock,
     });
     expect(calls).toEqual([]);
+    expect(result).toEqual({ status: "skipped" });
+    // Lock was not ours to release, so it stays held.
+    expect(lock.current).toBe(true);
   });
 
-  test("clears loading even when submit throws", async () => {
+  test("ref-based lock blocks two synchronous calls before the first awaits", async () => {
+    // Regression: with state-based isLoading, two click handlers fired in the
+    // same React tick could both pass the gate before the setState re-render
+    // landed. The ref lock is mutated synchronously to prevent that.
+    const calls: Array<[string, "approved" | "rejected"]> = [];
+    const lock = makeLock();
+    let releaseFirstSubmit!: () => void;
+    const firstSubmitGate = new Promise<void>((r) => {
+      releaseFirstSubmit = r;
+    });
+    const submit = async (id: string, d: "approved" | "rejected") => {
+      calls.push([id, d]);
+      // First call hangs until released, simulating an in-flight network call.
+      if (calls.length === 1) await firstSubmitGate;
+    };
+
+    const first = runDecision({
+      approvalId: "appr_dbl",
+      decision: "approved",
+      submit,
+      lock,
+    });
+    // Second call dispatched before the first promise resolves — the lock
+    // must already be held even though no React re-render has run.
+    const second = runDecision({
+      approvalId: "appr_dbl",
+      decision: "approved",
+      submit,
+      lock,
+    });
+
+    const secondResult = await second;
+    expect(secondResult.status).toBe("skipped");
+    expect(calls).toEqual([["appr_dbl", "approved"]]);
+
+    releaseFirstSubmit();
+    const firstResult = await first;
+    expect(firstResult.status).toBe("submitted");
+    expect(lock.current).toBe(false);
+  });
+
+  test("returns status=failed and clears loading + lock when submit throws", async () => {
     let loading = false;
     let caught: unknown = null;
-    await runDecision({
+    const lock = makeLock();
+    const result = await runDecision({
       approvalId: "appr_5",
       decision: "approved",
       submit: async () => {
         throw new Error("network down");
       },
-      isLoading: loading,
+      lock,
       setLoading: (next) => {
         loading = next;
       },
@@ -310,25 +355,108 @@ describe("runDecision — single-flight submit", () => {
       },
     });
     expect(loading).toBe(false);
+    expect(lock.current).toBe(false);
     expect((caught as Error)?.message).toBe("network down");
+    expect(result.status).toBe("failed");
+    expect((result.error as Error)?.message).toBe("network down");
   });
 
   test("does not invoke onResolved when submit throws", async () => {
     let resolved = false;
-    await runDecision({
+    const result = await runDecision({
       approvalId: "appr_6",
       decision: "rejected",
       submit: async () => {
         throw new Error("boom");
       },
-      isLoading: false,
-      setLoading: () => {},
+      lock: makeLock(),
       onResolved: () => {
         resolved = true;
       },
       onError: () => {},
     });
     expect(resolved).toBe(false);
+    expect(result.status).toBe("failed");
+  });
+
+  test("never re-throws — callers can rely on the returned status instead", async () => {
+    // The promise resolves with a DecisionResult; an unhandled rejection
+    // here would crash the caller's click handler, so guarantee it doesn't.
+    const result = await runDecision({
+      approvalId: "appr_7",
+      decision: "approved",
+      submit: async () => {
+        throw new Error("upstream 500");
+      },
+      lock: makeLock(),
+    });
+    expect(result.status).toBe("failed");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  ComposerApprovalPrompt CTA gating                                         */
+/*                                                                            */
+/*  Tell-me-something-else must only seed the composer / return focus when    */
+/*  the rejection actually reached the backend. A skipped or failed submit    */
+/*  means the approval is still pending and the UI should not act as if it    */
+/*  resolved.                                                                 */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+import type { DecisionResult } from "./composerApproval";
+
+function shouldRunTellMeSomethingElse(
+  cta: "yes" | "no" | "tell_me_something_else",
+  result: DecisionResult,
+): boolean {
+  return (
+    cta === "tell_me_something_else" &&
+    result.status === "submitted" &&
+    result.decision === "rejected"
+  );
+}
+
+describe("Tell me something else — gated on confirmed rejection", () => {
+  test("fires when the rejection submit succeeds", () => {
+    expect(
+      shouldRunTellMeSomethingElse("tell_me_something_else", {
+        status: "submitted",
+        decision: "rejected",
+      }),
+    ).toBe(true);
+  });
+
+  test("does NOT fire when the submit was skipped (already in flight)", () => {
+    expect(
+      shouldRunTellMeSomethingElse("tell_me_something_else", { status: "skipped" }),
+    ).toBe(false);
+  });
+
+  test("does NOT fire when the submit failed", () => {
+    expect(
+      shouldRunTellMeSomethingElse("tell_me_something_else", {
+        status: "failed",
+        error: new Error("network down"),
+      }),
+    ).toBe(false);
+  });
+
+  test("does NOT fire for the Yes CTA", () => {
+    expect(
+      shouldRunTellMeSomethingElse("yes", {
+        status: "submitted",
+        decision: "approved",
+      }),
+    ).toBe(false);
+  });
+
+  test("does NOT fire for the No CTA even though the decision is rejected", () => {
+    expect(
+      shouldRunTellMeSomethingElse("no", {
+        status: "submitted",
+        decision: "rejected",
+      }),
+    ).toBe(false);
   });
 });
 

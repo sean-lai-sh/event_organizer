@@ -136,29 +136,58 @@ export function decisionForCta(cta: ComposerCta): "approved" | "rejected" {
 }
 
 /**
- * Single-flight wrapper around the approval submit call. Suppresses duplicate
- * submissions while a request is in flight, then notifies the parent on
- * success. Errors are intentionally not swallowed — callers can attach an
- * `onError` to surface them, but the loading flag is always cleared in the
- * `finally` block.
+ * Outcome of a `runDecision` call. Callers branch on `status` to decide
+ * whether the rejection / approval actually reached the backend before
+ * triggering follow-on UI behavior such as focusing the composer.
+ *
+ * - `submitted`: `submit` resolved successfully and `onResolved` ran.
+ * - `skipped`:   the lock was already held; no submit was attempted.
+ * - `failed`:    `submit` rejected; `onError` was invoked (if provided).
+ */
+export interface DecisionResult {
+  status: "submitted" | "skipped" | "failed";
+  decision?: "approved" | "rejected";
+  error?: unknown;
+}
+
+/**
+ * Single-flight wrapper around the approval submit call.
+ *
+ * Gating uses a synchronous ref-shaped lock so two clicks dispatched in the
+ * same React event tick — before any reactive `setLoading` re-render lands —
+ * cannot both pass through. The optional `setLoading` setter is purely for UI
+ * feedback (button opacity, etc.) and is not part of the gating decision.
+ *
+ * Errors from `submit` are reported via the returned `DecisionResult` and via
+ * `onError` if supplied; this function does not re-throw, so callers can rely
+ * on it never rejecting. The lock and `setLoading` are always released in
+ * the `finally` block.
  */
 export async function runDecision(args: {
   approvalId: string;
   decision: "approved" | "rejected";
   submit: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
-  isLoading: boolean;
-  setLoading: (next: boolean) => void;
+  /**
+   * Mutable ref holding the in-flight flag. Checked and set synchronously so
+   * two click handlers fired in the same tick cannot both pass the gate.
+   */
+  lock: { current: boolean };
+  setLoading?: (next: boolean) => void;
   onResolved?: (decision: "approved" | "rejected") => void | Promise<void>;
   onError?: (error: unknown) => void;
-}): Promise<void> {
-  if (args.isLoading) return;
-  args.setLoading(true);
+}): Promise<DecisionResult> {
+  if (args.lock.current) return { status: "skipped" };
+  args.lock.current = true;
+  args.setLoading?.(true);
   try {
     await args.submit(args.approvalId, args.decision);
     await args.onResolved?.(args.decision);
+    return { status: "submitted", decision: args.decision };
   } catch (error) {
     args.onError?.(error);
+    return { status: "failed", error };
   } finally {
-    args.setLoading(false);
+    args.lock.current = false;
+    args.setLoading?.(false);
   }
 }
