@@ -65,8 +65,7 @@ The Modal runtime owns:
 - prompt assembly
 - model execution
 - Anthropic Agent SDK harness lifecycle
-- tool selection and tool execution
-- MCP access
+- tool selection and in-process tool execution
 - approval gating
 - guardrails and policy enforcement
 - artifact generation
@@ -81,15 +80,16 @@ The Anthropic Agent SDK is the runtime harness inside Modal.
 Use it for:
 
 - run orchestration
-- streaming assistant output
 - tool loop management
 - step tracing
 - handoff between model output, tool execution, and approval pauses
 
 Current implementation contract:
 
-- the runtime launches the packaged FastMCP server over stdio from `apps.mcp.server`
-- the Claude agent SDK is the only runtime harness that decides when MCP tools are relevant
+- the runtime uses an in-process tool loop in `agent/runtime/anthropic_adapter.py`
+- no subprocess or MCP stdio transport is required for production run execution
+- local FastMCP utilities remain available for compatibility, inspection, and tests
+- the Claude agent SDK is the harness for model interaction and tool-use turns
 - read tools execute immediately
 - write tools are converted into Modal-managed approvals before execution
 - approved tool calls resume by replaying the exact stored tool name and arguments
@@ -100,11 +100,11 @@ Repo-specific logic must remain in local modules:
 
 - Attio wrappers
 - Convex synchronization
-- MCP adapters
+- in-process tool adapters
 - artifact normalization
 - approval policy and risk classification
 
-Current MCP tool surface:
+Current tool surface:
 
 - Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
@@ -138,17 +138,16 @@ Modal exposes the canonical agent API surface:
 - `GET /agent/threads/:id`
   - return normalized thread, message, artifact, and approval state
 - `POST /agent/runs`
-  - start a run for a thread
-- `GET /agent/runs/:id/stream`
-  - stream assistant output, tool activity, and artifact events
+  - start a run for a thread; the UI observes run progress from Convex-normalized state
 - `POST /agent/approvals/:id`
   - approve or reject a pending action
 
 Implementation rules:
 
 - Modal remains authoritative for run lifecycle and approval state
-- Convex stores synchronized normalized records for UI and history
+- Convex stores synchronized normalized records for UI, live rendering, and history
 - clients render state; they do not decide state
+- no dedicated `GET /agent/runs/:id/stream` route is currently exposed
 
 ## Agent-First UI Contract
 
@@ -156,7 +155,7 @@ The authenticated app should converge on this shape:
 
 - `/agent` as primary landing route
 - left rail for threads and recent work
-- center conversation timeline for streaming responses and approvals
+- center conversation timeline for Convex-reactive messages, run states, and approvals
 - right artifact canvas for rendered outputs
 
 Scoped launchers must exist from:
@@ -429,7 +428,7 @@ Next.js and Discord are thin clients.
 They may:
 
 - start threads or runs
-- render streamed output
+- render Convex-reactive message, run, artifact, and approval state
 - render approvals
 - submit approval decisions
 - deep-link into richer views

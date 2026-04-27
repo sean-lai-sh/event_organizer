@@ -1,5 +1,10 @@
 # Systems Architecture
 
+> Legacy/reference-only document. `PLAN.md` is the canonical architecture and
+> data-contract source of truth, and `AGENTS.md` is the operator/runtime guide.
+> If this file disagrees with either of those documents, treat `PLAN.md` and
+> `AGENTS.md` as authoritative and update this file only as supporting context.
+
 High-level documentation of how the EventClub backend works — from frontend queries through Convex to the AI agent layer.
 
 ---
@@ -65,7 +70,7 @@ High-level view of every service and how they connect.
     │   (backend/)                │          │                          │
     │   ┌────────────────────┐    │          │  ┌────────────────────┐  │
     │   │ Claude (Anthropic) │    │          │  │   Attio CRM        │  │
-    │   │ via fastmcp tools  │    │          │  │   api.attio.com/v2 │  │
+    │   │ via agent tools    │    │          │  │   api.attio.com/v2 │  │
     │   └────────────────────┘    │          │  │   contact records  │  │
     │   ┌────────────────────┐    │◄────────►│  └────────────────────┘  │
     │   │ AgentMail          │    │          │  ┌────────────────────┐  │
@@ -80,7 +85,7 @@ High-level view of every service and how they connect.
 **Notes:**
 - The frontend is a Next.js app running in the browser, talking to Convex via the Convex React client over WebSocket
 - The Python agent backend runs separately (Modal for serverless deployment) and talks to Convex via HTTP API using a deploy key
-- Both the frontend and the agent backend share the same Convex database — Convex is the single source of truth
+- Both the frontend and the agent backend share the same Convex database for application state; `PLAN.md` remains the documentation source of truth
 - Attio CRM is the contact database; `attio_record_id` is the join key between Attio and Convex
 - AgentMail handles email thread lifecycle; `agentmail_thread_id` links email threads to outreach rows in Convex
 
@@ -298,14 +303,14 @@ The Python agent backend: how Claude reasons and calls tools to manage speaker o
 │                    (backend/ — runs on Modal)                     │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
-│  │  Claude (claude-sonnet / claude-opus via Anthropic SDK)   │   │
-│  │  Orchestrated via fastmcp tool calling                    │   │
+│  │  Claude via Anthropic SDK                                 │   │
+│  │  Orchestrated by the Modal runtime tool loop              │   │
 │  └───────────────────────────────────────────────────────────┘   │
 │          │                                                        │
 │          │  calls tools                                           │
 │          ▼                                                        │
 │  ┌──────────────────────────────────────────────────────────┐    │
-│  │  MCP Tool Layer (fastmcp)                                │    │
+│  │  Agent Tool Layer                                        │    │
 │  │                                                          │    │
 │  │  Attio Tools                  Convex Tools               │    │
 │  │  ┌──────────────────┐        ┌──────────────────────┐    │    │

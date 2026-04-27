@@ -17,7 +17,7 @@ The system is split into three layers:
 | Layer | Responsibility |
 |---|---|
 | `fe+convex/` | Next.js app surfaces, Convex queries/mutations, authenticated UI for `/agent` and dashboard drill-downs |
-| `agent/` | Modal-hosted agent runtime, MCP adapters, Attio/Convex integration helpers, Anthropic Agent SDK harness |
+| `agent/` | Modal-hosted agent runtime, in-process tool adapters, Attio/Convex integration helpers, Anthropic Agent SDK harness |
 | Attio + Convex | Persistent business state: Attio for CRM truth, Convex for application state and agent interaction history |
 
 ## Current MVP Direction
@@ -43,7 +43,7 @@ For the authoritative product and data-contract details, read:
 ```text
 event_organizer/
 ├── fe+convex/              # Next.js 16 app + Convex functions
-├── agent/                  # Modal runtime, Attio helpers, MCP server, tests
+├── agent/                  # Modal runtime, Attio helpers, local MCP utilities, tests
 ├── PLAN.md                 # Architecture and data-contract source of truth
 ├── AGENTS.md               # Operator and runtime integration guide
 ├── IMPLEMENTATION.md       # Implementation workstreams and dependency plan
@@ -110,7 +110,8 @@ cd /Users/sean_lai/event_organizer/agent
 uv sync
 ```
 
-Run the packaged local MCP server if you are working on tool adapters:
+Run the packaged local MCP server only if you are working on tool adapter
+compatibility or local inspection:
 
 ```bash
 cd /Users/sean_lai/event_organizer/agent
@@ -124,7 +125,11 @@ cd /Users/sean_lai/event_organizer/agent
 doppler run -- npx @modelcontextprotocol/inspector uv run python -m apps.mcp.server
 ```
 
-The Modal runtime starts that same MCP server over stdio through the Claude agent SDK. The current tool surface is:
+The production Modal runtime uses an in-process tool loop inside
+`agent/runtime/anthropic_adapter.py`; it does not depend on the local MCP
+server or stdio transport. `POST /agent/runs` starts execution for a thread,
+and the web UI renders live updates from Convex-normalized thread, message,
+artifact, run, and approval records. The current tool surface is:
 
 - Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`

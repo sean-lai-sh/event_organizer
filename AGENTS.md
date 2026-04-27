@@ -53,13 +53,12 @@ Modal-hosted Python agent code coordinates the systems and is the authoritative 
 
 - `agent/helper/attio.py` wraps Attio API access.
 - `agent/helper/tools.py` contains shared Attio and Convex helpers.
-- `agent/helper/attio.py` wraps Attio API access.
-- `agent/helper/tools.py` contains shared Attio and Convex helpers.
 - `agent/match.py` handles candidate selection.
 - `agent/outreach.py` handles outbound sends.
 - `agent/reply_handler.py` handles inbound email processing.
-- `agent/apps/mcp/service.py` is the packaged FastMCP implementation used by the runtime.
-- `agent/apps/mcp/server.py` is the stdio launcher the runtime starts through the Claude agent SDK.
+- `agent/runtime/anthropic_adapter.py` runs the current in-process tool loop.
+- `agent/apps/mcp/service.py` is the packaged FastMCP-compatible tool implementation for local inspection and compatibility.
+- `agent/apps/mcp/server.py` is the stdio launcher for local tooling, not the canonical production execution path.
 - `agent/mcp_server.py` is a compatibility shim for local tooling and tests.
 - Modal-hosted conversational endpoints own thread runs, approvals, artifacts, and policy.
 - Anthropic Agent SDK is used inside Modal as the harness layer only.
@@ -73,7 +72,7 @@ They may:
 - list threads
 - create or resume threads
 - start runs
-- render streamed output
+- render Convex-reactive message, run, artifact, and approval state
 - render artifacts and approvals
 - submit approval decisions
 
@@ -293,7 +292,7 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 4. The client renders the normalized run, message, artifact, and approval state from Convex.
 5. On approval, the client submits the decision back to Modal and the run resumes.
 
-Current MCP tool surface:
+Current tool surface:
 
 - Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
