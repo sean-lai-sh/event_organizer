@@ -15,8 +15,11 @@ It exposes:
 2. `POST /agent/threads`
 3. `GET /agent/threads/:id`
 4. `POST /agent/runs`
-5. `GET /agent/runs/:id/stream`
-6. `POST /agent/approvals/:id`
+5. `POST /agent/approvals/:id`
+
+There is currently no `GET /agent/runs/:id/stream` endpoint. The website starts
+work with `POST /agent/runs` and renders live updates from Convex-normalized
+thread, message, run, artifact, and approval records.
 
 `runtime/modal_app.py` remains as a compatibility entrypoint for existing deploy commands and forwards to the same runtime service.
 
@@ -35,13 +38,13 @@ When a user interacts with the website agent:
 
 1. The UI starts/resumes a thread via `runtime_app.py`.
 2. A run is created and executed in Modal.
-3. The runtime runs the Claude agent SDK harness and launches the packaged FastMCP server over stdio from `apps.mcp.server`.
+3. The runtime runs the Claude agent SDK harness and executes tools through the in-process tool loop in `runtime/anthropic_adapter.py`.
 4. If an action is write/send/destructive, approval gating can pause the run until user decision.
-5. Streamed output, artifacts, and approval states are returned in normalized form for UI rendering.
+5. Messages, artifacts, run status, and approval states are synchronized to Convex for UI rendering.
 
 ## Tool Access Surface
 
-The runtime's current MCP tool surface is:
+The runtime's current tool surface is:
 
 1. **Attio `people` (identity only)**
    - `search_people`
@@ -77,7 +80,7 @@ These are additional root services used by workflow tooling:
 | `match.py` | `event-outreach-match` | Candidate scoring/matching workflow |
 | `outreach.py` | `event-outreach-send` | Outbound invite send workflow |
 | `reply_handler.py` | `event-outreach-replies` | AgentMail webhook ingest and thread routing |
-| `mcp_server.py` | — | Compatibility shim to the packaged FastMCP server |
+| `mcp_server.py` | — | Compatibility shim for local MCP inspection and tests |
 
 ## Running Tests
 
@@ -99,5 +102,5 @@ python -m pytest tests/test_runtime_*.py -v
 | `attio.py` | Attio CRM v2 async HTTP client with retry on 429 |
 | `tools.py` | `ConvexClient` + shared Attio helpers (`upsert_inbound_contact`, `append_attio_note`) |
 | `email_parse.py` | LLM classification (Haiku) + `handle_known_thread` / `handle_net_new` path handlers |
-| `models.py` | Pydantic models for `AttioContact`, `CareerProfile`, `OutreachStatus`, etc. |
+| `models.py` | Pydantic models for Attio people identity and speaker workflow data |
 | `prompts/` | System prompts for LLM classification (`known_thread.txt`, `net_new.txt`) |
