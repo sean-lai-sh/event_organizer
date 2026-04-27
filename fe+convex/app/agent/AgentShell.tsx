@@ -101,10 +101,10 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
           // Title updates reactively via the Convex listThreads subscription.
         }}
         onDeleteThread={async (threadId) => {
-          await deleteThread(threadId);
           if (activeThreadId === threadId) {
             router.push("/agent");
           }
+          await deleteThread(threadId);
         }}
       />
 
