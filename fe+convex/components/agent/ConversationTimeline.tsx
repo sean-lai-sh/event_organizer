@@ -7,8 +7,13 @@ import { api } from "@/convex/_generated/api";
 import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from "./types";
 import { MessageBubble } from "./MessageBubble";
 import { ResolvedApprovalCard } from "./ResolvedApprovalCard";
-import { PendingApprovalBar } from "./PendingApprovalBar";
-import { AgentInput } from "./AgentInput";
+import { ComposerApprovalPrompt } from "./ComposerApprovalPrompt";
+import { AgentInput, type AgentInputHandle } from "./AgentInput";
+import {
+  buildTellMeSomethingElseDraft,
+  countPendingApprovals,
+  getActiveComposerApproval,
+} from "./composerApproval";
 import {
   createThread,
   startRun,
@@ -148,6 +153,7 @@ export function ConversationTimeline({
   const [tracesVisible, setTracesVisible] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<AgentInputHandle>(null);
   const threadIdRef = useRef<string | null>(null);
   const messagesAtSend = useRef<number>(0);
   const traceHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -305,7 +311,8 @@ export function ConversationTimeline({
     // isRunning is cleared reactively when the Convex run status changes.
   }
 
-  const pendingApprovals = approvals.filter((a) => a.status === "pending");
+  const activeComposerApproval = getActiveComposerApproval(approvals);
+  const pendingApprovalCount = countPendingApprovals(approvals);
   const resolvedApprovals = approvals.filter((a) => a.status !== "pending");
 
   // Only suppress ThinkingBubble once a streaming message has actual text to show.
@@ -393,10 +400,11 @@ export function ConversationTimeline({
         )}
       </div>
 
-      {pendingApprovals.length > 0 && (
-        <PendingApprovalBar
-          approvals={pendingApprovals}
-          onDecision={async (decision) => {
+      {activeComposerApproval && (
+        <ComposerApprovalPrompt
+          approval={activeComposerApproval}
+          pendingCount={pendingApprovalCount}
+          onResolved={async (decision) => {
             if (decision === "approved") {
               // Re-arm isRunning so the run-completion effect fires when the
               // resumed run finishes and resets the trace-hide timer.
@@ -404,18 +412,26 @@ export function ConversationTimeline({
             }
             onArtifactsChange?.();
           }}
+          onTellMeSomethingElse={() => {
+            // Preserve the existing draft if the user has already started
+            // typing; otherwise seed a short helper text so the composer is
+            // not empty when focus returns.
+            onDraftChange?.(buildTellMeSomethingElseDraft(draftValue ?? ""));
+            inputRef.current?.focus();
+          }}
         />
       )}
 
       <AgentInput
+        ref={inputRef}
         onSubmit={handleSend}
-        disabled={isRunning || pendingApprovals.length > 0}
+        disabled={isRunning}
         placeholder={
-          pendingApprovals.length > 0
-            ? "Approve or reject the action above to continue..."
-            : isRunning
+          isRunning
             ? "Agent is working..."
-            : "Message the agent..."
+            : activeComposerApproval
+              ? "Reply, or use the actions above to decide..."
+              : "Message the agent..."
         }
         value={draftValue}
         onValueChange={onDraftChange}

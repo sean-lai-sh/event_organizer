@@ -33,11 +33,10 @@ DEFAULT_SYSTEM_PROMPT = (
     "or unrelated APIs unless a tool actually failed with that error. "
     "Only edit or write external state when the application explicitly approves it. "
     "Respond with concise operational guidance and clear next actions. "
-    "When a user asks to create an event, collect the following before calling create_event: "
-    "event name, date, event type (Speaker Panel / Workshop / Networking / Social), location, "
-    "start and end time, and whether speaker outreach will be needed. "
-    "Ask for missing required details one step at a time. "
-    "Confirm all collected details with the user in plain language before calling the tool. "
+    "When a user asks to create an event, call create_event immediately using whatever details "
+    "the user has provided. Only ask the user for event name or date if those two required fields "
+    "are genuinely missing from their request — do not ask for or wait on optional fields. "
+    "If no location is specified, default to '16 Washington Place'. "
     "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
     "to the user — use natural language equivalents instead. "
     "When updating an event, confirm which fields will change before calling update_event_safe."
@@ -263,7 +262,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "create_event",
-        "description": "Create a new event. Collect all required details from the user before calling this tool.",
+        "description": "Create a new event. Call immediately with whatever details the user provided; only title and event_date are required.",
         "input_schema": {
             "type": "object",
             "properties": {

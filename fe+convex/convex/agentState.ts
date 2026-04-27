@@ -102,6 +102,9 @@ async function requireThread(
   ctx: AgentDbContext,
   args: { thread_id?: Id<"agent_threads">; external_id?: string }
 ) {
+  if (!args.thread_id && !args.external_id) {
+    throw new Error("A thread_id or external_id is required");
+  }
   if (args.thread_id) {
     const thread = await ctx.db.get(args.thread_id);
     if (thread) return thread as AgentThread;
@@ -110,13 +113,16 @@ async function requireThread(
     const thread = await getThreadByExternalId(ctx, args.external_id);
     if (thread) return thread as AgentThread;
   }
-  throw new Error("A thread_id or external_id is required");
+  return null;
 }
 
 async function requireRun(
   ctx: AgentDbContext,
   args: { run_id?: Id<"agent_runs">; external_id?: string }
 ) {
+  if (!args.run_id && !args.external_id) {
+    throw new Error("A run_id or external_id is required");
+  }
   if (args.run_id) {
     const run = await ctx.db.get(args.run_id);
     if (run) return run as AgentRun;
@@ -125,7 +131,7 @@ async function requireRun(
     const run = await getRunByExternalId(ctx, args.external_id);
     if (run) return run as AgentRun;
   }
-  throw new Error("A run_id or external_id is required");
+  return null;
 }
 
 async function patchThreadActivity(
@@ -191,6 +197,7 @@ export const getThreadState = query({
   },
   handler: async (ctx, args) => {
     const thread = await requireThread(ctx, args);
+    if (!thread) return null;
 
     const [runs, messages, artifacts, approvals, traces, context_links] = await Promise.all([
       ctx.db
@@ -238,6 +245,7 @@ export const getRunState = query({
   },
   handler: async (ctx, args) => {
     const run = await requireRun(ctx, args);
+    if (!run) return null;
 
     const [messages, artifacts, approvals, traces, context_links] = await Promise.all([
       ctx.db
