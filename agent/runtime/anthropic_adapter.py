@@ -36,6 +36,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "When a user asks to create an event, call create_event immediately using whatever details "
     "the user has provided. Only ask the user for event name or date if those two required fields "
     "are genuinely missing from their request — do not ask for or wait on optional fields. "
+    "If no location is specified, default to '16 Washington Place'. "
     "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
     "to the user — use natural language equivalents instead. "
     "When updating an event, confirm which fields will change before calling update_event_safe."
