@@ -3,28 +3,43 @@
 MVP scope (issue #52):
 - Room discovery is locked to the Leslie eLab "Lean/Launchpad" room.
 - Availability is always fetched live — no caching layer.
-- Booking submits under a single shared club booking profile sourced from Doppler.
+- Booking submits under a single shared club booking profile loaded from
+  ``booking_profile.json`` (co-located with this module).
 - Only first-time booking is supported; cancellation/rebooking is out of scope.
 
-The client wraps OnceHub's v2 HTTP API. Concrete endpoint paths are hidden
-behind thin wrapper methods (`_raw_list_slots`, `_raw_submit_booking`) so
-tests can mock at the method boundary without spinning up HTTP fakes.
+The client wraps OnceHub's **internal browser API** (``go.oncehub.com/api/``).
+No API key is required — these are the same unauthenticated endpoints that the
+AngularJS booking frontend calls.  Concrete endpoint paths are hidden behind
+thin wrapper methods (``_raw_list_slots``, ``_raw_submit_booking``) so tests
+can mock at the method boundary without spinning up HTTP fakes.
 """
 from __future__ import annotations
 
 import asyncio
+import calendar
+import json
 import os
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
 
-BASE_URL = "https://api.oncehub.com/v2"
+# ── Constants ────────────────────────────────────────────────────────────────
+
+BASE_URL = "https://go.oncehub.com/api"
+PAGE_URL = "https://go.oncehub.com"
 
 DEFAULT_ROOM_LABEL = "Lean/Launchpad"
 DEFAULT_TIMEZONE = "America/New_York"
+TIMEZONE_ID = 270  # OnceHub internal ID for US/Eastern
+IANA_TZ = DEFAULT_TIMEZONE
+
+_PROFILE_PATH = Path(__file__).with_name("booking_profile.json")
+
+# ── Data classes ─────────────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -72,11 +87,25 @@ class OnceHubBookingReceipt:
     raw: dict[str, Any]
 
 
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+
 def _env(name: str, default: str | None = None) -> str | None:
     value = os.environ.get(name)
     if value is None or value == "":
         return default
     return value
+
+
+def _load_booking_profile() -> dict[str, Any]:
+    """Load the shared booking profile from the co-located JSON file.
+
+    Only the active booking fields are returned; keys prefixed with ``_``
+    (option reference tables, comments) are stripped.
+    """
+    with open(_PROFILE_PATH) as f:
+        raw = json.load(f)
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
 
 
 def _iter_months(start: date, end: date) -> list[tuple[int, int]]:
@@ -116,6 +145,29 @@ def month_ranges(
     return out
 
 
+def _month_range_ms(year: int, month: int, tz_name: str = DEFAULT_TIMEZONE) -> tuple[int, int]:
+    """Return (start_epoch_ms, end_epoch_ms) for an entire calendar month."""
+    tz = ZoneInfo(tz_name)
+    first = datetime(year, month, 1, tzinfo=tz)
+    _, last_day = calendar.monthrange(year, month)
+    # End at the last millisecond of the month
+    end = datetime(year, month, last_day, 23, 59, 59, 999000, tzinfo=tz)
+    return int(first.timestamp() * 1000), int(end.timestamp() * 1000)
+
+
+def _parse_oncehub_date_key(key: str) -> date | None:
+    """Parse OnceHub's 0-indexed-month date keys.
+
+    The internal API returns date keys like ``"2026-3-16"`` which means
+    April 16, 2026 (month is 0-indexed).
+    """
+    try:
+        parts = key.split("-")
+        return date(int(parts[0]), int(parts[1]) + 1, int(parts[2]))
+    except (ValueError, IndexError):
+        return None
+
+
 def _format_slot(
     *,
     start_dt: datetime,
@@ -141,44 +193,14 @@ def _format_slot(
     )
 
 
-def _parse_slot_entry(
-    entry: dict[str, Any],
-    *,
-    duration_minutes: int,
-    tz: ZoneInfo,
-    room_label: str,
-    page_url: str,
-) -> OnceHubSlot | None:
-    iso = entry.get("start_time") or entry.get("start") or entry.get("starts_at")
-    if not iso:
-        ms = entry.get("start_epoch_ms") or entry.get("epoch_ms")
-        if ms is None:
-            return None
-        start_dt = datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
-    else:
-        try:
-            start_dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        if start_dt.tzinfo is None:
-            start_dt = start_dt.replace(tzinfo=tz)
-    return _format_slot(
-        start_dt=start_dt,
-        duration_minutes=duration_minutes,
-        tz=tz,
-        room_label=room_label,
-        page_url=page_url,
-    )
-
-
 def _within_window(slot: OnceHubSlot, window: str | None) -> bool:
     """Return True if slot's local start time falls in the window.
 
     Accepted forms:
       - "HH:MM-HH:MM" (24h, local)
-      - "morning"  → 05:00–12:00
-      - "afternoon" → 12:00–17:00
-      - "evening"   → 17:00–22:00
+      - "morning"  -> 05:00-12:00
+      - "afternoon" -> 12:00-17:00
+      - "evening"   -> 17:00-22:00
     """
     if not window:
         return True
@@ -202,13 +224,83 @@ def _within_window(slot: OnceHubSlot, window: str | None) -> bool:
     return start_t <= slot_t < end_t
 
 
+def _encode_postdata(
+    *,
+    first_name: str,
+    last_name: str,
+    email: str,
+    net_id: str,
+    subject: str,
+    event_name: str,
+    organization: str,
+    num_attendees: str,
+    graduation_year: str,
+    location: str,
+    affiliation_id: str,
+    school_id: str,
+    pronouns_id: str,
+    start_epoch_ms: int,
+    duration_minutes: int,
+) -> str:
+    """Build the ``_so_callback_equal`` / ``_so_cf_list`` encoded string
+    that OnceHub expects as the ``postData`` field in
+    ``SaveSchedulerInviteeDetails``.
+    """
+    sep = "_so_callback_equal"
+    end = "_so_callback_quote"
+    cf_sep = "_so_cf_quote"
+    cf_list = "_so_cf_list"
+
+    parts = [
+        f"name{sep}{first_name}{end}",
+        f"message{sep}{end}",
+        f"timezone{sep}{TIMEZONE_ID}{end}",
+        f"email{sep}{email}{end}",
+        f"subject{sep}{subject}{end}",
+        f"duration{sep}{duration_minutes}{end}",
+        f"location{sep}{location}{end}",
+        f"locationlabel{sep}Location{end}",
+        f"meetingtimes{sep}_so_list{start_epoch_ms}_so_quote{duration_minutes}{end}",
+        f"postBuffer{sep}30{end}",
+        f"preBuffer{sep}30{end}",
+        f"meetinglowerboundary{sep}{start_epoch_ms}{end}",
+        f"meetingupperboundary{sep}{start_epoch_ms + duration_minutes}{end}",
+    ]
+
+    # Custom fields: (libraryId, isSecure, value)
+    custom_fields = [
+        (60168, "false", last_name),
+        (15400, "false", net_id),
+        (57698, "false", graduation_year),
+        (10734, "false", event_name),
+        (10735, "false", organization),
+        (10737, "false", num_attendees),
+        (10636, "false", f"{affiliation_id}{cf_sep}"),  # dropdown
+        (10637, "false", f"{school_id}{cf_sep}"),  # dropdown
+    ]
+    if pronouns_id:
+        custom_fields.append((114071, "false", f"{pronouns_id}{cf_sep}"))
+
+    cf_str = f"customfield{sep}"
+    for lib_id, secure, val in custom_fields:
+        cf_str += f"{lib_id}{cf_sep}{secure}{cf_sep}{cf_sep}{val}{cf_list}"
+    parts.append(cf_str)
+
+    return "".join(parts)
+
+
+# ── Client ───────────────────────────────────────────────────────────────────
+
+
 class OnceHubClient:
     """Async client for OnceHub room lookup + booking.
 
-    Authentication uses an API key loaded from `ONCEHUB_API_KEY`. The
-    booking profile (who "owns" the booking) and the page URL for the
-    Leslie eLab Lean/Launchpad room come from environment variables so
-    they can be rotated via Doppler without code changes.
+    Uses the **internal browser API** at ``go.oncehub.com/api/``. No API key
+    is required. The booking profile (who "owns" the booking) is loaded from
+    ``booking_profile.json`` so it can be edited without code changes.
+
+    The page URL for the Leslie eLab comes from ``ONCEHUB_PAGE_URL`` (env)
+    so it can be rotated via Doppler without code changes.
     """
 
     def __init__(self, *, timeout: float = 30.0, tz_name: str = DEFAULT_TIMEZONE) -> None:
@@ -216,22 +308,26 @@ class OnceHubClient:
         self._tz_name = tz_name
         self._tz = ZoneInfo(tz_name)
         self._client: httpx.AsyncClient | None = None
+        self._room_ids: dict[str, Any] | None = None
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
     async def __aenter__(self) -> "OnceHubClient":
-        token = _env("ONCEHUB_API_KEY")
-        if not token:
-            raise RuntimeError("ONCEHUB_API_KEY must be set to talk to OnceHub")
         self._client = httpx.AsyncClient(
-            base_url=BASE_URL,
             headers={
-                "API-Key": token,
+                "Content-Type": "application/json;charset=UTF-8",
+                "Referer": self.page_url,
+                "Origin": "https://go.oncehub.com",
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
                 "Accept": "application/json",
-                "Content-Type": "application/json",
             },
             timeout=self._timeout,
         )
+        # Establish session cookies
+        await self._client.get(self.page_url)
         return self
 
     async def __aexit__(self, *_: Any) -> None:
@@ -248,17 +344,17 @@ class OnceHubClient:
         return url
 
     @property
+    def link_name(self) -> str:
+        """Extract the link name from the page URL (last path segment)."""
+        return self.page_url.rstrip("/").rsplit("/", 1)[-1]
+
+    @property
     def room_label(self) -> str:
         return _env("ONCEHUB_ROOM_LABEL", DEFAULT_ROOM_LABEL) or DEFAULT_ROOM_LABEL
 
     @property
-    def booking_profile_id(self) -> str:
-        profile = _env("ONCEHUB_SHARED_BOOKING_PROFILE_ID")
-        if not profile:
-            raise RuntimeError(
-                "ONCEHUB_SHARED_BOOKING_PROFILE_ID must be set for the shared club booking identity"
-            )
-        return profile
+    def booking_profile(self) -> dict[str, Any]:
+        return _load_booking_profile()
 
     # ── Retry helper ─────────────────────────────────────────────────────
 
@@ -274,22 +370,56 @@ class OnceHubClient:
         resp.raise_for_status()
         return resp
 
+    # ── Room ID discovery ────────────────────────────────────────────────
+
+    async def _discover_room_ids(self) -> dict[str, Any]:
+        """Call the landing page + getbooknow APIs to discover room IDs."""
+        if self._room_ids is not None:
+            return self._room_ids
+
+        r1 = await self._request(
+            "POST",
+            f"{BASE_URL}/get-data/GetLandingPageLayout",
+            json={"linkName": self.link_name, "tzstring": IANA_TZ},
+        )
+        bnl_id = r1.json().get("bookNowLinkId")
+        theme_id = r1.json().get("returnThemeId", "")
+
+        r2 = await self._request(
+            "POST",
+            f"{BASE_URL}/get-data/getbooknow",
+            json={
+                "LinkName": self.link_name,
+                "BooknowLinkId": bnl_id,
+                "IsServiceFirst": False,
+            },
+        )
+        rooms = r2.json()["bookNowLinkObj"]["meetMeLinkArr"]
+
+        # Find the Lean/Launchpad room (or fall back to the target label)
+        target_label = self.room_label.lower()
+        room = None
+        for r in rooms:
+            if target_label in r["label"].lower():
+                room = r
+                break
+        if room is None:
+            # Fall back to second room (Lean/Launchpad is typically index 1)
+            room = rooms[1] if len(rooms) > 1 else rooms[0]
+
+        self._room_ids = {
+            "label": room["label"],
+            "settings_id": room["settingsId"],
+            "meetme_link_id": room["meetmeLinkId"],
+            "owner_user_id": room["ownerUserId"],
+            "link_name": room["linkName"],
+            "book_now_link_id": bnl_id,
+            "category_id": room.get("categoryId", ""),
+            "theme_id": theme_id,
+        }
+        return self._room_ids
+
     # ── Raw transport hooks (tests mock these) ──────────────────────────
-    #
-    # CAVEAT: The exact endpoint paths, query-param names, and request body
-    # shape below are placeholders for the OnceHub v2 HTTP API. OnceHub's
-    # current v2 surface uses endpoints like `/booking_pages/{id}/availability`
-    # and `/scheduled_events` with a `{booking_page, event_type_id, invitee,
-    # form_submission, ...}` body. These hooks have NOT been validated
-    # against a live OnceHub deployment — they are designed to be mockable
-    # at the method boundary (see `agent/tests/test_oncehub_client.py`'s
-    # `_StubClient`) so the parse/filter/receipt-mapping logic can be
-    # exercised in isolation.
-    #
-    # Before flipping this on against real secrets, confirm the payload
-    # shape against current OnceHub v2 docs and adjust here. The public
-    # client methods (`resolve_room`, `list_slots`, `submit_booking`) are
-    # the stable contract — only these two raw hooks should change.
 
     async def _raw_list_slots(
         self,
@@ -299,23 +429,57 @@ class OnceHubClient:
         month: int,
         duration_minutes: int,
     ) -> list[dict[str, Any]]:
+        """Fetch availability for one calendar month via ``calc-ts``.
+
+        Returns a list of slot dicts with ``start_time`` (ISO) and
+        ``start_epoch_ms`` keys, normalised from OnceHub's internal
+        0-indexed-month date-keyed format.
+        """
+        ids = await self._discover_room_ids()
+        s_ms, e_ms = _month_range_ms(year, month, tz_name=self._tz_name)
+
         resp = await self._request(
-            "GET",
-            "/scheduled_events/availability",
-            params={
-                "page_url": page_url,
-                "year": year,
-                "month": month,
-                "duration_minutes": duration_minutes,
-                "timezone": self._tz_name,
+            "POST",
+            f"{BASE_URL}/get-availability/calc-ts",
+            json={
+                "pooledType": -1,
+                "timeZoneId": TIMEZONE_ID,
+                "userId": ids["owner_user_id"],
+                "settingsId": ids["settings_id"],
+                "meetmelinkid": ids["meetme_link_id"],
+                "startDate": s_ms,
+                "endDate": e_ms,
+                "serviceId": -1,
+                "teamId": -1,
+                "meetingDuration": duration_minutes,
             },
         )
-        payload = resp.json()
-        raw = payload.get("data") if isinstance(payload, dict) else payload
-        return raw if isinstance(raw, list) else []
+        data = resp.json().get("data", {}).get("slots", {})
+
+        # Flatten the date-keyed structure into a list of slot entries
+        entries: list[dict[str, Any]] = []
+        for key, day_obj in data.items():
+            real_date = _parse_oncehub_date_key(key)
+            if real_date is None:
+                continue
+            for slot in day_obj.get("am", []) + day_obj.get("pm", []):
+                epoch_ms = slot["startTime"]
+                start_dt = datetime.fromtimestamp(
+                    epoch_ms / 1000, tz=timezone.utc
+                ).astimezone(self._tz)
+                entries.append({
+                    "start_time": start_dt.isoformat(),
+                    "start_epoch_ms": epoch_ms,
+                })
+        return entries
 
     async def _raw_submit_booking(self, payload: dict[str, Any]) -> dict[str, Any]:
-        resp = await self._request("POST", "/scheduled_events", json=payload)
+        """Submit a booking via ``SaveSchedulerInviteeDetails``."""
+        resp = await self._request(
+            "POST",
+            f"{BASE_URL}/get-data/SaveSchedulerInviteeDetails",
+            json=payload,
+        )
         body = resp.json()
         return body if isinstance(body, dict) else {"raw": body}
 
@@ -361,10 +525,7 @@ class OnceHubClient:
         end = date.fromisoformat(end_date)
         if end < start:
             raise ValueError("end_date must be on or after start_date")
-        # month_ranges validates the ordering (end >= start) and yields a
-        # timezone-aware first-of-month anchor for every month the range
-        # touches. Use it as the single source of truth for month iteration
-        # so tests and production share the same path.
+
         ranges = month_ranges(start_date, end_date, tz_name=self._tz_name)
 
         entries: list[dict[str, Any]] = []
@@ -380,15 +541,27 @@ class OnceHubClient:
 
         slots: list[OnceHubSlot] = []
         for entry in entries:
-            slot = _parse_slot_entry(
-                entry,
+            iso = entry.get("start_time")
+            ms = entry.get("start_epoch_ms")
+            if iso:
+                try:
+                    start_dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if start_dt.tzinfo is None:
+                    start_dt = start_dt.replace(tzinfo=self._tz)
+            elif ms is not None:
+                start_dt = datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
+            else:
+                continue
+
+            slot = _format_slot(
+                start_dt=start_dt,
                 duration_minutes=duration_minutes,
                 tz=self._tz,
                 room_label=room.label,
                 page_url=room.page_url,
             )
-            if slot is None:
-                continue
             slot_date = date.fromisoformat(slot.display_date)
             if slot_date < start or slot_date > end:
                 continue
@@ -415,44 +588,79 @@ class OnceHubClient:
     ) -> OnceHubBookingReceipt:
         """Submit a booking under the shared club booking profile.
 
-        The `target_profile_override` argument is a runtime escape hatch
-        for callers that need to swap to a secondary profile at approval
-        time; the default is always the env-configured shared profile.
+        The booking profile is loaded from ``booking_profile.json``. The
+        ``title`` argument overrides the profile's ``subject`` field, and
+        ``num_attendees`` overrides the profile's ``num_attendees``.
         """
         if duration_minutes <= 0:
             raise ValueError("duration_minutes must be positive")
         if num_attendees <= 0:
             raise ValueError("num_attendees must be positive")
 
-        room = await self.resolve_room()
-        profile_id = target_profile_override or self.booking_profile_id
+        ids = await self._discover_room_ids()
+        profile = self.booking_profile
 
-        start_dt = datetime.fromtimestamp(slot_start_epoch_ms / 1000, tz=timezone.utc).astimezone(self._tz)
+        # Build the encoded postData string
+        post_data = _encode_postdata(
+            first_name=profile["first_name"],
+            last_name=profile["last_name"],
+            email=profile["email"],
+            net_id=profile["net_id"],
+            subject=title,  # Use the booking title as the subject
+            event_name=profile.get("event_name", title),
+            organization=profile["organization"],
+            num_attendees=str(num_attendees),
+            graduation_year=profile.get("graduation_year", ""),
+            location=profile.get("location", "16 Washington Place"),
+            affiliation_id=profile["affiliation_id"],
+            school_id=profile["school_id"],
+            pronouns_id=profile.get("pronouns_id", ""),
+            start_epoch_ms=slot_start_epoch_ms,
+            duration_minutes=duration_minutes,
+        )
 
         payload: dict[str, Any] = {
-            "page_url": room.page_url,
-            "booking_profile_id": profile_id,
-            "start_time": start_dt.isoformat(),
-            "duration_minutes": duration_minutes,
-            "timezone": self._tz_name,
-            "form": {
-                "title": title,
-                "attendees": num_attendees,
-            },
+            "postData": post_data,
+            "IANATimeZone": IANA_TZ,
+            "sid": ids["settings_id"],
+            "userId": ids["owner_user_id"],
+            "meetmeLinkId": ids["meetme_link_id"],
+            "serviceId": -1,
+            "serviceCategoryId": "",
+            "bookingPageCategoryId": ids["category_id"],
+            "IFParams": {},
+            "salesForceBooking": None,
+            "bid": None,
+            "sn": -1,
+            "themeId": ids["theme_id"],
+            "e": False,
+            "categorySkippedStatus": 1,
+            "OneTimeLinkId": None,
+            "UtmParameters": {},
+            "bookNowLinkId": ids["book_now_link_id"],
         }
-        if description:
-            payload["form"]["description"] = description
-        if event_type:
-            payload["form"]["event_type"] = event_type
-        if target_profile:
-            payload["form"]["target_profile"] = target_profile
 
         body = await self._raw_submit_booking(payload)
+
+        # Map the response to a receipt
+        is_error = body.get("isError", False)
+        if is_error:
+            return OnceHubBookingReceipt(
+                status="error",
+                booking_reference=None,
+                raw=body,
+            )
+
         reference = (
-            body.get("booking_id")
+            body.get("encodedMeetingId")
+            or body.get("bookingkey")
+            or body.get("booking_id")
             or body.get("reference")
             or body.get("id")
-            or (body.get("data", {}) or {}).get("id")
         )
-        status = body.get("status") or body.get("booking_status") or "confirmed"
-        return OnceHubBookingReceipt(status=status, booking_reference=reference, raw=body)
+        status = body.get("meetingStatus") or body.get("status") or "confirmed"
+        return OnceHubBookingReceipt(
+            status=status,
+            booking_reference=reference,
+            raw=body,
+        )

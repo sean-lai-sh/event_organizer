@@ -7,6 +7,7 @@ These cover:
 - Duration handling.
 - Empty-availability path.
 - Booking response mapping and shared-profile submission.
+- Internal API date-key parsing (0-indexed months).
 """
 from __future__ import annotations
 
@@ -21,14 +22,13 @@ from core.clients.oncehub import (
     OnceHubClient,
     OnceHubSlot,
     month_ranges,
+    _parse_oncehub_date_key,
 )
 
 
 @pytest.fixture(autouse=True)
 def _oncehub_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ONCEHUB_API_KEY", "fake-key")
-    monkeypatch.setenv("ONCEHUB_PAGE_URL", "https://go.oncehub.com/NYULeslie/Lean-Launchpad")
-    monkeypatch.setenv("ONCEHUB_SHARED_BOOKING_PROFILE_ID", "profile_shared_club")
+    monkeypatch.setenv("ONCEHUB_PAGE_URL", "https://go.oncehub.com/NYULeslie")
 
 
 def _make_client() -> OnceHubClient:
@@ -44,9 +44,24 @@ class _StubClient(OnceHubClient):
         self._stub_slot_entries_by_month: dict[tuple[int, int], list[dict]] = {}
         if slot_entries is not None:
             self._stub_slot_entries_by_month[(0, 0)] = slot_entries
-        self._booking_body = booking_body or {"booking_id": "bk_123", "status": "confirmed"}
+        self._booking_body = booking_body or {
+            "meetingStatus": "proposed",
+            "isError": False,
+            "encodedMeetingId": "bk_123",
+        }
         self.booking_calls: list[dict] = []
         self.list_calls: list[dict] = []
+        # Pre-populate room IDs so we don't need HTTP
+        self._room_ids = {
+            "label": "Lean/Launchpad (fits 30 - 50 people)",
+            "settings_id": "MTM2Mjg0",
+            "meetme_link_id": "MTQ1OTg5",
+            "owner_user_id": "fake-owner-id",
+            "link_name": "LeslieLarge",
+            "book_now_link_id": "MTM4NTMz",
+            "category_id": "NjYyMQ==",
+            "theme_id": "fake-theme",
+        }
 
     def set_month_entries(self, year: int, month: int, entries: list[dict]) -> None:
         self._stub_slot_entries_by_month[(year, month)] = entries
@@ -69,6 +84,21 @@ class _StubClient(OnceHubClient):
     async def _raw_submit_booking(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.booking_calls.append(payload)
         return self._booking_body
+
+
+# ── _parse_oncehub_date_key ──────────────────────────────────────────
+
+def test_parse_oncehub_date_key_zero_indexed_month() -> None:
+    """OnceHub date keys use 0-indexed months: '2026-3-16' = April 16."""
+    from datetime import date as d
+    assert _parse_oncehub_date_key("2026-3-16") == d(2026, 4, 16)
+    assert _parse_oncehub_date_key("2026-0-1") == d(2026, 1, 1)
+    assert _parse_oncehub_date_key("2026-11-31") == d(2026, 12, 31)
+
+
+def test_parse_oncehub_date_key_invalid() -> None:
+    assert _parse_oncehub_date_key("invalid") is None
+    assert _parse_oncehub_date_key("") is None
 
 
 # ── month_ranges ────────────────────────────────────────────────────────
@@ -106,9 +136,8 @@ async def test_resolve_room_returns_configured_page_url_and_label() -> None:
     client = _make_client()
     room = await client.resolve_room()
     assert room.label == DEFAULT_ROOM_LABEL
-    assert room.page_url == "https://go.oncehub.com/NYULeslie/Lean-Launchpad"
-    # The link name is derived from the tail of the page URL for URL-safe anchors.
-    assert room.link_name == "Lean-Launchpad"
+    assert room.page_url == "https://go.oncehub.com/NYULeslie"
+    assert room.link_name == "NYULeslie"
 
 
 @pytest.mark.asyncio
@@ -116,15 +145,6 @@ async def test_resolve_room_respects_room_label_override(monkeypatch: pytest.Mon
     monkeypatch.setenv("ONCEHUB_ROOM_LABEL", "Custom Room")
     room = await _make_client().resolve_room()
     assert room.label == "Custom Room"
-
-
-@pytest.mark.asyncio
-async def test_booking_profile_id_required() -> None:
-    import os
-    os.environ.pop("ONCEHUB_SHARED_BOOKING_PROFILE_ID", None)
-    client = _make_client()
-    with pytest.raises(RuntimeError):
-        _ = client.booking_profile_id
 
 
 # ── list_slots ─────────────────────────────────────────────────────────
@@ -210,9 +230,35 @@ async def test_list_slots_rejects_non_positive_duration() -> None:
 # ── submit_booking ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_submit_booking_uses_shared_profile_and_maps_receipt() -> None:
+async def test_submit_booking_maps_receipt_from_internal_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Mock the booking profile loader
+    monkeypatch.setattr(
+        "core.clients.oncehub._load_booking_profile",
+        lambda: {
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "test@nyu.edu",
+            "net_id": "tu123",
+            "subject": "Default Subject",
+            "event_name": "Default Event",
+            "organization": "TestOrg",
+            "num_attendees": "10",
+            "graduation_year": "2027",
+            "location": "16 Washington Place",
+            "affiliation_id": "457707",
+            "school_id": "453247",
+            "pronouns_id": "",
+        },
+    )
     client = _StubClient(
-        booking_body={"booking_id": "bk_xyz", "status": "confirmed", "extra": {"x": 1}}
+        booking_body={
+            "meetingStatus": "proposed",
+            "isError": False,
+            "encodedMeetingId": "enc_xyz",
+            "bookingkey": "bk_xyz",
+            "MeetingSubject": "Speaker Panel",
+            "meetingLocation": "16 Washington Place",
+        }
     )
     tz = ZoneInfo("America/New_York")
     start_dt = datetime(2026, 5, 15, 10, 0, tzinfo=tz)
@@ -228,25 +274,42 @@ async def test_submit_booking_uses_shared_profile_and_maps_receipt() -> None:
         target_profile="early-stage founders",
     )
 
-    assert receipt.status == "confirmed"
-    assert receipt.booking_reference == "bk_xyz"
-    assert receipt.raw == {"booking_id": "bk_xyz", "status": "confirmed", "extra": {"x": 1}}
+    assert receipt.status == "proposed"
+    assert receipt.booking_reference == "enc_xyz"
+    assert receipt.raw["meetingStatus"] == "proposed"
+    assert receipt.raw["isError"] is False
 
     assert len(client.booking_calls) == 1
     payload = client.booking_calls[0]
-    assert payload["page_url"] == "https://go.oncehub.com/NYULeslie/Lean-Launchpad"
-    assert payload["booking_profile_id"] == "profile_shared_club"
-    assert payload["duration_minutes"] == 90
-    assert payload["timezone"] == "America/New_York"
-    assert payload["form"]["title"] == "Speaker Panel"
-    assert payload["form"]["attendees"] == 30
-    assert payload["form"]["description"] == "Panel discussion"
-    assert payload["form"]["event_type"] == "speaker_panel"
+    # Internal API uses postData encoding, not structured JSON form
+    assert "postData" in payload
+    assert payload["IANATimeZone"] == "America/New_York"
+    assert payload["sid"] == "MTM2Mjg0"
 
 
 @pytest.mark.asyncio
-async def test_submit_booking_falls_back_to_confirmed_status_when_body_absent() -> None:
-    client = _StubClient(booking_body={"id": "bk_1"})
+async def test_submit_booking_error_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "core.clients.oncehub._load_booking_profile",
+        lambda: {
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "test@nyu.edu",
+            "net_id": "tu123",
+            "subject": "Default",
+            "event_name": "Default",
+            "organization": "TestOrg",
+            "num_attendees": "10",
+            "graduation_year": "2027",
+            "location": "16 Washington Place",
+            "affiliation_id": "457707",
+            "school_id": "453247",
+            "pronouns_id": "",
+        },
+    )
+    client = _StubClient(
+        booking_body={"isError": True, "errorMessage": "Slot no longer available"}
+    )
     tz = ZoneInfo("America/New_York")
     start_dt = datetime(2026, 5, 15, 10, 0, tzinfo=tz)
     receipt = await client.submit_booking(
@@ -255,12 +318,30 @@ async def test_submit_booking_falls_back_to_confirmed_status_when_body_absent() 
         title="Workshop",
         num_attendees=20,
     )
-    assert receipt.booking_reference == "bk_1"
-    assert receipt.status == "confirmed"
+    assert receipt.status == "error"
+    assert receipt.booking_reference is None
 
 
 @pytest.mark.asyncio
-async def test_submit_booking_rejects_invalid_args() -> None:
+async def test_submit_booking_rejects_invalid_args(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "core.clients.oncehub._load_booking_profile",
+        lambda: {
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "test@nyu.edu",
+            "net_id": "tu123",
+            "subject": "Default",
+            "event_name": "Default",
+            "organization": "TestOrg",
+            "num_attendees": "10",
+            "graduation_year": "2027",
+            "location": "16 Washington Place",
+            "affiliation_id": "457707",
+            "school_id": "453247",
+            "pronouns_id": "",
+        },
+    )
     client = _StubClient()
     with pytest.raises(ValueError):
         await client.submit_booking(

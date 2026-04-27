@@ -120,7 +120,7 @@ OnceHub integration rules (issue #52 MVP):
 
 - MVP is scoped to the Leslie eLab **Lean/Launchpad** room only. Other OnceHub rooms are out of scope.
 - Availability is **always live** from OnceHub on every request. Do not route MVP through `elab_scrape/` or the cached `room_availability` table.
-- Bookings are submitted under a single **shared club booking profile** sourced from Doppler (`ONCEHUB_SHARED_BOOKING_PROFILE_ID`), not per-user NYU identities.
+- Bookings are submitted under a single **shared club booking profile** stored in `agent/core/clients/booking_profile.json`, not per-user NYU identities.
 - Booking receipts live in Convex `event_room_bookings`, not on `events`. The user-facing event record stays in `events`.
 - If no event exists yet, an approved booking may create the event as part of the write. Approved bookings sticky `events.room_confirmed` to `true`.
 - Dashboard entrypoints (new-event page, event-detail page) are **thin launchers** that seed an agent thread and route to `/agent/<thread_id>`. Modal remains the orchestration authority; dashboard pages do not call OnceHub directly.
