@@ -144,6 +144,38 @@ class FakeConvexClient:
         self.state["create_event_calls"].append(event)
         return self.state.get("create_event_result", "new_evt_id")
 
+    async def create_event_safe(
+        self,
+        *,
+        title: str,
+        description: str | None = None,
+        event_date: str | None = None,
+        event_time: str | None = None,
+        event_end_time: str | None = None,
+        location: str | None = None,
+        event_type: str | None = None,
+        target_profile: str | None = None,
+        needs_outreach: bool | None = None,
+        status: str | None = None,
+        created_by: str | None = None,
+    ) -> str:
+        self.state["create_event_safe_calls"].append(
+            {
+                "title": title,
+                "description": description,
+                "event_date": event_date,
+                "event_time": event_time,
+                "event_end_time": event_end_time,
+                "location": location,
+                "event_type": event_type,
+                "target_profile": target_profile,
+                "needs_outreach": needs_outreach,
+                "status": status,
+                "created_by": created_by,
+            }
+        )
+        return self.state.get("create_event_result", "new_evt_id")
+
     async def update_event_safe(
         self,
         event_id: str,
@@ -157,6 +189,7 @@ class FakeConvexClient:
         status: str | None = None,
         event_type: str | None = None,
         target_profile: str | None = None,
+        needs_outreach: bool | None = None,
         speaker_confirmed: bool | None = None,
         room_confirmed: bool | None = None,
     ) -> dict | None:
@@ -172,6 +205,7 @@ class FakeConvexClient:
                 "status": status,
                 "event_type": event_type,
                 "target_profile": target_profile,
+                "needs_outreach": needs_outreach,
                 "speaker_confirmed": speaker_confirmed,
                 "room_confirmed": room_confirmed,
             }
@@ -193,6 +227,7 @@ def _fresh_convex_state() -> dict:
         "attendance_calls": [],
         "update_event_calls": [],
         "create_event_calls": [],
+        "create_event_safe_calls": [],
     }
 
 
@@ -659,6 +694,7 @@ async def test_update_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
             "status": "outreach",
             "event_type": None,
             "target_profile": None,
+            "needs_outreach": None,
             "speaker_confirmed": True,
             "room_confirmed": False,
         }
@@ -684,8 +720,8 @@ async def test_create_event_io(monkeypatch: pytest.MonkeyPatch) -> None:
         status="draft",
     )
 
-    assert len(state["create_event_calls"]) == 1
-    payload = state["create_event_calls"][0]
+    assert len(state["create_event_safe_calls"]) == 1
+    payload = state["create_event_safe_calls"][0]
     assert payload["title"] == "Startup Growth Panel"
     assert payload["event_date"] == "2026-04-30"
     assert payload["event_time"] == "18:00"
@@ -710,16 +746,53 @@ async def test_create_event_io_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
         event_date="2026-05-01",
     )
 
-    payload = state["create_event_calls"][0]
+    payload = state["create_event_safe_calls"][0]
     assert payload["title"] == "Quick Meetup"
     assert payload["event_date"] == "2026-05-01"
-    assert payload["status"] == "draft"
-    assert payload["needs_outreach"] is True
+    assert payload["status"] is None
+    assert payload["needs_outreach"] is None
     assert payload["description"] is None
     assert payload["location"] is None
     assert payload["event_type"] is None
 
     assert result == {"event_id": "evt_min_1", "title": "Quick Meetup"}
+
+
+@pytest.mark.asyncio
+async def test_create_event_safe_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = _fresh_convex_state()
+    state["create_event_result"] = "evt_safe_42"
+    state["get_event_result"] = {
+        "_id": "evt_safe_42",
+        "title": "Runtime Event",
+        "status": "draft",
+    }
+    _install_fake_convex(monkeypatch, state)
+
+    result = await mcp_service.create_event_safe(
+        title="Runtime Event",
+        event_date="2026-05-15",
+        needs_outreach=True,
+        created_by="modal-runtime",
+    )
+
+    assert state["create_event_safe_calls"] == [
+        {
+            "title": "Runtime Event",
+            "description": None,
+            "event_date": "2026-05-15",
+            "event_time": None,
+            "event_end_time": None,
+            "location": None,
+            "event_type": None,
+            "target_profile": None,
+            "needs_outreach": True,
+            "status": None,
+            "created_by": "modal-runtime",
+        }
+    ]
+    assert state["get_event_calls"] == ["evt_safe_42"]
+    assert result == {"_id": "evt_safe_42", "title": "Runtime Event", "status": "draft"}
 
 
 @pytest.mark.asyncio
@@ -741,6 +814,7 @@ async def test_update_event_safe_io_with_event_type(monkeypatch: pytest.MonkeyPa
     call = state["update_event_calls"][0]
     assert call["event_type"] == "workshop"
     assert call["target_profile"] == "engineers"
+    assert call["needs_outreach"] is None
     assert call["event_id"] == "evt_10"
     assert updated == {"_id": "evt_10", "title": "Workshop", "event_type": "workshop"}
 
@@ -769,3 +843,4 @@ def test_person_and_speaker_tool_surfaces_are_separated() -> None:
     # Compatibility read aliases are still exposed.
     assert callable(mcp_service.search_contacts)
     assert callable(mcp_service.get_contact)
+    assert callable(mcp_service.create_event_safe)

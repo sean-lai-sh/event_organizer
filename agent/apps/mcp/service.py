@@ -409,33 +409,65 @@ async def get_event_attendance(event_id: str) -> dict:
 
 
 @mcp.tool()
+async def create_event_safe(
+    title: str,
+    description: str | None = None,
+    event_date: str | None = None,
+    event_time: str | None = None,
+    event_end_time: str | None = None,
+    location: str | None = None,
+    event_type: str | None = None,
+    target_profile: str | None = None,
+    needs_outreach: bool | None = None,
+    status: str | None = None,
+    created_by: str | None = None,
+) -> dict:
+    """Safely create a Convex event through the runtime service mutation."""
+    async with ConvexClient() as convex:
+        event_id = await convex.create_event_safe(
+            title=title,
+            description=description,
+            event_date=event_date,
+            event_time=event_time,
+            event_end_time=event_end_time,
+            location=location,
+            event_type=event_type,
+            target_profile=target_profile,
+            needs_outreach=needs_outreach,
+            status=status,
+            created_by=created_by,
+        )
+        return await convex.get_event(event_id) or {"event_id": event_id, "title": title}
+
+
+@mcp.tool()
 async def create_event(
     title: str,
-    event_date: str,
-    status: str = "draft",
+    event_date: str | None = None,
+    status: str | None = None,
     description: str | None = None,
     event_time: str | None = None,
     event_end_time: str | None = None,
     location: str | None = None,
     event_type: str | None = None,
     target_profile: str | None = None,
-    needs_outreach: bool = True,
+    needs_outreach: bool | None = None,
+    created_by: str | None = None,
 ) -> dict:
-    """Create a new event with the provided details."""
-    async with ConvexClient() as convex:
-        event_id = await convex.create_event({
-            "title": title,
-            "description": description,
-            "event_date": event_date,
-            "event_time": event_time,
-            "event_end_time": event_end_time,
-            "location": location,
-            "event_type": event_type,
-            "target_profile": target_profile,
-            "needs_outreach": needs_outreach,
-            "status": status,
-        })
-        return {"event_id": event_id, "title": title}
+    """Compatibility wrapper for `create_event_safe`."""
+    return await create_event_safe(
+        title=title,
+        description=description,
+        event_date=event_date,
+        event_time=event_time,
+        event_end_time=event_end_time,
+        location=location,
+        event_type=event_type,
+        target_profile=target_profile,
+        needs_outreach=needs_outreach,
+        status=status,
+        created_by=created_by,
+    )
 
 
 @mcp.tool()
@@ -450,6 +482,7 @@ async def update_event_safe(
     status: str | None = None,
     event_type: str | None = None,
     target_profile: str | None = None,
+    needs_outreach: bool | None = None,
     speaker_confirmed: bool | None = None,
     room_confirmed: bool | None = None,
 ) -> dict | None:
@@ -466,6 +499,7 @@ async def update_event_safe(
             status=status,
             event_type=event_type,
             target_profile=target_profile,
+            needs_outreach=needs_outreach,
             speaker_confirmed=speaker_confirmed,
             room_confirmed=room_confirmed,
         )
@@ -670,6 +704,7 @@ __all__ = [
     "get_event_outreach",
     "get_attendance_dashboard",
     "get_event_attendance",
+    "create_event_safe",
     "create_event",
     "update_event_safe",
     "find_oncehub_slots",

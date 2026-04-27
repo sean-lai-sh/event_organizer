@@ -289,6 +289,63 @@ async def test_tool_aware_write_run_pauses_then_executes_exact_tool(monkeypatch:
 
 
 @pytest.mark.asyncio
+async def test_tool_aware_create_event_safe_pauses_then_executes_exact_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executed: list[tuple[str, dict]] = []
+
+    async def fake_execute_tool_call(tool_name: str, tool_input: dict) -> dict:
+        executed.append((tool_name, tool_input))
+        return {"_id": "evt_new", **tool_input}
+
+    monkeypatch.setattr(runtime_service, "execute_tool_call", fake_execute_tool_call)
+
+    tool_input = {
+        "title": "Runtime Planning Session",
+        "event_date": "2026-05-20",
+        "needs_outreach": False,
+    }
+    service = AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeToolAwareAdapter(
+            AgentTurnResult(
+                tool_traces=[
+                    ToolTrace(
+                        name="create_event_safe",
+                        tool_input=tool_input,
+                        tool_use_id="tool_create",
+                    )
+                ],
+                blocked_action=ToolAction(
+                    name="create_event_safe",
+                    action_class=ActionClass.WRITE,
+                    payload={"tool_input": tool_input},
+                ),
+            )
+        ),
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Create event thread"))
+    response = await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Create an event")
+    )
+
+    assert response.run.status.value == "paused_approval"
+    state = await service.get_thread_state(thread.external_id)
+    approval = state.approvals[0]
+    assert approval.title == "Create event: Runtime Planning Session on 2026-05-20"
+
+    decision = await service.submit_approval(
+        approval.external_id,
+        ApprovalDecisionRequest(decision=ApprovalStatus.APPROVED),
+    )
+
+    assert executed == [("create_event_safe", tool_input)]
+    assert decision.run.status.value == "completed"
+
+
+@pytest.mark.asyncio
 async def test_latest_event_attendance_retries_when_fake_limitation_skips_tools() -> None:
     adapter = FakeToolAwareAdapter(
         [

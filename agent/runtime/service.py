@@ -77,7 +77,7 @@ def _format_slot_label(slot_start_epoch_ms: int | None, duration_minutes: int | 
 
 def _make_approval_title(action: ToolAction) -> str:
     tool_input = action.payload.get("tool_input", {})
-    if action.name == "create_event":
+    if action.name in {"create_event_safe", "create_event"}:
         name = tool_input.get("title", "untitled event")
         date = tool_input.get("event_date", "")
         return f"Create event: {name}" + (f" on {date}" if date else "")

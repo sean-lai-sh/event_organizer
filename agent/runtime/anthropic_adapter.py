@@ -33,7 +33,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "or unrelated APIs unless a tool actually failed with that error. "
     "Only edit or write external state when the application explicitly approves it. "
     "Respond with concise operational guidance and clear next actions. "
-    "When a user asks to create an event, call create_event immediately using whatever details "
+    "When a user asks to create an event, call create_event_safe immediately using whatever details "
     "the user has provided. Only ask the user for event name or date if those two required fields "
     "are genuinely missing from their request — do not ask for or wait on optional fields. "
     "If no location is specified, default to '16 Washington Place'. "
@@ -261,8 +261,11 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "create_event",
-        "description": "Create a new event. Call immediately with whatever details the user provided; only title and event_date are required.",
+        "name": "create_event_safe",
+        "description": (
+            "Safely create a new Convex event through the Modal runtime service contract. "
+            "Call immediately with whatever details the user provided; only title is required."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -276,8 +279,30 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
                 "event_type":     {"type": "string", "description": "speaker_panel|workshop|networking|social"},
                 "target_profile": {"type": "string", "description": "Intended audience profile"},
                 "needs_outreach": {"type": "boolean"},
+                "created_by":     {"type": "string"},
             },
-            "required": ["title", "event_date"],
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "create_event",
+        "description": "Compatibility alias for `create_event_safe`; prefer `create_event_safe`.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title":          {"type": "string", "description": "Event name"},
+                "event_date":     {"type": "string", "description": "Date in YYYY-MM-DD format"},
+                "status":         {"type": "string", "description": "draft|matching|outreach|completed"},
+                "description":    {"type": "string"},
+                "event_time":     {"type": "string", "description": "Start time in HH:MM format"},
+                "event_end_time": {"type": "string", "description": "End time in HH:MM format"},
+                "location":       {"type": "string"},
+                "event_type":     {"type": "string", "description": "speaker_panel|workshop|networking|social"},
+                "target_profile": {"type": "string", "description": "Intended audience profile"},
+                "needs_outreach": {"type": "boolean"},
+                "created_by":     {"type": "string"},
+            },
+            "required": ["title"],
         },
     },
     {
@@ -296,6 +321,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
                 "status":         {"type": "string"},
                 "event_type":     {"type": "string"},
                 "target_profile": {"type": "string"},
+                "needs_outreach": {"type": "boolean"},
                 "speaker_confirmed": {"type": "boolean"},
                 "room_confirmed":    {"type": "boolean"},
             },

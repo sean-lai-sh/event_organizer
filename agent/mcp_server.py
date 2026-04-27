@@ -5,6 +5,7 @@ from apps.mcp.service import (
     ConvexClient,
     append_person_note,
     create_event,
+    create_event_safe,
     ensure_speaker_for_person,
     flatten_record,
     flatten_speaker_entry,
@@ -52,6 +53,7 @@ __all__ = [
     "get_event_outreach",
     "get_attendance_dashboard",
     "get_event_attendance",
+    "create_event_safe",
     "create_event",
     "update_event_safe",
 ]

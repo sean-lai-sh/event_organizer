@@ -130,7 +130,7 @@ The Modal runtime starts that same MCP server over stdio through the Claude agen
 - Attio `speakers` (workflow): `search_speakers`, `get_speaker`, `ensure_speaker_for_person`, `update_speaker_workflow`
 - Compatibility read aliases: `search_contacts`, `get_contact`
 - Convex reads: `list_events`, `get_event`, `get_event_inbound_status`, `get_event_outreach`, `get_attendance_dashboard`, `get_event_attendance`, `get_event_room_booking`
-- Approval-gated Convex writes: `create_event`, `update_event_safe`
+- Approval-gated Convex writes: `create_event_safe`, `update_event_safe` (`create_event` remains a compatibility alias)
 - OnceHub live reads: `find_oncehub_slots` (Leslie eLab Lean/Launchpad, always live)
 - Approval-gated OnceHub writes: `book_oncehub_room` (booking under the shared club profile; upserts `event_room_bookings` and stickies `events.room_confirmed`)
 

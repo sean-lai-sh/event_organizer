@@ -41,6 +41,7 @@ def test_mcp_root_launcher_exposes_server_contract() -> None:
     assert callable(mcp_server.get_event_outreach)
     assert callable(mcp_server.get_attendance_dashboard)
     assert callable(mcp_server.get_event_attendance)
+    assert callable(mcp_server.create_event_safe)
     assert callable(mcp_server.update_event_safe)
 
     # People tools (identity only)
