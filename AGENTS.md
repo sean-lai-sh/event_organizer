@@ -396,7 +396,8 @@ For dashboard shell, nav, spacing rhythm, and state contrast rules, follow `DESI
 
 ### Typography
 
-- **Font**: Inter (UI), Geist (dashboard wordmark/nav)
+- App surfaces and canonical screen specs use `Inter` only. Do not introduce alternate display or navigation fonts.
+- **Font**: Inter across all UI surfaces, including dashboard wordmark/nav
 - **Display headings**: `fontWeight: 300`, tight `letterSpacing` (−2.5 to −4), `lineHeight: 0.97`
 - **Section headings**: `fontSize: 28`, `fontWeight: 600`, `letterSpacing: -1`
 - **Labels**: `fontSize: 13`, `fontWeight: 500`, `fill: #555555`

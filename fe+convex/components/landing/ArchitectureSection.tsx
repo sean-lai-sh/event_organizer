@@ -8,7 +8,7 @@ export default function ArchitectureSection() {
           <p className="mt-0 mb-4 text-[17px] font-normal tracking-[-0.5px] text-[#6b6b6b]">
             Architecture
           </p>
-          <h2 className="mx-auto mb-[18px] mt-0 max-w-[620px] [font-family:var(--font-outfit),Outfit,system-ui,sans-serif] text-[clamp(36px,4vw,48px)] font-light leading-[1.05] tracking-[-2.4px] text-[#393939]">
+          <h2 className="mx-auto mb-[18px] mt-0 max-w-[620px] font-sans text-[clamp(36px,4vw,48px)] font-light leading-[1.05] tracking-[-2.4px] text-[#393939]">
             A platform built to connect everything your club needs.
           </h2>
           <p className="mx-auto m-0 max-w-[500px] text-[20px] leading-[1.6] font-normal tracking-[-0.35px] text-[#6b6b6b]">

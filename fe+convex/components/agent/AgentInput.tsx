@@ -95,7 +95,7 @@ export const AgentInput = forwardRef<AgentInputHandle, AgentInputProps>(function
           rows={1}
           placeholder={placeholder}
           className="max-h-40 flex-1 resize-none bg-transparent text-[13.5px] leading-[1.5] text-[#111111] placeholder:text-[#BBBBBB] focus:outline-none disabled:opacity-50"
-          style={{ fontFamily: "var(--font-geist-sans)" }}
+          style={{ fontFamily: "var(--font-app-sans)" }}
         />
         <button
           onClick={handleSubmit}

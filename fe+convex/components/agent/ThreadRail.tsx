@@ -263,7 +263,7 @@ export function ThreadRail({
           <Zap className="h-4 w-4 text-[#0A0A0A]" strokeWidth={1.9} />
           <span
             className="text-[13px] font-semibold tracking-[-0.01em] text-[#111111]"
-            style={{ fontFamily: "var(--font-geist-sans)" }}
+            style={{ fontFamily: "var(--font-app-sans)" }}
           >
             Agent
           </span>
@@ -334,7 +334,7 @@ export function ThreadRail({
                             }
                             onBlur={() => cancelRename()}
                             className="w-full rounded-[6px] border border-[#D8D8D8] bg-[#FFFFFF] px-2 py-1 text-[12.5px] font-medium leading-snug text-[#111111] outline-none"
-                            style={{ fontFamily: "var(--font-geist-sans)" }}
+                            style={{ fontFamily: "var(--font-app-sans)" }}
                           />
                         ) : (
                           <p

@@ -392,7 +392,7 @@ function EventDetailEditor({
         </div>
       }
     >
-      <section className="grid gap-6 font-[var(--font-geist-sans)] xl:grid-cols-[minmax(0,860px)_320px]">
+      <section className="grid gap-6 font-sans xl:grid-cols-[minmax(0,860px)_320px]">
         <div className="space-y-5">
           <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#111111]">Event Details</h2>
 

@@ -89,7 +89,7 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
   return (
     <div
       className="flex h-screen bg-[#FFFFFF] text-[#111111]"
-      style={{ fontFamily: "var(--font-geist-sans)" }}
+      style={{ fontFamily: "var(--font-app-sans)" }}
     >
       <ThreadRail
         activeThreadId={activeThreadId}

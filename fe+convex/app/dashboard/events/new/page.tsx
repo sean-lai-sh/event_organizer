@@ -420,7 +420,7 @@ export default function NewEventPage() {
         </div>
       }
     >
-      <section className="grid gap-6 font-[var(--font-geist-sans)] xl:grid-cols-[minmax(0,860px)_320px]">
+      <section className="grid gap-6 font-sans xl:grid-cols-[minmax(0,860px)_320px]">
         <div className="order-2 w-full max-w-[860px] space-y-5 xl:order-1">
           <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-[#111111]">Create Event</h2>
 

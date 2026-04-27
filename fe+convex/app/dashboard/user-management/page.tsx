@@ -159,7 +159,7 @@ export default function UserManagementPage() {
             key={metric.label}
             className="flex flex-col gap-2 rounded-[18px] border border-[#E8E8E8] bg-[#F4F4F4] p-4"
           >
-            <span className="font-[var(--font-outfit)] text-[34px] font-light leading-none tracking-[-0.04em] text-[#1F1F1F]">
+            <span className="font-sans text-[34px] font-light leading-none tracking-[-0.04em] text-[#1F1F1F]">
               {metric.value}
             </span>
             <span className="text-[13px] font-medium text-[#767676]">{metric.label}</span>
@@ -187,7 +187,6 @@ export default function UserManagementPage() {
                   <TableHead className="px-4 text-[#999999]">Role</TableHead>
                   <TableHead className="px-4 text-[#999999]">Joined</TableHead>
                   <TableHead className="px-4 text-[#999999]">Status</TableHead>
-                  <TableHead className="px-4 text-[#999999]">Access</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -225,34 +224,21 @@ export default function UserManagementPage() {
                         {formatCreatedAt(member.created_at)}
                       </TableCell>
                       <TableCell className="px-4 py-3.5">
-                        <span
-                          className={`text-[12px] font-medium ${
-                            member.active ? "text-[#15803D]" : "text-[#7B7B7B]"
+                        <select
+                          value={member.active ? "active" : "inactive"}
+                          disabled={isAccessLoading}
+                          onChange={(e) =>
+                            void handleAccessToggle(member.userId, e.target.value === "active")
+                          }
+                          className={`h-9 rounded-[8px] border px-3 text-[12px] font-medium outline-none transition focus:border-[#111111] disabled:cursor-not-allowed disabled:opacity-60 ${
+                            member.active
+                              ? "border-[#C7E5CE] bg-[#F3FBF4] text-[#15803D]"
+                              : "border-[#E0E0E0] bg-[#FFFFFF] text-[#7B7B7B]"
                           }`}
                         >
-                          {member.active ? "Active" : "Inactive"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="px-4 py-3.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[12px] text-[#6B6B6B]">
-                            {formatRole(member.role)}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={isAccessLoading}
-                            onClick={() =>
-                              void handleAccessToggle(member.userId, !member.active)
-                            }
-                            className="text-[12px] font-medium text-[#555555] transition hover:text-[#111111] disabled:cursor-not-allowed disabled:text-[#BBBBBB]"
-                          >
-                            {isAccessLoading
-                              ? "Saving..."
-                              : member.active
-                                ? "Remove access"
-                                : "Restore"}
-                          </button>
-                        </div>
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
                       </TableCell>
                     </TableRow>
                   );

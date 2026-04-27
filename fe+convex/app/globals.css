@@ -5,10 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-geist-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-geist-mono: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-  --font-outfit: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-inter: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-app-sans: var(--font-inter), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-app-mono: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
   --background: #fafafa;
   --foreground: #111111;
   --card: #ffffff;
@@ -46,9 +44,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-app-sans);
+  --font-mono: var(--font-app-mono);
+  --font-heading: var(--font-app-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -98,7 +96,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
 }
 
 .auth-root {
@@ -155,7 +153,7 @@ select {
 }
 
 .landing-brand {
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -620,7 +618,7 @@ select {
 .platform-heading,
 .cta-heading {
   margin: 18px 0 0;
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: clamp(2.5rem, 6vw, 4.6rem);
   line-height: 0.98;
   letter-spacing: -0.05em;
@@ -732,7 +730,7 @@ select {
 
 .hero-title {
   margin: 24px 0 0;
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: clamp(4rem, 10vw, 7.2rem);
   line-height: 0.9;
   letter-spacing: -0.075em;
@@ -817,7 +815,7 @@ select {
 }
 
 .hero-stat-value {
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 1.8rem;
   font-weight: 600;
   letter-spacing: -0.05em;
@@ -896,7 +894,7 @@ select {
 
 .hero-stage-title {
   margin: 8px 0 0;
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 1.85rem;
   line-height: 1;
   letter-spacing: -0.05em;
@@ -1010,7 +1008,7 @@ select {
 }
 
 .hero-kpi-value {
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 2.3rem;
   line-height: 0.95;
   letter-spacing: -0.06em;
@@ -1118,7 +1116,7 @@ select {
 
 .capability-title {
   margin: 18px 0 0;
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 1.45rem;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -1197,7 +1195,7 @@ select {
 .platform-label-title {
   margin: 0;
   color: #000;
-  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 16px;
   font-weight: 300;
   letter-spacing: -1px;
@@ -1207,7 +1205,7 @@ select {
 .platform-label-desc {
   margin: 0;
   color: #000;
-  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 14px;
   font-weight: 300;
   line-height: 1.6;
@@ -1233,7 +1231,7 @@ select {
 }
 
 .proof-value {
-  font-family: var(--font-outfit), Outfit, system-ui, sans-serif;
+  font-family: var(--font-app-sans);
   font-size: 1.55rem;
   line-height: 1.05;
   letter-spacing: -0.05em;
