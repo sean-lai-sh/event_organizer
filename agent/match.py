@@ -20,9 +20,9 @@ image = build_image()
 
 
 MATCH_SYSTEM_PROMPT = """\
-You are matching contacts to a student club event. For each contact, score them 1-10
-for relevance to this event. Consider their career_profile (skills, interests,
-experience), contact_type, and the event description/target_profile.
+You are matching speaker candidates to a student club event. For each candidate,
+score them 1-10 for relevance to this event. Consider their speaker_info,
+work_history, profile details, and the event description/target_profile.
 
 Return valid JSON — an array of objects with these fields:
 - attio_record_id: string
@@ -34,13 +34,19 @@ Sort by score descending. Only include contacts scoring 5 or above."""
 
 def _build_contact_summary(contact: dict) -> dict:
     props = contact.get("properties", {})
+    speaker = contact.get("speaker", {})
     return {
         "attio_record_id": contact["id"],
+        "attio_speakers_entry_id": contact.get("speaker_entry_id"),
         "name": f"{props.get('firstname', '')} {props.get('lastname', '')}".strip(),
         "email": props.get("email", ""),
-        "contact_type": props.get("contact_type", ""),
-        "career_profile": props.get("career_profile", ""),
-        "outreach_status": props.get("outreach_status", ""),
+        "company": props.get("company", ""),
+        "job_title": props.get("job_title", ""),
+        "description": props.get("description", ""),
+        "speaker_status": speaker.get("status", ""),
+        "speaker_source": speaker.get("source", ""),
+        "speaker_info": speaker.get("speaker_info", ""),
+        "work_history": speaker.get("work_history", ""),
     }
 
 
