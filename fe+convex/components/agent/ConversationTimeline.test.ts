@@ -13,6 +13,7 @@
  *   5. initRunState        – bootstrapping isRunning from Convex on direct-URL nav
  *   6. deriveTitle         – thread title truncation
  *   7. formatTraceKind     – trace step label formatting
+ *   8. selectResolvedApprovals – approval-history filter + chronological sort
  */
 
 import { describe, test, expect } from "bun:test";
@@ -439,5 +440,79 @@ describe("formatTraceKind — trace label formatting", () => {
 
   test("handles already-capitalised input gracefully", () => {
     expect(formatTraceKind("Thinking")).toBe("Thinking");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  8. selectResolvedApprovals                                                */
+/*                                                                            */
+/*  Resolved approvals (status approved/rejected) render at the TOP of the   */
+/*  thread as a single-line history. They must be sorted by createdAt        */
+/*  ascending so the order is stable and chronological regardless of the     */
+/*  shape Convex returns. Pending approvals must NEVER leak into the         */
+/*  history list — they live in the composer prompt.                         */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+interface MinimalApproval {
+  id: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: number;
+}
+
+function selectResolvedApprovals<T extends MinimalApproval>(approvals: T[]): T[] {
+  return approvals
+    .filter((a) => a.status !== "pending")
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+describe("selectResolvedApprovals — approval history filter + sort", () => {
+  test("excludes pending approvals (they belong in the composer prompt, not the history)", () => {
+    const result = selectResolvedApprovals([
+      { id: "a", status: "pending", createdAt: 1 },
+      { id: "b", status: "approved", createdAt: 2 },
+      { id: "c", status: "rejected", createdAt: 3 },
+    ]);
+    expect(result.map((a) => a.id)).toEqual(["b", "c"]);
+  });
+
+  test("sorts ascending by createdAt regardless of input order", () => {
+    const result = selectResolvedApprovals([
+      { id: "late", status: "approved", createdAt: 300 },
+      { id: "early", status: "rejected", createdAt: 100 },
+      { id: "mid", status: "approved", createdAt: 200 },
+    ]);
+    expect(result.map((a) => a.id)).toEqual(["early", "mid", "late"]);
+  });
+
+  test("returns [] when there are no approvals at all", () => {
+    expect(selectResolvedApprovals([])).toEqual([]);
+  });
+
+  test("returns [] when every approval is still pending", () => {
+    expect(
+      selectResolvedApprovals([
+        { id: "a", status: "pending", createdAt: 1 },
+        { id: "b", status: "pending", createdAt: 2 },
+      ]),
+    ).toEqual([]);
+  });
+
+  test("preserves both approved and rejected entries — they are both 'history'", () => {
+    const result = selectResolvedApprovals([
+      { id: "approved", status: "approved", createdAt: 10 },
+      { id: "rejected", status: "rejected", createdAt: 20 },
+    ]);
+    expect(result).toHaveLength(2);
+    expect(result.map((a) => a.status)).toEqual(["approved", "rejected"]);
+  });
+
+  test("does not mutate the input array", () => {
+    const input: MinimalApproval[] = [
+      { id: "b", status: "approved", createdAt: 200 },
+      { id: "a", status: "approved", createdAt: 100 },
+    ];
+    const snapshot = input.map((a) => a.id);
+    selectResolvedApprovals(input);
+    expect(input.map((a) => a.id)).toEqual(snapshot);
   });
 });

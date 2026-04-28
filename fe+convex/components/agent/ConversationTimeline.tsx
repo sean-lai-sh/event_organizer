@@ -313,7 +313,9 @@ export function ConversationTimeline({
 
   const activeComposerApproval = getActiveComposerApproval(approvals);
   const pendingApprovalCount = countPendingApprovals(approvals);
-  const resolvedApprovals = approvals.filter((a) => a.status !== "pending");
+  const resolvedApprovals = approvals
+    .filter((a) => a.status !== "pending")
+    .sort((a, b) => a.createdAt - b.createdAt);
 
   // Only suppress ThinkingBubble once a streaming message has actual text to show.
   const hasStreamingBubble = messages.some(
@@ -363,6 +365,17 @@ export function ConversationTimeline({
           ))
         ) : (
           <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
+            {resolvedApprovals.length > 0 && (
+              <div className="space-y-1.5">
+                {resolvedApprovals.map((approval) => (
+                  <ResolvedApprovalCard
+                    key={approval.id}
+                    approval={approval}
+                  />
+                ))}
+              </div>
+            )}
+
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
@@ -389,13 +402,6 @@ export function ConversationTimeline({
             {displayTraces.length > 0 && (
               <InlineTraceList traces={displayTraces} isRunning={isRunning} />
             )}
-
-            {resolvedApprovals.map((approval) => (
-              <ResolvedApprovalCard
-                key={approval.id}
-                approval={approval}
-              />
-            ))}
           </div>
         )}
       </div>
