@@ -12,13 +12,10 @@ export function ResolvedApprovalCard({ approval }: ResolvedApprovalCardProps) {
   const statusLabel = isApproved ? "Approved" : "Rejected";
   const StatusIcon = isApproved ? Check : X;
   const statusTone = isApproved ? "text-[#0A0A0A]" : "text-[#999999]";
+  const actionLabel = approval.requestedAction.trim() || "Approval required";
 
   return (
-    <div
-      role="status"
-      aria-label={`${statusLabel}: ${approval.requestedAction}`}
-      className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] px-3 py-1.5"
-    >
+    <div className="mx-auto flex max-w-[520px] items-center gap-2 rounded-[8px] border border-[#E0E0E0] bg-[#FFFFFF] px-3 py-1.5">
       <StatusIcon
         className={`h-3.5 w-3.5 shrink-0 ${statusTone}`}
         strokeWidth={2.2}
@@ -28,7 +25,7 @@ export function ResolvedApprovalCard({ approval }: ResolvedApprovalCardProps) {
       </span>
       <span className="text-[11.5px] text-[#999999]">·</span>
       <p className="truncate text-[12.5px] text-[#111111]">
-        {approval.requestedAction}
+        {actionLabel}
       </p>
     </div>
   );
