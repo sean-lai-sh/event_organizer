@@ -26,6 +26,7 @@ def build_image(*, extra_pip: Iterable[str] = (), add_prompts: bool = False) -> 
             "pydantic[email]>=2.0",
             "fastmcp>=2.0",
             "fastapi[standard]",
+            "agentmail",
             *list(extra_pip),
         )
         .add_local_python_source("helper", "runtime", "apps", "core")
