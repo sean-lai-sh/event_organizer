@@ -54,18 +54,7 @@ export const listOutreachThreads = query({
     filter: v.optional(inboundStateFilterValidator),
   },
   handler: async (ctx, { filter }) => {
-    const [rows, receipts] = await Promise.all([
-      ctx.db.query("event_outreach").collect(),
-      ctx.db.query("inbound_receipts").collect(),
-    ]);
-
-    const receiptsByThreadId = new Map<string, typeof receipts>();
-    for (const receipt of receipts) {
-      if (!receipt.thread_id) continue;
-      const threadReceipts = receiptsByThreadId.get(receipt.thread_id) ?? [];
-      threadReceipts.push(receipt);
-      receiptsByThreadId.set(receipt.thread_id, threadReceipts);
-    }
+    const rows = await ctx.db.query("event_outreach").collect();
 
     const filteredRows = rows.filter((row) => {
       if (!filter || filter === "all") return true;
@@ -74,10 +63,17 @@ export const listOutreachThreads = query({
 
     const threadRows = await Promise.all(
       filteredRows.map(async (row) => {
-        const event = await ctx.db.get(row.event_id);
-        const threadReceipts = row.agentmail_thread_id
-          ? receiptsByThreadId.get(row.agentmail_thread_id) ?? []
-          : [];
+        const [event, threadReceipts] = await Promise.all([
+          ctx.db.get(row.event_id),
+          row.agentmail_thread_id
+            ? ctx.db
+                .query("inbound_receipts")
+                .withIndex("by_thread_id", (q) =>
+                  q.eq("thread_id", row.agentmail_thread_id)
+                )
+                .collect()
+            : Promise.resolve([]),
+        ]);
         const lastActivityAt = getLastActivityAt(row, threadReceipts);
         return {
           _id: row._id,
@@ -110,15 +106,20 @@ export const getOutreachThread = query({
     const row = await ctx.db.get(id);
     if (!row) return null;
 
-    const [event, receipts] = await Promise.all([
+    const [event, rawReceipts] = await Promise.all([
       ctx.db.get(row.event_id),
-      ctx.db.query("inbound_receipts").collect(),
+      row.agentmail_thread_id
+        ? ctx.db
+            .query("inbound_receipts")
+            .withIndex("by_thread_id", (q) =>
+              q.eq("thread_id", row.agentmail_thread_id)
+            )
+            .collect()
+        : Promise.resolve([]),
     ]);
 
     const threadReceipts = row.agentmail_thread_id
-      ? receipts
-          .filter((receipt) => receipt.thread_id === row.agentmail_thread_id)
-          .sort((left, right) => {
+      ? rawReceipts.sort((left, right) => {
             const timeDelta = left.received_at - right.received_at;
             if (timeDelta !== 0) return timeDelta;
             const updatedLeft = left.updated_at ?? left.completed_at ?? left.processing_started_at ?? 0;

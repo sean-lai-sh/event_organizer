@@ -226,7 +226,9 @@ export default defineSchema({
     processing_started_at: v.optional(v.number()),
     completed_at: v.optional(v.number()),
     updated_at: v.optional(v.number()),
-  }).index("by_message_id", ["message_id"]),
+  })
+    .index("by_message_id", ["message_id"])
+    .index("by_thread_id", ["thread_id"]),
 
   invites: defineTable({
     code: v.string(),
