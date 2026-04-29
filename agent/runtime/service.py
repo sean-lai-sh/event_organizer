@@ -102,6 +102,11 @@ def _make_approval_title(action: ToolAction) -> str:
         )
         base = f"Book Leslie eLab Lean/Launchpad: {title}"
         return f"{base} ({slot_label})" if slot_label else base
+    if action.name == "send_outreach_email":
+        recipient = tool_input.get("recipient_name") or tool_input.get("recipient_email", "")
+        subject = tool_input.get("subject", "")
+        base = f"Send email to {recipient}" if recipient else "Send outreach email"
+        return f"{base}: {subject}" if subject else base
     return f"Approval required: {action.name}"
 
 
@@ -455,7 +460,7 @@ class AgentRuntimeService:
             thread_external_id=run.thread_external_id,
             run_external_id=run.external_id,
             status=ApprovalStatus.PENDING,
-            action_type=action.action_class.value,
+            action_type=action.name,
             title=_make_approval_title(action),
             summary=decision.reason,
             risk_level=decision.risk_level,

@@ -38,10 +38,18 @@ export const FIELD_LABELS: Record<string, string> = {
   booked_time: "Start Time",
   booked_end_time: "End Time",
   page_url: "Booking Page",
+  // Email outreach
+  recipient_name: "Recipient",
+  recipient_email: "To",
+  subject: "Subject",
+  message_body: "Message",
+  sender_name: "From",
+  sender_email: "Sender Email",
+  signature: "Signature",
 };
 
 // Keys whose values can be long enough to warrant clamping in the receipt UI.
-const LONG_TEXT_KEYS = new Set(["description", "summary", "notes"]);
+const LONG_TEXT_KEYS = new Set(["description", "summary", "notes", "message_body", "signature"]);
 
 // Keys that should be interpreted as a date (YYYY-MM-DD or full ISO string).
 const DATE_KEYS = new Set(["event_date", "date"]);

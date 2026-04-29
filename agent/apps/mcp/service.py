@@ -34,6 +34,7 @@ try:
         normalize_speaker_source,
         normalize_speaker_status,
     )
+    from helper.tools import get_agentmail_client
 except ModuleNotFoundError:  # pragma: no cover - package import fallback
     from agent.core.clients.attio import (  # type: ignore
         AttioClient,
@@ -46,6 +47,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import fallback
         normalize_speaker_source,
         normalize_speaker_status,
     )
+    from agent.helper.tools import get_agentmail_client  # type: ignore
 
 mcp = FastMCP("event-organizer")
 
@@ -643,6 +645,51 @@ async def get_event_room_booking(event_id: str) -> dict | None:
         return await convex.get_event_room_booking(event_id)
 
 
+# ── Outreach email ────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+async def send_outreach_email(
+    recipient_name: str,
+    recipient_email: str,
+    subject: str,
+    message_body: str,
+    sender_name: str,
+    sender_email: str,
+    signature: str,
+) -> dict:
+    """Send a single outreach email via AgentMail.
+
+    Approval-gated: the runtime pauses before this executes. The user can
+    review and edit all fields before confirming. On approval, the message is
+    sent from the configured AgentMail inbox and the thread_id is returned so
+    replies can be tracked.
+    """
+    import os
+
+    inbox_id = os.environ.get("AGENTMAIL_INBOX_ID")
+    if not inbox_id:
+        raise ValueError("AGENTMAIL_INBOX_ID environment variable is not set")
+
+    full_body = f"{message_body}\n\n{signature}".strip()
+    client = get_agentmail_client()
+    message = client.inboxes.messages.send(
+        inbox_id=inbox_id,
+        to=recipient_email,
+        subject=subject,
+        text=full_body,
+    )
+
+    return {
+        "thread_id": message.thread_id,
+        "recipient_name": recipient_name,
+        "recipient_email": recipient_email,
+        "subject": subject,
+        "sender_name": sender_name,
+        "sender_email": sender_email,
+    }
+
+
 __all__ = [
     "AttioClient",
     "ConvexClient",
@@ -675,4 +722,6 @@ __all__ = [
     "find_oncehub_slots",
     "book_oncehub_room",
     "get_event_room_booking",
+    # outreach email
+    "send_outreach_email",
 ]

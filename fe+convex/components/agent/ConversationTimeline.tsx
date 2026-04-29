@@ -60,6 +60,7 @@ type ConvexApproval = {
   status: string;
   risk_level: string;
   requested_at: number;
+  action_type?: string;
 };
 
 type ConvexTrace = {
@@ -116,6 +117,7 @@ function mapConvexApproval(a: ConvexApproval): AgentApproval {
     proposedPayload,
     status: a.status as AgentApproval["status"],
     createdAt: a.requested_at,
+    actionType: a.action_type,
   };
 }
 

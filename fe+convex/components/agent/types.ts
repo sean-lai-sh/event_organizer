@@ -113,6 +113,7 @@ export interface AgentApproval {
   proposedPayload: Record<string, unknown>;
   status: "pending" | "approved" | "rejected";
   createdAt: number;
+  actionType?: string;
 }
 
 export interface ContextLink {

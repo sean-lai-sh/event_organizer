@@ -166,7 +166,11 @@ export interface DecisionResult {
 export async function runDecision(args: {
   approvalId: string;
   decision: "approved" | "rejected";
-  submit: (approvalId: string, decision: "approved" | "rejected") => Promise<void>;
+  submit: (
+    approvalId: string,
+    decision: "approved" | "rejected",
+    overrideArgs?: Record<string, unknown>,
+  ) => Promise<void>;
   /**
    * Mutable ref holding the in-flight flag. Checked and set synchronously so
    * two click handlers fired in the same tick cannot both pass the gate.
@@ -175,12 +179,14 @@ export async function runDecision(args: {
   setLoading?: (next: boolean) => void;
   onResolved?: (decision: "approved" | "rejected") => void | Promise<void>;
   onError?: (error: unknown) => void;
+  /** Optional field overrides to merge into the tool payload before execution. */
+  overrideArgs?: Record<string, unknown>;
 }): Promise<DecisionResult> {
   if (args.lock.current) return { status: "skipped" };
   args.lock.current = true;
   args.setLoading?.(true);
   try {
-    await args.submit(args.approvalId, args.decision);
+    await args.submit(args.approvalId, args.decision, args.overrideArgs);
     await args.onResolved?.(args.decision);
     return { status: "submitted", decision: args.decision };
   } catch (error) {
