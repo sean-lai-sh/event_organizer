@@ -39,7 +39,10 @@ DEFAULT_SYSTEM_PROMPT = (
     "If no location is specified, default to '16 Washington Place'. "
     "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
     "to the user — use natural language equivalents instead. "
-    "When updating an event, confirm which fields will change before calling update_event_safe."
+    "When updating an event, confirm which fields will change before calling update_event_safe. "
+    "When the user asks to draft or send an outreach email, call `send_outreach_email` with all "
+    "required fields. The send is approval-gated — compose a complete draft and let the user "
+    "review before it is delivered."
 )
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
@@ -355,6 +358,27 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
                 "event_id": {"type": "string"},
             },
             "required": ["event_id"],
+        },
+    },
+    {
+        "name": "send_outreach_email",
+        "description": (
+            "Send a single outreach email via AgentMail. "
+            "Approval-gated: the user will review and can edit all fields before the email is sent. "
+            "Use this when the user asks to draft or send an email to a contact."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "recipient_name":  {"type": "string", "description": "Full name of the recipient"},
+                "recipient_email": {"type": "string", "description": "Recipient email address"},
+                "subject":         {"type": "string", "description": "Email subject line"},
+                "message_body":    {"type": "string", "description": "Main body of the email (without signature)"},
+                "sender_name":     {"type": "string", "description": "Display name of the sender"},
+                "sender_email":    {"type": "string", "description": "Sender email address"},
+                "signature":       {"type": "string", "description": "Email sign-off / signature block"},
+            },
+            "required": ["recipient_name", "recipient_email", "subject", "message_body", "sender_name", "sender_email", "signature"],
         },
     },
 ]
