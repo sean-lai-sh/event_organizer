@@ -3,9 +3,12 @@
 from apps.mcp.service import (
     AttioClient,
     ConvexClient,
+    OnceHubClient,
     append_person_note,
+    book_oncehub_room,
     create_event,
     ensure_speaker_for_person,
+    find_oncehub_slots,
     flatten_record,
     flatten_speaker_entry,
     get_attendance_dashboard,
@@ -14,6 +17,7 @@ from apps.mcp.service import (
     get_event_attendance,
     get_event_inbound_status,
     get_event_outreach,
+    get_event_room_booking,
     get_person,
     get_speaker,
     list_events,
@@ -30,6 +34,7 @@ from apps.mcp.service import (
 __all__ = [
     "AttioClient",
     "ConvexClient",
+    "OnceHubClient",
     "flatten_record",
     "flatten_speaker_entry",
     "mcp",
@@ -55,6 +60,10 @@ __all__ = [
     "get_event_attendance",
     "create_event",
     "update_event_safe",
+    # oncehub
+    "find_oncehub_slots",
+    "book_oncehub_room",
+    "get_event_room_booking",
     # outreach email
     "send_outreach_email",
 ]
