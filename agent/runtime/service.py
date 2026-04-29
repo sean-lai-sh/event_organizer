@@ -459,7 +459,7 @@ class AgentRuntimeService:
             thread_external_id=run.thread_external_id,
             run_external_id=run.external_id,
             status=ApprovalStatus.PENDING,
-            action_type=action.action_class.value,
+            action_type=action.name,
             title=_make_approval_title(action),
             summary=decision.reason,
             risk_level=decision.risk_level,
