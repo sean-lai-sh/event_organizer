@@ -12,6 +12,7 @@ SECRETS = {
     "match": "doppler-v1",
     "outreach": "doppler-v1",
     "replies": "doppler-v1",
+    "mcp": "doppler-v1",
 }
 
 
