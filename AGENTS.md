@@ -293,6 +293,57 @@ Do not write historical labels like `warm_intro`, `agent_outreach`, or `inbound`
 4. The client renders the normalized run, message, artifact, and approval state from Convex.
 5. On approval, the client submits the decision back to Modal and the run resumes.
 
+### New-thread first-message path (web)
+
+This path is distinct from a send on an existing thread and must behave exactly as follows. Deviating from this sequence produces a skeleton-flash or silent run failure.
+
+**Problem context:** `ConversationTimeline` on `/agent` (no thread) and `ConversationTimeline` on `/agent/<id>` (new thread) are different React component instances. All local state — `isRunning`, `pendingMessage`, `tracesVisible` — is lost when `router.push` unmounts the first instance and mounts the second. If `startRun` is called from the first instance it may also fail silently with no way for the second instance to surface the error.
+
+**Required sequence:**
+
+```
+User types on /agent (thread = null)
+  │
+  ├─ handleSend fires
+  │     setIsRunning(true), setPendingMessage(text), setTracesVisible(true)
+  │     await createThread(title)          ← backend creates thread, Convex synced
+  │     runThreadIdRef.current = thread.id ← prevents thread-change guard from clearing state
+  │     setPendingRun(thread.id, text)     ← hands off to pendingRunState module
+  │     onThreadCreated(thread)            ← router.push('/agent/<id>')
+  │     return                             ← old instance does NOT call startRun
+  │
+  └─ New ConversationTimeline mounts on /agent/<id>
+        useEffect (pendingRunState pickup, declared BEFORE thread-change guard):
+          consumePendingRun(thread.id)     → returns text, clears store
+          messagesAtSend.current = 0
+          runThreadIdRef.current = thread.id   ← guard reads this next
+          setPendingMessage(text)          ← PendingConversationView shows immediately
+          setIsRunning(true)
+          setTracesVisible(true)
+          startRun(thread.id, text)        ← new instance owns the run
+            .catch → clears all optimistic state (user can retry)
+
+        useEffect (thread-change guard, declared AFTER pickup):
+          thread.id === runThreadIdRef.current  → false → does NOT clear state
+```
+
+**Key invariants:**
+
+1. `createThread` is always awaited before `router.push`. The thread must exist in Convex before the new component subscribes to `getThreadState`.
+2. `startRun` is never called from the old component for the new-thread path. The new component owns it.
+3. The pending-run pickup effect must be declared before the thread-change guard in the component body. Both are `useEffect`; React fires them in declaration order within the same render, so the pickup sets `runThreadIdRef.current` before the guard reads it.
+4. `consumePendingRun` is idempotent — it clears the store on first read. Navigating back to the thread later will not trigger a duplicate run.
+5. `setPendingRun` overwrites any previous entry. If the user somehow creates two threads in rapid succession only the second pending run survives.
+
+**Files:**
+
+| File | Role |
+|---|---|
+| `fe+convex/components/agent/pendingRunState.ts` | Module-level `setPendingRun` / `consumePendingRun` store |
+| `fe+convex/components/agent/ConversationTimeline.tsx` | Pickup effect + `handleSend` early-return |
+| `fe+convex/components/agent/pendingRunState.test.ts` | Store contract tests |
+| `fe+convex/components/agent/ConversationTimeline.test.ts` | Section 9 — `pickupPendingRun` handoff logic |
+
 Current MCP tool surface:
 
 - Attio `people` (identity only): `search_people`, `get_person`, `upsert_person`, `append_person_note`
@@ -353,6 +404,10 @@ OnceHub data model:
 - Do not move tool policy or guardrails into Next.js or Discord.
 - Do not expose raw Anthropic Agent SDK event payloads as product contracts.
 - Do not introduce a second document that competes with `PLAN.md` as the data-contract source of truth.
+- Do not call `startRun` from the old `ConversationTimeline` instance when creating a new thread. Use `setPendingRun` + early return so the new instance on `/agent/<id>` owns the run. Calling `startRun` from the old instance means errors are silently lost and the new component cannot recover to a usable state. See "New-thread first-message path" above.
+- Do not move the pending-run pickup `useEffect` to after the thread-change guard in `ConversationTimeline`. Declaration order controls which effect sets `runThreadIdRef.current` first; reversing the order causes the guard to clear the optimistic state the pickup just established.
+- Do not render resolved approvals (status `approved` or `rejected`) at the top of the thread as a grouped block. They must appear inline in the chronological message timeline, merged with messages by `createdAt`, so the approval record sits at the point in the conversation where the agent paused.
+- Do not move the pending approval (status `pending`) into the message timeline. Pending approvals must stay in `ComposerApprovalPrompt` pinned above the composer input. This split is intentional: resolved approvals are history, pending approvals are an action the user must take now.
 
 ## MVP Scope Guardrail
 
