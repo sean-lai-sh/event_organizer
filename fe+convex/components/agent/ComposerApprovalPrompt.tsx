@@ -15,28 +15,23 @@ interface ComposerApprovalPromptProps {
   approval: AgentApproval;
   pendingCount: number;
   onResolved?: (decision: "approved" | "rejected") => void | Promise<void>;
-  onTellMeSomethingElse?: () => void;
+  onRejectedWithMessage?: (message: string) => void | Promise<void>;
 }
 
-/**
- * Compact approval strip anchored above the composer.
- *
- * Replaces the prior large inline approval card. Visually monochrome and
- * intentionally low-key so the surface reads as part of the composer rather
- * than a second chat bubble. Raw payload JSON is hidden behind a Details
- * disclosure that is closed by default.
- */
 export function ComposerApprovalPrompt({
   approval,
   pendingCount,
   onResolved,
-  onTellMeSomethingElse,
+  onRejectedWithMessage,
 }: ComposerApprovalPromptProps) {
   const [loading, setLoading] = useState(false);
   const [longExpanded, setLongExpanded] = useState<Record<string, boolean>>({});
+  const [inputMode, setInputMode] = useState(false);
+  const [inputText, setInputText] = useState("");
   // Ref-based lock so two clicks dispatched in the same React tick — before
   // `disabled={loading}` propagates — still cannot double-submit.
   const lockRef = useRef(false);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const summary = summarizeApproval(approval);
   const fields = extractApprovalFields(approval.proposedPayload);
   const olderPending = Math.max(0, pendingCount - 1);
@@ -46,8 +41,13 @@ export function ComposerApprovalPrompt({
   }
 
   async function handleCta(cta: ComposerCta) {
+    if (cta === "tell_me_something_else") {
+      setInputMode(true);
+      setTimeout(() => messageInputRef.current?.focus(), 0);
+      return;
+    }
     const decision = decisionForCta(cta);
-    const result = await runDecision({
+    await runDecision({
       approvalId: approval.id,
       decision,
       submit: submitApproval,
@@ -55,16 +55,21 @@ export function ComposerApprovalPrompt({
       setLoading,
       onResolved,
     });
-    // Only seed the composer / return focus when the rejection actually
-    // reached the backend. A skipped (already in-flight) or failed submit
-    // means the approval is still pending on the server, so behaving as if
-    // it had resolved would be misleading.
-    if (
-      cta === "tell_me_something_else" &&
-      result.status === "submitted" &&
-      result.decision === "rejected"
-    ) {
-      onTellMeSomethingElse?.();
+  }
+
+  async function handleMessageSubmit() {
+    const text = inputText.trim();
+    if (!text || loading) return;
+    const result = await runDecision({
+      approvalId: approval.id,
+      decision: "rejected",
+      submit: submitApproval,
+      lock: lockRef,
+      setLoading,
+      onResolved,
+    });
+    if (result.status === "submitted") {
+      onRejectedWithMessage?.(text);
     }
   }
 
@@ -89,36 +94,6 @@ export function ComposerApprovalPrompt({
         {summary.detail && (
           <p className="truncate text-[11.5px] text-[#777777]">{summary.detail}</p>
         )}
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => handleCta("yes")}
-            disabled={loading}
-            className="flex h-7 items-center rounded-[6px] bg-[#0A0A0A] px-3 text-[12px] font-medium text-white transition-colors hover:bg-[#222222] active:scale-[0.97] disabled:opacity-40"
-            style={{ transition: "transform 120ms ease-out, background-color 100ms ease-out" }}
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            onClick={() => handleCta("no")}
-            disabled={loading}
-            className="flex h-7 items-center rounded-[6px] border border-[#E0E0E0] px-3 text-[12px] font-medium text-[#333333] transition-colors hover:border-[#CFCFCF] hover:bg-[#F4F4F4] active:scale-[0.97] disabled:opacity-40"
-            style={{ transition: "transform 120ms ease-out, background-color 100ms ease-out" }}
-          >
-            No
-          </button>
-          <button
-            type="button"
-            onClick={() => handleCta("tell_me_something_else")}
-            disabled={loading}
-            className="flex h-7 items-center rounded-[6px] border border-transparent px-2 text-[12px] font-medium text-[#555555] transition-colors hover:border-[#E0E0E0] hover:bg-[#F4F4F4] active:scale-[0.97] disabled:opacity-40"
-            style={{ transition: "transform 120ms ease-out, background-color 100ms ease-out" }}
-          >
-            Tell me something else
-          </button>
-        </div>
 
         {fields.length > 0 && (
           <dl className="mt-1 divide-y divide-[#F1F1F1] rounded-[6px] border border-[#EBEBEB] bg-[#FAFAFA] px-3 py-1">
@@ -152,6 +127,79 @@ export function ComposerApprovalPrompt({
               );
             })}
           </dl>
+        )}
+
+        {inputMode ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              ref={messageInputRef}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleMessageSubmit();
+                }
+                if (e.key === "Escape") {
+                  setInputMode(false);
+                  setInputText("");
+                }
+              }}
+              placeholder="What should be different?"
+              rows={2}
+              disabled={loading}
+              className="w-full resize-none rounded-[6px] border border-[#E0E0E0] bg-[#FAFAFA] px-3 py-2 text-[12.5px] text-[#111111] placeholder-[#BBBBBB] outline-none focus:border-[#CFCFCF] disabled:opacity-40"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleMessageSubmit}
+                disabled={loading || !inputText.trim()}
+                className="flex h-7 items-center rounded-[6px] bg-[#0A0A0A] px-3 text-[12px] font-medium text-white transition-colors hover:bg-[#222222] active:scale-[0.97] disabled:opacity-40"
+                style={{ transition: "transform 120ms ease-out, background-color 100ms ease-out" }}
+              >
+                Send
+              </button>
+              <button
+                type="button"
+                onClick={() => { setInputMode(false); setInputText(""); }}
+                disabled={loading}
+                className="text-[11.5px] text-[#999999] transition-colors hover:text-[#555555] disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleCta("yes")}
+              disabled={loading}
+              className="flex h-7 items-center rounded-[6px] bg-[#0A0A0A] px-3 text-[12px] font-medium text-white transition-colors hover:bg-[#222222] active:scale-[0.97] disabled:opacity-40"
+              style={{ transition: "transform 120ms ease-out, background-color 100ms ease-out" }}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCta("no")}
+              disabled={loading}
+              className="flex h-7 items-center rounded-[6px] border border-[#E0E0E0] px-3 text-[12px] font-medium text-[#333333] transition-colors hover:border-[#CFCFCF] hover:bg-[#F4F4F4] active:scale-[0.97] disabled:opacity-40"
+              style={{ transition: "transform 120ms ease-out, background-color 100ms ease-out" }}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCta("tell_me_something_else")}
+              disabled={loading}
+              className="flex h-7 items-center rounded-[6px] border border-transparent px-2 text-[12px] font-medium text-[#555555] transition-colors hover:border-[#E0E0E0] hover:bg-[#F4F4F4] active:scale-[0.97] disabled:opacity-40"
+              style={{ transition: "transform 120ms ease-out, background-color 100ms ease-out" }}
+            >
+              Tell me something else
+            </button>
+          </div>
         )}
       </div>
 
