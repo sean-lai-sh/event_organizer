@@ -360,6 +360,19 @@ export function ConversationTimeline({
     .filter((a) => a.status !== "pending")
     .sort((a, b) => a.createdAt - b.createdAt);
 
+  // Merge messages and resolved approvals into a single chronological list so
+  // each resolved approval sits at the point in the conversation where the
+  // agent paused — not pinned to the top of the thread.  Pending approvals are
+  // NOT included here; they live in ComposerApprovalPrompt above the input.
+  type TimelineItem =
+    | { kind: "message"; id: string; createdAt: number; message: AgentMessage }
+    | { kind: "approval"; id: string; createdAt: number; approval: AgentApproval };
+
+  const timeline: TimelineItem[] = [
+    ...messages.map((m) => ({ kind: "message" as const, id: m.id, createdAt: m.createdAt, message: m })),
+    ...resolvedApprovals.map((a) => ({ kind: "approval" as const, id: a.id, createdAt: a.createdAt, approval: a })),
+  ].sort((a, b) => a.createdAt - b.createdAt);
+
   // Only suppress ThinkingBubble once a streaming message has actual text to show.
   const hasStreamingBubble = messages.some(
     (m) => m.isStreaming && m.content.some((b) => b.type === "text" && b.text.length > 0),
@@ -408,20 +421,13 @@ export function ConversationTimeline({
           ))
         ) : (
           <div className="mx-auto max-w-[700px] space-y-4 px-5 py-5">
-            {resolvedApprovals.length > 0 && (
-              <div className="space-y-1.5">
-                {resolvedApprovals.map((approval) => (
-                  <ResolvedApprovalCard
-                    key={approval.id}
-                    approval={approval}
-                  />
-                ))}
-              </div>
+            {timeline.map((item) =>
+              item.kind === "message" ? (
+                <MessageBubble key={item.id} message={item.message} />
+              ) : (
+                <ResolvedApprovalCard key={item.id} approval={item.approval} />
+              )
             )}
-
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
 
             {pendingMessage && (
               <div className="flex justify-end gap-3">
