@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { AgentApproval } from "./types";
-import { extractInnerPayload } from "./approvalPayload";
+import { extractApprovalFields } from "./approvalPayload";
 import { submitApproval } from "./adapters/runtime";
 import {
   decisionForCta,
@@ -33,12 +33,17 @@ export function ComposerApprovalPrompt({
   onTellMeSomethingElse,
 }: ComposerApprovalPromptProps) {
   const [loading, setLoading] = useState(false);
+  const [longExpanded, setLongExpanded] = useState<Record<string, boolean>>({});
   // Ref-based lock so two clicks dispatched in the same React tick — before
   // `disabled={loading}` propagates — still cannot double-submit.
   const lockRef = useRef(false);
   const summary = summarizeApproval(approval);
-  const inner = extractInnerPayload(approval.proposedPayload);
+  const fields = extractApprovalFields(approval.proposedPayload);
   const olderPending = Math.max(0, pendingCount - 1);
+
+  function toggleLong(key: string) {
+    setLongExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   async function handleCta(cta: ComposerCta) {
     const decision = decisionForCta(cta);
@@ -115,16 +120,38 @@ export function ComposerApprovalPrompt({
           </button>
         </div>
 
-        {Object.keys(inner).length > 0 && (
-          <details className="group mt-0.5">
-            <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-[#999999] outline-none transition-colors hover:text-[#555555]">
-              <span className="inline-block transition-transform group-open:rotate-90">›</span>
-              Details
-            </summary>
-            <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-[6px] border border-[#EBEBEB] bg-[#FAFAFA] px-2.5 py-1.5 font-mono text-[10.5px] text-[#555555]">
-              {JSON.stringify(inner, null, 2)}
-            </pre>
-          </details>
+        {fields.length > 0 && (
+          <dl className="mt-1 divide-y divide-[#F1F1F1] rounded-[6px] border border-[#EBEBEB] bg-[#FAFAFA] px-3 py-1">
+            {fields.map((f) => {
+              const expanded = longExpanded[f.key] === true;
+              const clamped = f.isLong && f.displayValue.length > 200;
+              const shown =
+                clamped && !expanded
+                  ? f.displayValue.slice(0, 200).trimEnd() + "…"
+                  : f.displayValue;
+              return (
+                <div key={f.key} className="flex gap-3 py-1.5">
+                  <dt className="w-[110px] shrink-0 text-[11px] font-medium uppercase tracking-wide text-[#999999]">
+                    {f.label}
+                  </dt>
+                  <dd className="flex-1 text-[12px] leading-snug text-[#111111]">
+                    <span className={f.isLong ? "whitespace-pre-wrap break-words" : "break-words"}>
+                      {shown}
+                    </span>
+                    {clamped && (
+                      <button
+                        type="button"
+                        onClick={() => toggleLong(f.key)}
+                        className="ml-2 text-[11px] font-medium text-[#555555] underline-offset-2 hover:underline"
+                      >
+                        {expanded ? "Show less" : "Show more"}
+                      </button>
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
         )}
       </div>
 
