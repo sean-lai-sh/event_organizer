@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { AgentApproval } from "./types";
 import { extractApprovalFields, extractInnerPayload } from "./approvalPayload";
 import { submitApproval } from "./adapters/runtime";
@@ -136,8 +138,11 @@ export function ComposerApprovalPrompt({
         {fields.length > 0 && !editMode && (
           <dl className="mt-1 divide-y divide-[#F1F1F1] rounded-[6px] border border-[#EBEBEB] bg-[#FAFAFA] px-3 py-1">
             {fields.map((f) => {
+              const isRichField = isEmailApproval && f.key === "message_body";
+              // For email body fields always show full content; clamp others as before
+              const neverClamp = isEmailApproval && (f.key === "message_body" || f.key === "signature");
               const expanded = longExpanded[f.key] === true;
-              const clamped = f.isLong && f.displayValue.length > 200;
+              const clamped = !neverClamp && f.isLong && f.displayValue.length > 200;
               const shown =
                 clamped && !expanded
                   ? f.displayValue.slice(0, 200).trimEnd() + "…"
@@ -148,17 +153,27 @@ export function ComposerApprovalPrompt({
                     {f.label}
                   </dt>
                   <dd className="flex-1 text-[12px] leading-snug text-[#111111]">
-                    <span className={f.isLong ? "whitespace-pre-wrap break-words" : "break-words"}>
-                      {shown}
-                    </span>
-                    {clamped && (
-                      <button
-                        type="button"
-                        onClick={() => toggleLong(f.key)}
-                        className="ml-2 text-[11px] font-medium text-[#555555] underline-offset-2 hover:underline"
-                      >
-                        {expanded ? "Show less" : "Show more"}
-                      </button>
+                    {isRichField ? (
+                      <div className="break-words [&_strong]:font-semibold [&_em]:italic [&_u]:underline [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-0.5">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {f.displayValue}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <>
+                        <span className={f.isLong ? "whitespace-pre-wrap break-words" : "break-words"}>
+                          {shown}
+                        </span>
+                        {clamped && (
+                          <button
+                            type="button"
+                            onClick={() => toggleLong(f.key)}
+                            className="ml-2 text-[11px] font-medium text-[#555555] underline-offset-2 hover:underline"
+                          >
+                            {expanded ? "Show less" : "Show more"}
+                          </button>
+                        )}
+                      </>
                     )}
                   </dd>
                 </div>
