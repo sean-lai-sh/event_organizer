@@ -24,6 +24,9 @@ export default defineSchema({
   event_outreach: defineTable({
     event_id: v.id("events"),
     attio_record_id: v.string(),
+    attio_speakers_entry_id: v.optional(v.string()),
+    contact_name: v.optional(v.string()),
+    contact_email: v.optional(v.string()),
     suggested: v.boolean(),
     approved: v.boolean(),
     outreach_sent: v.boolean(),
