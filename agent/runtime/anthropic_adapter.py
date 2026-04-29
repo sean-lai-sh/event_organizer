@@ -40,9 +40,13 @@ DEFAULT_SYSTEM_PROMPT = (
     "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
     "to the user — use natural language equivalents instead. "
     "When updating an event, confirm which fields will change before calling update_event_safe. "
-    "When the user asks to draft or send an outreach email, call `send_outreach_email` with all "
-    "required fields. The send is approval-gated — compose a complete draft and let the user "
-    "review before it is delivered."
+    "When the user asks to draft or send an outreach email: first call `get_event` (or "
+    "`list_events` if no event id is known) to retrieve the full event details — title, date, "
+    "time, location, description, and type. Also call `get_person` or `search_people` to confirm "
+    "the recipient's name and email. Then call `send_outreach_email` with all required fields "
+    "fully populated using those details. Never draft an email with placeholder or missing event "
+    "details. The send is approval-gated — compose a complete draft so the user can review the "
+    "full content before it is delivered."
 )
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
