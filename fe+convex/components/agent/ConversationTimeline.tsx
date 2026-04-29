@@ -18,6 +18,7 @@ import {
   createThread,
   startRun,
 } from "./adapters/runtime";
+import { setPendingRun, consumePendingRun } from "./pendingRunState";
 
 interface ConversationTimelineProps {
   thread: AgentThread | null;
@@ -216,6 +217,41 @@ export function ConversationTimeline({
     threadIdRef.current = thread?.id ?? null;
   }, [thread]);
 
+  // Pending-run handoff: when handleSend creates a NEW thread it stores the
+  // user message in pendingRunState before navigating here.  We pick it up
+  // on mount so the optimistic UI (PendingConversationView + thinking bubble)
+  // shows immediately instead of MessageSkeletons, and we own the startRun
+  // call so errors can be surfaced in this component.
+  //
+  // This effect MUST be declared before the thread-change guard below so that
+  // runThreadIdRef.current is set to thread.id before the guard reads it —
+  // otherwise the guard would see a mismatch and clear the optimistic state.
+  const threadId = thread?.id ?? null;
+  useEffect(() => {
+    if (!threadId) return;
+    const pendingMsg = consumePendingRun(threadId);
+    if (!pendingMsg) return;
+
+    messagesAtSend.current = 0;
+    lastRunIdBeforeSend.current = null;
+    runThreadIdRef.current = threadId;
+    setPendingMessage(pendingMsg);
+    setIsRunning(true);
+    setTracesVisible(true);
+
+    let active = true;
+    startRun(threadId, pendingMsg).catch(() => {
+      if (active) {
+        setIsRunning(false);
+        setPendingMessage(null);
+        setTracesVisible(false);
+        runThreadIdRef.current = null;
+      }
+    });
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
+
   // Clear the trace-hide timer on unmount to prevent setState on an
   // unmounted component if the user navigates away before it fires.
   useEffect(() => {
@@ -288,7 +324,14 @@ export function ConversationTimeline({
         // and doesn't clear tracesVisible for this in-flight run.
         runThreadIdRef.current = workingThread.id;
         threadIdRef.current = workingThread.id;
+        // Hand off the message and startRun responsibility to the incoming
+        // ConversationTimeline instance via pendingRunState.  That component
+        // picks it up on mount, shows the optimistic UI without a skeleton
+        // flash, and owns error handling.  We return early — the new instance
+        // does the work.
+        setPendingRun(workingThread.id, text);
         onThreadCreated?.(workingThread);
+        return;
       } catch {
         setIsRunning(false);
         setPendingMessage(null);

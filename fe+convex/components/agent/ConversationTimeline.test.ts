@@ -14,6 +14,7 @@
  *   6. deriveTitle         – thread title truncation
  *   7. formatTraceKind     – trace step label formatting
  *   8. selectResolvedApprovals – approval-history filter + chronological sort
+ *   9. pickupPendingRun    – cross-navigation handoff: new thread first-message flow
  */
 
 import { describe, test, expect } from "bun:test";
@@ -514,5 +515,150 @@ describe("selectResolvedApprovals — approval history filter + sort", () => {
     const snapshot = input.map((a) => a.id);
     selectResolvedApprovals(input);
     expect(input.map((a) => a.id)).toEqual(snapshot);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  9. pickupPendingRun                                                       */
+/*                                                                            */
+/*  When handleSend creates a NEW thread it must NOT call startRun itself.   */
+/*  Instead it stores the pending message in pendingRunState and returns      */
+/*  early.  The incoming ConversationTimeline picks up the pending run on    */
+/*  mount, shows PendingConversationView (not MessageSkeletons), and calls   */
+/*  startRun with proper error handling.                                      */
+/*                                                                            */
+/*  Pure-function mirror of the useEffect pickup logic so we can exercise    */
+/*  every branch without a React renderer.                                   */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+interface PendingRunPickupResult {
+  pendingMessage: string;
+  isRunning: true;
+  tracesVisible: true;
+  runThreadId: string;
+}
+
+function pickupPendingRun(p: {
+  threadId: string | null | undefined;
+  pending: { threadId: string; message: string } | null;
+}): PendingRunPickupResult | null {
+  if (!p.threadId) return null;
+  if (p.pending?.threadId !== p.threadId) return null;
+  return {
+    pendingMessage: p.pending.message,
+    isRunning: true,
+    tracesVisible: true,
+    runThreadId: p.threadId,
+  };
+}
+
+// Mirror of shouldClearTracesOnThreadChange — verifies that once
+// runThreadIdRef.current is set by the pickup effect the thread-change guard
+// does NOT clear the optimistic state.
+function threadChangeWouldClear(p: {
+  newThreadId: string | null | undefined;
+  runThreadId: string | null;
+}): boolean {
+  return p.newThreadId !== p.runThreadId;
+}
+
+describe("pickupPendingRun — cross-navigation first-message handoff", () => {
+  describe("happy path: new thread, pending run present", () => {
+    test("returns optimistic state when threadId matches the stored pending run", () => {
+      const result = pickupPendingRun({
+        threadId: "thread_new",
+        pending: { threadId: "thread_new", message: "Book me a room" },
+      });
+      expect(result).not.toBeNull();
+      expect(result?.pendingMessage).toBe("Book me a room");
+      expect(result?.isRunning).toBe(true);
+      expect(result?.tracesVisible).toBe(true);
+      expect(result?.runThreadId).toBe("thread_new");
+    });
+
+    test("selectView shows pendingView (not skeletons) once pickup applies the state", () => {
+      // After pickupPendingRun fires, pendingMessage is set.  The view selector
+      // must choose pendingView when loaded=false (Convex still loading).
+      expect(selectView({
+        hasThread: true,
+        loaded: false,
+        pendingMessage: "Book me a room",
+        messagesLength: 0,
+        isRunning: true,
+      })).toBe("pendingView");
+    });
+
+    test("after pickup sets runThreadId, thread-change guard does NOT clear the state", () => {
+      const result = pickupPendingRun({
+        threadId: "thread_new",
+        pending: { threadId: "thread_new", message: "Hello" },
+      });
+      // runThreadId is set to thread_new by the pickup effect.
+      // The guard checks newThreadId !== runThreadId → should be false (no clear).
+      expect(threadChangeWouldClear({
+        newThreadId: "thread_new",
+        runThreadId: result!.runThreadId,
+      })).toBe(false);
+    });
+  });
+
+  describe("no pending run — navigating directly to an existing thread", () => {
+    test("returns null when pending is null", () => {
+      expect(pickupPendingRun({ threadId: "thread_abc", pending: null })).toBeNull();
+    });
+
+    test("returns null when threadId doesn't match pending run", () => {
+      expect(pickupPendingRun({
+        threadId: "thread_abc",
+        pending: { threadId: "thread_xyz", message: "Hello" },
+      })).toBeNull();
+    });
+
+    test("returns null when threadId is null (no active thread)", () => {
+      expect(pickupPendingRun({
+        threadId: null,
+        pending: { threadId: "thread_abc", message: "Hello" },
+      })).toBeNull();
+    });
+
+    test("returns null when threadId is undefined", () => {
+      expect(pickupPendingRun({
+        threadId: undefined,
+        pending: { threadId: "thread_abc", message: "Hello" },
+      })).toBeNull();
+    });
+
+    test("without pickup, thread-change guard DOES clear state on first mount (runThreadId=null)", () => {
+      // This is the broken pre-fix behaviour: runThreadIdRef stays null because
+      // the old component's handleSend set it but the new component started fresh.
+      expect(threadChangeWouldClear({
+        newThreadId: "thread_new",
+        runThreadId: null, // no pickup happened
+      })).toBe(true); // guard would clear isRunning — bad UX
+    });
+  });
+
+  describe("startRun error recovery in the new component", () => {
+    test("selectView falls back to emptyState when startRun fails and state is cleared", () => {
+      // If startRun rejects, the pickup effect's catch clears all optimistic state.
+      expect(selectView({
+        hasThread: true,
+        loaded: true,
+        pendingMessage: null,
+        messagesLength: 0,
+        isRunning: false,
+      })).toBe("emptyState");
+    });
+
+    test("selectView shows skeletons while Convex loads and startRun fails (loaded=false)", () => {
+      // After error, pendingMessage is null and loaded is still false → skeletons.
+      expect(selectView({
+        hasThread: true,
+        loaded: false,
+        pendingMessage: null,
+        messagesLength: 0,
+        isRunning: false,
+      })).toBe("skeletons");
+    });
   });
 });
