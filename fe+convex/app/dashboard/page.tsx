@@ -19,18 +19,11 @@ import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-
-function formatShortDate(value?: string | null) {
-  if (!value) return "TBD";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatSourceLabel(source?: string | null) {
-  if (!source) return "unknown";
-  return source.replace(/_/g, " ");
-}
+import {
+  formatCompactTimestamp,
+  formatShortDate,
+  formatSourceLabel,
+} from "@/lib/attendance-format";
 
 function StatWidget({
   label,
@@ -126,7 +119,7 @@ export default function DashboardPage() {
     try {
       const result = await upsertAttendanceBatch({
         event_id: selectedEventId,
-        attendees: [{ email: attendeeEmail, name: attendeeName || undefined, source: attendeeSource }],
+        attendees: [{ email: attendeeEmail.trim(), name: attendeeName.trim() || undefined, source: attendeeSource }],
       });
       setMessage(`Logged ${result.inserted_count + result.updated_count} attendee record for ${result.event_title}.`);
       setAttendeeName("");

@@ -9,35 +9,13 @@ import { ArrowLeft, Clock3, FileEdit, LayoutList, Users2 } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+  formatCompactTimestamp,
+  formatShortDate,
+  formatSourceLabel,
+} from "@/lib/attendance-format";
 
 type DetailTab = "overview" | "attendees" | "activity" | "capture";
-
-function formatShortDate(value?: string | null) {
-  if (!value) return "TBD";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatCompactTimestamp(value?: number | null) {
-  if (!value) return "No activity yet";
-  const date = new Date(value);
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatSourceLabel(source?: string | null) {
-  if (!source) return "unknown";
-  return source.replace(/_/g, " ");
-}
 
 function DetailStat({
   label,
@@ -131,8 +109,8 @@ export default function EventDataDetailPage() {
         event_id: selectedEventId,
         attendees: [
           {
-            email: attendeeEmail,
-            name: attendeeName || undefined,
+            email: attendeeEmail.trim(),
+            name: attendeeName.trim() || undefined,
             source: attendeeSource,
           },
         ],
