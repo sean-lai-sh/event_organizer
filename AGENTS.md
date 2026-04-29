@@ -159,7 +159,7 @@ Current intended meaning:
 - `checked_in_at` = write timestamp for the attendance record
 - `source` = optional ingest source such as `manual` or `csv_import`
 
-`attendance` is the source for attendee analytics on `/dashboard/data`. It must remain deduplicated by `(event_id, email)`.
+`attendance` is the source for attendee analytics on `/dashboard`. It must remain deduplicated by `(event_id, email)`.
 
 #### `attendance_insights`
 

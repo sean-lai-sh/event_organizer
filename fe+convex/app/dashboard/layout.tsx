@@ -9,7 +9,6 @@ import { usePathname } from "next/navigation";
 import DashboardNav from "@/components/DashboardNav";
 import { useQuery } from "convex/react";
 import {
-  BarChart3,
   CalendarDays,
   LayoutDashboard,
   Mail,
@@ -40,11 +39,6 @@ const operationsLinks = [
     href: "/dashboard/events",
     label: "Events",
     icon: CalendarDays,
-  },
-  {
-    href: "/dashboard/data",
-    label: "Data",
-    icon: BarChart3,
   },
   {
     href: "/dashboard/speakers",

@@ -2,23 +2,24 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { useQuery } from "convex/react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
-
-const kpis = [
-  { label: "total events",       value: "24" },
-  { label: "active outreach",    value: "8"  },
-  { label: "speakers confirmed", value: "12" },
-  { label: "upcoming",           value: "5"  },
-];
-
-const mockEvents = [
-  { _id: "1", title: "AI & Society Speaker Panel", event_date: "2026-03-28", type: "Speaker Panel", status: "Outreach"  },
-  { _id: "2", title: "Web3 & Startups Workshop",   event_date: "2026-04-05", type: "Workshop",      status: "Matching"  },
-  { _id: "3", title: "Spring Networking Mixer",    event_date: "2026-04-18", type: "Networking",    status: "Completed" },
-];
+import { api } from "@/convex/_generated/api";
+import { computeKpis, toEventRows } from "./dashboardView";
 
 export default function DashboardPage() {
-  const eventRows = useMemo(() => mockEvents.slice(0, 3), []);
+  const eventsRaw = useQuery(api.events.listEvents, {});
+
+  const kpis = useMemo(() => {
+    if (!eventsRaw) return null;
+    const speakersConfirmed = eventsRaw.filter((e) => e.speaker_confirmed).length;
+    return computeKpis(eventsRaw, { speakersConfirmed });
+  }, [eventsRaw]);
+
+  const eventRows = useMemo(
+    () => (eventsRaw ? toEventRows(eventsRaw, 3) : null),
+    [eventsRaw]
+  );
 
   return (
     <DashboardPageShell
@@ -35,17 +36,24 @@ export default function DashboardPage() {
     >
       {/* KPI row — hero kpi-card motif */}
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {kpis.map((k) => (
-          <div
-            key={k.label}
-            className="flex flex-col gap-2 rounded-[18px] border border-[#e8e8e8] bg-[#f4f4f4] p-4"
-          >
-            <span className="font-sans text-[34px] font-light leading-none tracking-[-0.04em] text-[#1f1f1f]">
-              {k.value}
-            </span>
-            <span className="text-[13px] font-medium text-[#767676]">{k.label}</span>
-          </div>
-        ))}
+        {kpis
+          ? kpis.map((k) => (
+              <div
+                key={k.label}
+                className="flex flex-col gap-2 rounded-[18px] border border-[#e8e8e8] bg-[#f4f4f4] p-4"
+              >
+                <span className="font-sans text-[34px] font-light leading-none tracking-[-0.04em] text-[#1f1f1f]">
+                  {k.value}
+                </span>
+                <span className="text-[13px] font-medium text-[#767676]">{k.label}</span>
+              </div>
+            ))
+          : Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[88px] animate-pulse rounded-[18px] border border-[#e8e8e8] bg-[#f4f4f4]"
+              />
+            ))}
       </section>
 
       {/* Main grid */}
@@ -60,27 +68,49 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="overflow-hidden rounded-[12px] border border-[#EBEBEB] bg-white">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#EBEBEB] bg-[#F7F7F7]">
-                  {["Event", "Type", "Date", "Status"].map((h) => (
-                    <th key={h} className="h-9 px-4 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[#999999]">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F0F0F0]">
-                {eventRows.map((event) => (
-                  <tr key={event._id} className="hover:bg-[#FAFAFA]">
-                    <td className="px-4 py-3 text-[13px] font-medium text-[#111111]">{event.title}</td>
-                    <td className="px-4 py-3 text-[13px] text-[#6B6B6B]">{event.type}</td>
-                    <td className="px-4 py-3 text-[13px] text-[#6B6B6B]">{new Date(event.event_date).toLocaleDateString()}</td>
-                    <td className="px-4 py-3 text-[13px] font-medium text-[#3B3B3B]">{event.status}</td>
-                  </tr>
+            {eventRows === null ? (
+              <div className="space-y-2 p-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-12 animate-pulse rounded-[8px] border border-[#F0F0F0] bg-[#F7F7F7]"
+                  />
                 ))}
-              </tbody>
-            </table>
+              </div>
+            ) : eventRows.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[13px] text-[#9B9B9B]">
+                No events yet.{" "}
+                <Link href="/dashboard/events/new" className="font-medium text-[#111111] underline underline-offset-2">
+                  Create your first event.
+                </Link>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#EBEBEB] bg-[#F7F7F7]">
+                    {["Event", "Type", "Date", "Status"].map((h) => (
+                      <th key={h} className="h-9 px-4 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[#999999]">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0F0F0]">
+                  {eventRows.map((event) => (
+                    <tr key={event._id} className="hover:bg-[#FAFAFA]">
+                      <td className="px-4 py-3 text-[13px] font-medium text-[#111111]">{event.title}</td>
+                      <td className="px-4 py-3 text-[13px] text-[#6B6B6B]">{event.type}</td>
+                      <td className="px-4 py-3 text-[13px] text-[#6B6B6B]">
+                        {event.event_date
+                          ? new Date(`${event.event_date}T00:00:00`).toLocaleDateString()
+                          : "TBD"}
+                      </td>
+                      <td className="px-4 py-3 text-[13px] font-medium text-[#3B3B3B]">{event.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
@@ -91,29 +121,28 @@ export default function DashboardPage() {
             <div className="mt-3 space-y-2">
               <div className="flex items-center justify-between text-[13px]">
                 <span className="text-[#4d4d4d]">Replies waiting triage</span>
-                <span className="font-semibold text-[#111111]">3</span>
+                <span className="font-semibold text-[#111111]">—</span>
               </div>
               <div className="flex items-center justify-between text-[13px]">
                 <span className="text-[#4d4d4d]">Speakers requested call</span>
-                <span className="font-semibold text-[#111111]">2</span>
+                <span className="font-semibold text-[#111111]">—</span>
               </div>
             </div>
           </div>
 
           <div className="rounded-[12px] border border-[#EBEBEB] bg-white p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.07em] text-[#999999]">Next actions</p>
-            <ol className="mt-3 space-y-2">
-              {[
-                "Approve spring panel shortlist",
-                "Follow up with 4 pending speakers",
-                "Lock venue details by Friday",
-              ].map((action, i) => (
-                <li key={action} className="flex items-baseline gap-2 text-[13px]">
-                  <span className="shrink-0 font-medium text-[#BBBBBB]">{i + 1}.</span>
-                  <span className="text-[#4d4d4d]">{action}</span>
-                </li>
-              ))}
-            </ol>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.07em] text-[#999999]">Quick links</p>
+            <div className="mt-3 space-y-2">
+              <Link href="/dashboard/events" className="block text-[13px] text-[#4d4d4d] hover:text-[#111111]">
+                All events
+              </Link>
+              <Link href="/dashboard/speakers" className="block text-[13px] text-[#4d4d4d] hover:text-[#111111]">
+                Speakers
+              </Link>
+              <Link href="/dashboard/communications" className="block text-[13px] text-[#4d4d4d] hover:text-[#111111]">
+                Communications
+              </Link>
+            </div>
           </div>
         </div>
       </section>
