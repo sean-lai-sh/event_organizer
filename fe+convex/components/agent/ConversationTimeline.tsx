@@ -10,7 +10,6 @@ import { ResolvedApprovalCard } from "./ResolvedApprovalCard";
 import { ComposerApprovalPrompt } from "./ComposerApprovalPrompt";
 import { AgentInput, type AgentInputHandle } from "./AgentInput";
 import {
-  buildTellMeSomethingElseDraft,
   countPendingApprovals,
   getActiveComposerApproval,
 } from "./composerApproval";
@@ -467,12 +466,8 @@ export function ConversationTimeline({
             }
             onArtifactsChange?.();
           }}
-          onTellMeSomethingElse={() => {
-            // Preserve the existing draft if the user has already started
-            // typing; otherwise seed a short helper text so the composer is
-            // not empty when focus returns.
-            onDraftChange?.(buildTellMeSomethingElseDraft(draftValue ?? ""));
-            inputRef.current?.focus();
+          onRejectedWithMessage={(message) => {
+            handleSend(message);
           }}
         />
       )}
