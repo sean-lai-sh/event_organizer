@@ -474,6 +474,76 @@ export const getEventAttendanceDetail = query({
   },
 });
 
+export const getAttendanceTimeSeries = query({
+  args: {},
+  handler: async (ctx) => {
+    const [events, attendanceRows] = await Promise.all([
+      ctx.db.query("events").collect(),
+      ctx.db.query("attendance").collect(),
+    ]);
+
+    const sortedEvents = events
+      .filter((e) => e.event_date)
+      .sort((a, b) => (a.event_date! > b.event_date! ? 1 : -1));
+
+    const eventAttendeeMap = new Map<string, Set<string>>();
+    for (const row of attendanceRows) {
+      const key = row.event_id as string;
+      if (!eventAttendeeMap.has(key)) eventAttendeeMap.set(key, new Set());
+      eventAttendeeMap.get(key)!.add(row.email);
+    }
+
+    const seenEmails = new Set<string>();
+    return sortedEvents.map((event) => {
+      const attendees = eventAttendeeMap.get(event._id as string) ?? new Set<string>();
+      const total = attendees.size;
+      const newCount = [...attendees].filter((e) => !seenEmails.has(e)).length;
+      for (const email of attendees) seenEmails.add(email);
+      return {
+        event_id: event._id,
+        title: event.title,
+        event_date: event.event_date!,
+        total_attendees: total,
+        new_attendees: newCount,
+        repeat_attendees: total - newCount,
+      };
+    });
+  },
+});
+
+export const getDashboardWidgets = query({
+  args: {},
+  handler: async (ctx) => {
+    const events = await ctx.db.query("events").collect();
+    const today = new Date().toISOString().slice(0, 10);
+    const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
+    const future = events
+      .filter((e) => e.event_date && e.event_date >= today)
+      .sort((a, b) => (a.event_date! < b.event_date! ? -1 : 1));
+
+    const past = events
+      .filter((e) => e.event_date && e.event_date < today)
+      .sort((a, b) => (b.event_date! > a.event_date! ? 1 : -1));
+
+    const past6mo = events.filter(
+      (e) => e.event_date && e.event_date >= sixMonthsAgo && e.event_date < today
+    );
+
+    return {
+      next_event: future[0]
+        ? { title: future[0].title, event_date: future[0].event_date! }
+        : null,
+      recent_event: past[0]
+        ? { title: past[0].title, event_date: past[0].event_date!, status: past[0].status }
+        : null,
+      events_past_6_months: past6mo.length,
+    };
+  },
+});
+
 export const recordAttendanceInsight = mutation({
   args: {
     insight_text: v.string(),
