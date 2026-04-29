@@ -42,6 +42,7 @@ Convex is the operational application database.
 - `agent_runs` stores normalized run lifecycle records.
 - `agent_artifacts` stores renderable agent outputs.
 - `agent_approvals` stores approval gates and decisions.
+- `agent_traces` stores normalized reasoning and tool-step traces.
 - `agent_context_links` stores links between conversations and product entities.
 
 Convex is not the source of truth for identity or speaker workflow fields that already live in Attio.
@@ -51,8 +52,6 @@ Convex is also not the source of truth for agent orchestration policy.
 
 Modal-hosted Python agent code coordinates the systems and is the authoritative execution layer.
 
-- `agent/helper/attio.py` wraps Attio API access.
-- `agent/helper/tools.py` contains shared Attio and Convex helpers.
 - `agent/helper/attio.py` wraps Attio API access.
 - `agent/helper/tools.py` contains shared Attio and Convex helpers.
 - `agent/match.py` handles candidate selection.
@@ -196,19 +195,17 @@ Stores renderable outputs such as tables, metrics, timelines, checklists, report
 
 Stores pending and completed approvals for Modal-side actions.
 
+#### `agent_traces`
+
+Stores normalized reasoning and tool-step traces for a run. These records let the UI show legible execution history without depending on raw SDK event formats.
+
 #### `agent_context_links`
 
 Stores optional links between threads/runs and events, speakers, people, or communication threads.
 
 #### `eboard_members`
 
-Stores internal ownership records keyed by Better Auth user id.
-
-Required extension:
-
-- `attio_people_record_id`
-
-Without that field, code cannot safely populate `speakers.managed_poc`.
+Stores internal ownership records keyed by Better Auth user id. The current schema contains `userId`, optional `role`, `active`, and `created_at`. It does **not** currently store an Attio `people.record_id` for the eboard member, so code should only populate `speakers.managed_poc` when that Attio person id is obtained through another explicit path. If automated owner-to-Attio mapping is needed later, add an `attio_people_record_id` field to this table and update the sync code in the same change.
 
 #### `contact_assignments`
 

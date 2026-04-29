@@ -37,6 +37,7 @@ For the authoritative product and data-contract details, read:
 - `AGENTS.md` for operator/runtime rules
 - `IMPLEMENTATION.md` for the parallel execution plan
 - `DESIGN.md` for shared dashboard and monochrome UI guidance
+- `WORK_ATTRIBUTION.md` for contribution attribution based on closed GitHub pull requests
 
 ## Repository Layout
 
@@ -47,7 +48,8 @@ event_organizer/
 ├── PLAN.md                 # Architecture and data-contract source of truth
 ├── AGENTS.md               # Operator and runtime integration guide
 ├── IMPLEMENTATION.md       # Implementation workstreams and dependency plan
-└── DESIGN.md               # Frontend layout and design-system rules
+├── DESIGN.md               # Frontend layout and design-system rules
+└── WORK_ATTRIBUTION.md     # Closed-PR contribution attribution record
 ```
 
 ## Prerequisites

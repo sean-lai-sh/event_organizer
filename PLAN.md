@@ -44,16 +44,17 @@ Existing business tables:
 - `inbound_receipts`
 - `invites`
 
-Agent-first persistence tables to add:
+Agent-first persistence tables now include:
 
 - `agent_threads`
 - `agent_messages`
 - `agent_runs`
 - `agent_artifacts`
 - `agent_approvals`
+- `agent_traces`
 - `agent_context_links`
 
-Convex stores normalized thread, run, artifact, and approval history for product rendering and continuation.
+Convex stores normalized thread, run, artifact, approval, and trace history for product rendering and continuation.
 Convex is not the source of truth for agent execution policy.
 
 ### Modal Runtime
@@ -263,11 +264,7 @@ Current intended meaning:
 
 #### `eboard_members`
 
-Stores internal ownership records keyed by Better Auth user id.
-
-Required extension:
-
-- `attio_people_record_id`
+Stores internal ownership records keyed by Better Auth user id. The current schema contains `userId`, optional `role`, `active`, and `created_at`. It does **not** currently store an Attio `people.record_id` for the eboard member, so code should only populate `speakers.managed_poc` when that Attio person id is obtained through another explicit path. If automated owner-to-Attio mapping is needed later, add an `attio_people_record_id` field to this table and update the sync code in the same change.
 
 #### `contact_assignments`
 

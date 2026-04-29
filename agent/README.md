@@ -37,7 +37,7 @@ When a user interacts with the website agent:
 2. A run is created and executed in Modal.
 3. The runtime runs the Claude agent SDK harness and launches the packaged FastMCP server over stdio from `apps.mcp.server`.
 4. If an action is write/send/destructive, approval gating can pause the run until user decision.
-5. Streamed output, artifacts, and approval states are returned in normalized form for UI rendering.
+5. Streamed output, artifacts, reasoning traces, and approval states are persisted in Convex and returned in normalized form for UI rendering.
 
 ## Tool Access Surface
 
@@ -63,10 +63,14 @@ The runtime's current MCP tool surface is:
    - `get_event_outreach`
    - `get_attendance_dashboard`
    - `get_event_attendance`
+   - `get_event_room_booking`
    - approval-gated `create_event`
    - approval-gated `update_event_safe`
+5. **OnceHub room booking**
+   - `find_oncehub_slots` reads live Leslie eLab Lean/Launchpad room availability.
+   - approval-gated `book_oncehub_room` books a selected slot under the shared club booking profile, upserts a Convex `event_room_bookings` receipt, and stickies `events.room_confirmed` when successful.
 
-The historical `create_contact` / `update_contact` workflow-authoritative tools have been retired because they wrote workflow fields onto Attio `people`.
+The historical `create_contact` / `update_contact` workflow-authoritative tools have been retired because they wrote workflow fields onto Attio `people`. Read tools run immediately, while Convex writes and external effects such as OnceHub booking pause for explicit approval before execution.
 
 ## Supporting Services (Root Files)
 
