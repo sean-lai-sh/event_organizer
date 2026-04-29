@@ -176,11 +176,11 @@ export default function EventDataDetailPage() {
       title={matchedEvent?.title ?? detail?.event?.title ?? "Event Data"}
       action={
         <Link
-          href="/dashboard/data"
+          href="/dashboard"
           className="inline-flex items-center gap-2 rounded-full border border-[#E1E1E1] bg-[#FFFFFF] px-3 py-1.5 text-[12px] font-medium text-[#111111] transition hover:bg-[#F6F6F6]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Data
+          Back to Dashboard
         </Link>
       }
     >
@@ -188,7 +188,7 @@ export default function EventDataDetailPage() {
         <section className="rounded-[20px] border border-[#EAEAEA] bg-[#FFFFFF] px-6 py-6">
           <EmptyState
             title="Event not found"
-            description="This detail link does not point to a current event record. Return to Data and reopen an event from the latest list."
+            description="This detail link does not point to a current event record. Return to Dashboard and reopen an event from the latest list."
           />
         </section>
       ) : null}
@@ -553,7 +553,7 @@ export default function EventDataDetailPage() {
               Save the event takeaway
             </h3>
             <p className="mt-2 text-[13px] leading-6 text-[#6C6C6C]">
-              Persist a clean read after reviewing this event’s turnout and activity.
+              Persist a clean read after reviewing this event's turnout and activity.
             </p>
 
             <textarea
