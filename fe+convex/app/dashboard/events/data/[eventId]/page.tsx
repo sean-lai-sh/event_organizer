@@ -9,35 +9,13 @@ import { ArrowLeft, Clock3, FileEdit, LayoutList, Users2 } from "lucide-react";
 import { DashboardPageShell } from "@/components/dashboard/PageShell";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+  formatCompactTimestamp,
+  formatShortDate,
+  formatSourceLabel,
+} from "@/lib/attendance-format";
 
 type DetailTab = "overview" | "attendees" | "activity" | "capture";
-
-function formatShortDate(value?: string | null) {
-  if (!value) return "TBD";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatCompactTimestamp(value?: number | null) {
-  if (!value) return "No activity yet";
-  const date = new Date(value);
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatSourceLabel(source?: string | null) {
-  if (!source) return "unknown";
-  return source.replace(/_/g, " ");
-}
 
 function DetailStat({
   label,
@@ -131,8 +109,8 @@ export default function EventDataDetailPage() {
         event_id: selectedEventId,
         attendees: [
           {
-            email: attendeeEmail,
-            name: attendeeName || undefined,
+            email: attendeeEmail.trim(),
+            name: attendeeName.trim() || undefined,
             source: attendeeSource,
           },
         ],
@@ -176,11 +154,11 @@ export default function EventDataDetailPage() {
       title={matchedEvent?.title ?? detail?.event?.title ?? "Event Data"}
       action={
         <Link
-          href="/dashboard/data"
+          href="/dashboard"
           className="inline-flex items-center gap-2 rounded-full border border-[#E1E1E1] bg-[#FFFFFF] px-3 py-1.5 text-[12px] font-medium text-[#111111] transition hover:bg-[#F6F6F6]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Data
+          Back to Dashboard
         </Link>
       }
     >
@@ -188,7 +166,7 @@ export default function EventDataDetailPage() {
         <section className="rounded-[20px] border border-[#EAEAEA] bg-[#FFFFFF] px-6 py-6">
           <EmptyState
             title="Event not found"
-            description="This detail link does not point to a current event record. Return to Data and reopen an event from the latest list."
+            description="This detail link does not point to a current event record. Return to Dashboard and reopen an event from the latest list."
           />
         </section>
       ) : null}
@@ -553,7 +531,7 @@ export default function EventDataDetailPage() {
               Save the event takeaway
             </h3>
             <p className="mt-2 text-[13px] leading-6 text-[#6C6C6C]">
-              Persist a clean read after reviewing this event’s turnout and activity.
+              Persist a clean read after reviewing this event's turnout and activity.
             </p>
 
             <textarea
