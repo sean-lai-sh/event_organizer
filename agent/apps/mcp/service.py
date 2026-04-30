@@ -666,12 +666,7 @@ async def send_outreach_email(
         from agent.helper.tools import get_agentmail_client  # type: ignore
 
     client = get_agentmail_client()
-    inbox_id = os.environ.get("AGENTMAIL_INBOX_ID")
-    if not inbox_id:
-        raise ValueError(
-            "AgentMail inbox is not configured. Set the AGENTMAIL_INBOX_ID environment "
-            "variable before calling send_outreach_email."
-        )
+    inbox_id = os.environ.get("AGENTMAIL_INBOX_ID", "events-technyu@agentmail.to")
     full_body = f"{message_body}\n\n{signature}".strip() if signature else message_body
 
     message = await asyncio.to_thread(
@@ -685,7 +680,6 @@ async def send_outreach_email(
     )
     return {
         "sent": True,
-        "thread_id": message.thread_id,
         "recipient_email": recipient_email,
         "subject": subject,
     }

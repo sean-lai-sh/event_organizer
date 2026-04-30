@@ -32,12 +32,7 @@ Guidelines:
 async def _get_inbox_id() -> str:
     import os
 
-    inbox_id = os.environ.get("AGENTMAIL_INBOX_ID")
-    if inbox_id:
-        return inbox_id
-    client = get_agentmail_client()
-    inbox = client.inboxes.create()
-    return inbox.id
+    return os.environ.get("AGENTMAIL_INBOX_ID", "events-technyu@agentmail.to")
 
 
 @app.function(
