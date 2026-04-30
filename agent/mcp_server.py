@@ -21,6 +21,7 @@ from apps.mcp.service import (
     search_contacts,
     search_people,
     search_speakers,
+    send_outreach_email,
     update_event_safe,
     update_speaker_workflow,
     upsert_person,
@@ -54,6 +55,8 @@ __all__ = [
     "get_event_attendance",
     "create_event",
     "update_event_safe",
+    # outreach email
+    "send_outreach_email",
 ]
 
 

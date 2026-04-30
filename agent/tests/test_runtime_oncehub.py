@@ -216,6 +216,192 @@ async def test_approved_booking_attaches_event_context_link(monkeypatch: pytest.
     assert event_links[0].relation == "subject"
 
 
+# ── send_outreach_email approval title ────────────────────────────────────────
+
+
+def test_send_outreach_email_approval_title_with_name_and_subject() -> None:
+    action = ToolAction(
+        name="send_outreach_email",
+        action_class=ActionClass.SEND,
+        payload={
+            "tool_input": {
+                "recipient_name": "Ada Lovelace",
+                "recipient_email": "ada@example.com",
+                "subject": "Speaking invite",
+            }
+        },
+    )
+    assert _make_approval_title(action) == "Send email to Ada Lovelace: Speaking invite"
+
+
+def test_send_outreach_email_approval_title_falls_back_to_email() -> None:
+    action = ToolAction(
+        name="send_outreach_email",
+        action_class=ActionClass.SEND,
+        payload={"tool_input": {"recipient_email": "ada@example.com"}},
+    )
+    assert _make_approval_title(action) == "Send email to ada@example.com"
+
+
+def test_send_outreach_email_approval_title_no_subject() -> None:
+    action = ToolAction(
+        name="send_outreach_email",
+        action_class=ActionClass.SEND,
+        payload={"tool_input": {"recipient_name": "Ada Lovelace", "subject": ""}},
+    )
+    assert _make_approval_title(action) == "Send email to Ada Lovelace"
+
+
+# ── send_outreach_email approval flow ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_send_outreach_email_pauses_for_approval() -> None:
+    tool_input = {
+        "recipient_name": "Ada Lovelace",
+        "recipient_email": "ada@example.com",
+        "subject": "Speaking invite",
+        "message_body": "Hi Ada",
+        "sender_name": "NYU AI",
+        "sender_email": "ai@nyu.edu",
+    }
+    adapter = FakeToolAwareAdapter(
+        AgentTurnResult(
+            tool_traces=[
+                ToolTrace(name="send_outreach_email", tool_input=tool_input, tool_use_id="t1")
+            ],
+            blocked_action=ToolAction(
+                name="send_outreach_email",
+                action_class=ActionClass.SEND,
+                payload={"tool_input": tool_input},
+            ),
+        )
+    )
+    service = runtime_service.AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=adapter,
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Outreach email"))
+    await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Send Ada a speaking invite")
+    )
+
+    state = await service.get_thread_state(thread.external_id)
+    assert len(state.approvals) == 1
+    approval = state.approvals[0]
+    assert approval.status == ApprovalStatus.PENDING
+    assert approval.action_type == "send"
+    assert "Ada Lovelace" in approval.title
+    assert "Speaking invite" in approval.title
+
+
+@pytest.mark.asyncio
+async def test_approved_send_outreach_email_fires_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    fired = {"args": None}
+
+    async def fake_execute(tool_name: str, tool_input: dict):
+        assert tool_name == "send_outreach_email"
+        fired["args"] = tool_input
+        return {
+            "sent": True,
+            "thread_id": "thread_abc",
+            "recipient_email": tool_input["recipient_email"],
+            "subject": tool_input["subject"],
+        }
+
+    monkeypatch.setattr(runtime_service, "execute_tool_call", fake_execute)
+
+    tool_input = {
+        "recipient_name": "Ada Lovelace",
+        "recipient_email": "ada@example.com",
+        "subject": "Speaking invite",
+        "message_body": "Hi Ada",
+        "sender_name": "NYU AI",
+        "sender_email": "ai@nyu.edu",
+    }
+    adapter = FakeToolAwareAdapter(
+        AgentTurnResult(
+            tool_traces=[
+                ToolTrace(name="send_outreach_email", tool_input=tool_input, tool_use_id="t1")
+            ],
+            blocked_action=ToolAction(
+                name="send_outreach_email",
+                action_class=ActionClass.SEND,
+                payload={"tool_input": tool_input},
+            ),
+        )
+    )
+    service = runtime_service.AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=adapter,
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Outreach email approved"))
+    await service.start_run(
+        RunCreateRequest(thread_id=thread.external_id, input_text="Send Ada a speaking invite")
+    )
+
+    state = await service.get_thread_state(thread.external_id)
+    decision = await service.submit_approval(
+        state.approvals[0].external_id,
+        ApprovalDecisionRequest(decision=ApprovalStatus.APPROVED),
+    )
+
+    assert decision.approval.status == ApprovalStatus.APPROVED
+    assert decision.run.status.value == "completed"
+    assert fired["args"] is not None
+    assert fired["args"]["recipient_email"] == "ada@example.com"
+
+
+@pytest.mark.asyncio
+async def test_rejected_send_outreach_email_does_not_fire_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    called = {"count": 0}
+
+    async def fake_execute(*_args, **_kwargs):
+        called["count"] += 1
+        return {}
+
+    monkeypatch.setattr(runtime_service, "execute_tool_call", fake_execute)
+
+    tool_input = {
+        "recipient_name": "Ada Lovelace",
+        "recipient_email": "ada@example.com",
+        "subject": "Speaking invite",
+        "message_body": "Hi Ada",
+        "sender_name": "NYU AI",
+        "sender_email": "ai@nyu.edu",
+    }
+    adapter = FakeToolAwareAdapter(
+        AgentTurnResult(
+            tool_traces=[ToolTrace(name="send_outreach_email", tool_input=tool_input, tool_use_id="t1")],
+            blocked_action=ToolAction(
+                name="send_outreach_email",
+                action_class=ActionClass.SEND,
+                payload={"tool_input": tool_input},
+            ),
+        )
+    )
+    service = runtime_service.AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=adapter,
+        policy=ApprovalPolicy(),
+    )
+
+    thread = await service.create_thread(ThreadCreateRequest(title="Outreach email rejected"))
+    await service.start_run(RunCreateRequest(thread_id=thread.external_id, input_text="Send email"))
+    state = await service.get_thread_state(thread.external_id)
+    decision = await service.submit_approval(
+        state.approvals[0].external_id,
+        ApprovalDecisionRequest(decision=ApprovalStatus.REJECTED),
+    )
+
+    assert decision.approval.status == ApprovalStatus.REJECTED
+    assert called["count"] == 0
+
+
 @pytest.mark.asyncio
 async def test_rejected_booking_does_not_execute_tool(monkeypatch: pytest.MonkeyPatch) -> None:
     called = {"count": 0}

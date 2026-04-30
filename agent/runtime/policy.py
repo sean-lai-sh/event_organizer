@@ -89,6 +89,10 @@ WRITE_TOOL_NAMES = {
     "book_oncehub_room",
 }
 
+SEND_TOOL_NAMES = {
+    "send_outreach_email",
+}
+
 
 def infer_tool_action_from_tool_name(tool_name: str, payload: dict | None = None) -> ToolAction:
     normalized = tool_name.strip()
@@ -96,6 +100,8 @@ def infer_tool_action_from_tool_name(tool_name: str, payload: dict | None = None
         return ToolAction(name=normalized, action_class=ActionClass.READ, payload=payload or {})
     if normalized in WRITE_TOOL_NAMES:
         return ToolAction(name=normalized, action_class=ActionClass.WRITE, payload=payload or {})
+    if normalized in SEND_TOOL_NAMES:
+        return ToolAction(name=normalized, action_class=ActionClass.SEND, payload=payload or {})
 
     return ToolAction(name=normalized or "unknown_tool", action_class=ActionClass.ANALYZE, payload=payload or {})
 

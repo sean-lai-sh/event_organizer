@@ -745,6 +745,92 @@ async def test_update_event_safe_io_with_event_type(monkeypatch: pytest.MonkeyPa
     assert updated == {"_id": "evt_10", "title": "Workshop", "event_type": "workshop"}
 
 
+# ── send_outreach_email tool body ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_send_outreach_email_calls_agentmail(monkeypatch: pytest.MonkeyPatch) -> None:
+    import helper.tools as helper_tools
+
+    class FakeMessage:
+        thread_id = "thread_abc"
+
+    sent_calls: list[dict] = []
+
+    class FakeMessages:
+        def send(self, *, inbox_id, to, subject, text, labels):
+            sent_calls.append(dict(inbox_id=inbox_id, to=to, subject=subject, text=text, labels=labels))
+            return FakeMessage()
+
+    class FakeInboxes:
+        messages = FakeMessages()
+
+    class FakeClient:
+        inboxes = FakeInboxes()
+
+    monkeypatch.setenv("AGENTMAIL_INBOX_ID", "inbox_test_1")
+    monkeypatch.setattr(helper_tools, "get_agentmail_client", lambda: FakeClient())
+
+    result = await mcp_service.send_outreach_email(
+        recipient_name="Ada Lovelace",
+        recipient_email="ada@example.com",
+        subject="Speaking invite",
+        message_body="Hi Ada, we'd love to have you.",
+        sender_name="NYU AI",
+        sender_email="ai@nyu.edu",
+        signature="Best,\nNYU AI Club",
+    )
+
+    assert result["sent"] is True
+    assert result["thread_id"] == "thread_abc"
+    assert result["recipient_email"] == "ada@example.com"
+    assert result["subject"] == "Speaking invite"
+    assert len(sent_calls) == 1
+    call = sent_calls[0]
+    assert call["inbox_id"] == "inbox_test_1"
+    assert call["to"] == "ada@example.com"
+    assert call["subject"] == "Speaking invite"
+    assert "Hi Ada" in call["text"]
+    assert "Best," in call["text"]
+    assert call["labels"] == ["outreach"]
+
+
+@pytest.mark.asyncio
+async def test_send_outreach_email_omits_signature_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    import helper.tools as helper_tools
+
+    class FakeMessage:
+        thread_id = "thread_no_sig"
+
+    sent_calls: list[dict] = []
+
+    class FakeMessages:
+        def send(self, *, inbox_id, to, subject, text, labels):
+            sent_calls.append(dict(text=text))
+            return FakeMessage()
+
+    class FakeInboxes:
+        messages = FakeMessages()
+
+    class FakeClient:
+        inboxes = FakeInboxes()
+
+    monkeypatch.setenv("AGENTMAIL_INBOX_ID", "inbox_test_2")
+    monkeypatch.setattr(helper_tools, "get_agentmail_client", lambda: FakeClient())
+
+    result = await mcp_service.send_outreach_email(
+        recipient_name="Bob",
+        recipient_email="bob@example.com",
+        subject="Hello",
+        message_body="Just a quick hello.",
+        sender_name="Alice",
+        sender_email="alice@example.com",
+    )
+
+    assert result["sent"] is True
+    assert sent_calls[0]["text"] == "Just a quick hello."
+
+
 def test_mcp_tool_docstrings_describe_event_and_attendance_uses() -> None:
     assert "newest relevant event" in (mcp_service.list_events.__doc__ or "")
     assert "actual attendance" in (mcp_service.get_event_attendance.__doc__ or "")

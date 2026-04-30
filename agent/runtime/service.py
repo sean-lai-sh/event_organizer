@@ -102,6 +102,10 @@ def _make_approval_title(action: ToolAction) -> str:
         )
         base = f"Book Leslie eLab Lean/Launchpad: {title}"
         return f"{base} ({slot_label})" if slot_label else base
+    if action.name == "send_outreach_email":
+        name = tool_input.get("recipient_name") or tool_input.get("recipient_email", "contact")
+        subj = tool_input.get("subject", "")
+        return f"Send email to {name}" + (f": {subj}" if subj else "")
     return f"Approval required: {action.name}"
 
 

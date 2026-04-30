@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from runtime.api import build_app
+from runtime.convex_sync import ConvexAgentStateSync
 from runtime.service import AgentRuntimeService
 from runtime.store import InMemoryRuntimeStore
 
@@ -16,8 +17,32 @@ class FakeAdapter:
         yield "Done: response"
 
 
+class NullSync(ConvexAgentStateSync):
+    """Sync stub that never touches Convex — all writes are no-ops, all reads return None."""
+
+    async def upsert_thread(self, record): return None
+    async def upsert_run(self, record): return None
+    async def append_message(self, record): return None
+    async def upsert_artifact(self, record): return None
+    async def upsert_approval(self, record): return None
+    async def resolve_approval(self, record): return None
+    async def append_trace(self, record): return None
+    async def upsert_context_link(self, thread_external_id, record, run_external_id=None): return None
+    async def fetch_approval_thread_id(self, approval_external_id): return None
+    async def fetch_thread_state(self, external_thread_id): return None
+    async def fetch_threads(self, *, limit=50): return None
+
+
+def _make_service() -> AgentRuntimeService:
+    return AgentRuntimeService(
+        store=InMemoryRuntimeStore(),
+        adapter=FakeAdapter(),
+        convex_sync=NullSync(),
+    )
+
+
 def test_runtime_api_agent_thread_run_stream_and_approval_flow() -> None:
-    service = AgentRuntimeService(store=InMemoryRuntimeStore(), adapter=FakeAdapter())
+    service = _make_service()
     app = build_app(service)
 
     client = TestClient(app)
@@ -63,7 +88,7 @@ def test_runtime_api_agent_thread_run_stream_and_approval_flow() -> None:
 
 
 def test_runtime_api_lists_agent_threads() -> None:
-    service = AgentRuntimeService(store=InMemoryRuntimeStore(), adapter=FakeAdapter())
+    service = _make_service()
     app = build_app(service)
 
     client = TestClient(app)

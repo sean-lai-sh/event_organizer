@@ -22,6 +22,7 @@ try:
         search_contacts,
         search_people,
         search_speakers,
+        send_outreach_email,
         update_event_safe,
         update_speaker_workflow,
         upsert_person,
@@ -46,6 +47,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import fallback
         search_contacts,
         search_people,
         search_speakers,
+        send_outreach_email,
         update_event_safe,
         update_speaker_workflow,
         upsert_person,
@@ -79,6 +81,8 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "find_oncehub_slots": find_oncehub_slots,
     "book_oncehub_room": book_oncehub_room,
     "get_event_room_booking": get_event_room_booking,
+    # outreach email
+    "send_outreach_email": send_outreach_email,
 }
 
 
