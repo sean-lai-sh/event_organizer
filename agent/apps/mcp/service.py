@@ -652,11 +652,12 @@ async def send_outreach_email(
     recipient_email: str,
     subject: str,
     message_body: str,
-    sender_name: str,
-    sender_email: str,
+    sender_name: str = "",
+    sender_email: str = "",
     signature: str = "",
 ) -> dict:
     """Send an outreach email via AgentMail. Approval-gated — do not call unless the user has confirmed."""
+    import asyncio
     import os
 
     try:
@@ -665,15 +666,22 @@ async def send_outreach_email(
         from agent.helper.tools import get_agentmail_client  # type: ignore
 
     client = get_agentmail_client()
-    inbox_id = os.environ["AGENTMAIL_INBOX_ID"]
+    inbox_id = os.environ.get("AGENTMAIL_INBOX_ID")
+    if not inbox_id:
+        raise ValueError(
+            "AgentMail inbox is not configured. Set the AGENTMAIL_INBOX_ID environment "
+            "variable before calling send_outreach_email."
+        )
     full_body = f"{message_body}\n\n{signature}".strip() if signature else message_body
 
-    message = client.inboxes.messages.send(
-        inbox_id=inbox_id,
-        to=recipient_email,
-        subject=subject,
-        text=full_body,
-        labels=["outreach"],
+    message = await asyncio.to_thread(
+        lambda: client.inboxes.messages.send(
+            inbox_id=inbox_id,
+            to=recipient_email,
+            subject=subject,
+            text=full_body,
+            labels=["outreach"],
+        )
     )
     return {
         "sent": True,

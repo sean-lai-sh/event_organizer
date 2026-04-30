@@ -357,6 +357,26 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
             "required": ["event_id"],
         },
     },
+    {
+        "name": "send_outreach_email",
+        "description": (
+            "Send an outreach email to a recipient via AgentMail. "
+            "Approval-gated — the runtime will pause for explicit user approval before sending."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "recipient_name":  {"type": "string", "description": "Recipient's full name"},
+                "recipient_email": {"type": "string", "description": "Recipient's email address"},
+                "subject":         {"type": "string", "description": "Email subject line"},
+                "message_body":    {"type": "string", "description": "Main body of the email"},
+                "sender_name":     {"type": "string", "description": "Sender's display name (optional)"},
+                "sender_email":    {"type": "string", "description": "Sender's email address (optional)"},
+                "signature":       {"type": "string", "description": "Optional signature to append"},
+            },
+            "required": ["recipient_name", "recipient_email", "subject", "message_body"],
+        },
+    },
 ]
 
 
