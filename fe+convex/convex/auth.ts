@@ -33,6 +33,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       expiresIn: 60 * 60 * 24 * 30,
       updateAge: 60 * 60 * 24,
     },
+    trustedOrigins: process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",") ?? [],
     advanced: {
       useSecureCookies: process.env.NODE_ENV === "production",
     },

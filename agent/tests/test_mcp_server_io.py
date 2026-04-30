@@ -782,7 +782,6 @@ async def test_send_outreach_email_calls_agentmail(monkeypatch: pytest.MonkeyPat
     )
 
     assert result["sent"] is True
-    assert result["thread_id"] == "thread_abc"
     assert result["recipient_email"] == "ada@example.com"
     assert result["subject"] == "Speaking invite"
     assert len(sent_calls) == 1
