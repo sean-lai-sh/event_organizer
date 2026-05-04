@@ -239,14 +239,15 @@ export function ConversationTimeline({
     setTracesVisible(true);
 
     let active = true;
-    startRun(threadId, pendingMsg).catch(() => {
-      if (active) {
-        setIsRunning(false);
-        setPendingMessage(null);
-        setTracesVisible(false);
-        runThreadIdRef.current = null;
-      }
-    });
+    startRun(threadId, pendingMsg)
+      .catch(() => {
+        if (active) {
+          setIsRunning(false);
+          setPendingMessage(null);
+          setTracesVisible(false);
+          runThreadIdRef.current = null;
+        }
+      });
     return () => { active = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
@@ -350,7 +351,6 @@ export function ConversationTimeline({
       setTracesVisible(false);
       runThreadIdRef.current = null;
     }
-    // isRunning is cleared reactively when the Convex run status changes.
   }
 
   const activeComposerApproval = getActiveComposerApproval(approvals);
