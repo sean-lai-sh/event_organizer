@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
@@ -41,11 +41,15 @@ interface AgentShellProps {
   activeThreadId: string | null;
 }
 
+type ViewState = { canvasOpen: boolean; draftValue: string; artifacts: AgentArtifact[] };
+
 export function AgentShell({ activeThreadId }: AgentShellProps) {
   const router = useRouter();
-  const [artifacts, setArtifacts] = useState<AgentArtifact[]>([]);
-  const [canvasOpen, setCanvasOpen] = useState(false);
-  const [draftValue, setDraftValue] = useState("");
+  const [{ canvasOpen, draftValue, artifacts }, dispatchView] = useReducer(
+    (s: ViewState, next: Partial<ViewState> | "reset"): ViewState =>
+      next === "reset" ? { canvasOpen: false, draftValue: "", artifacts: [] } : { ...s, ...next },
+    { canvasOpen: false, draftValue: "", artifacts: [] },
+  );
 
   // Same query ThreadRail uses — Convex deduplicates the subscription.
   const rawThreads = useQuery(api.agentState.listThreads, { limit: 50 });
@@ -63,16 +67,13 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
       : { id: activeThreadId, title: "Conversation", channel: "web", lastActivityAt: 0 };
   }, [activeThreadId, threadList]);
 
-  // Reset canvas and load artifacts whenever the active thread changes.
   useEffect(() => {
-    setCanvasOpen(false);
-    setDraftValue("");
-    setArtifacts([]);
+    dispatchView("reset");
     if (!activeThreadId) return;
     let cancelled = false;
     getThreadArtifacts(activeThreadId)
-      .then((arts) => { if (!cancelled) setArtifacts(arts); })
-      .catch(() => { /* thread may not be in Convex yet on first load */ });
+      .then((arts) => { if (!cancelled) dispatchView({ artifacts: arts }); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [activeThreadId]);
 
@@ -80,8 +81,10 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
     async (threadId?: string) => {
       const resolvedId = threadId ?? activeThreadId;
       if (!resolvedId) return;
-      const arts = await getThreadArtifacts(resolvedId);
-      setArtifacts(arts);
+      try {
+        const arts = await getThreadArtifacts(resolvedId);
+        dispatchView({ artifacts: arts });
+      } catch {}
     },
     [activeThreadId],
   );
@@ -138,7 +141,7 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
           <div className="flex shrink-0 items-center gap-2">
             {artifacts.length > 0 && !canvasOpen && (
               <button
-                onClick={() => setCanvasOpen(true)}
+                onClick={() => dispatchView({ canvasOpen: true })}
                 className="rounded-[6px] border border-[#E0E0E0] px-2.5 py-1 text-[12px] font-medium text-[#555555] transition-colors duration-100 hover:bg-[#F4F4F4]"
               >
                 Artifacts ({artifacts.length})
@@ -162,11 +165,11 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
           }}
           emptyState={
             <AgentEmptyState
-              onPromptSelect={(prompt) => setDraftValue(prompt)}
+              onPromptSelect={(prompt) => dispatchView({ draftValue: prompt })}
             />
           }
           draftValue={draftValue}
-          onDraftChange={setDraftValue}
+          onDraftChange={(v) => dispatchView({ draftValue: v })}
         />
       </div>
 
@@ -177,7 +180,7 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
         >
           <ArtifactCanvas
             artifacts={artifacts}
-            onClose={() => setCanvasOpen(false)}
+            onClose={() => dispatchView({ canvasOpen: false })}
           />
         </div>
       )}

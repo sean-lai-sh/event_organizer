@@ -240,14 +240,6 @@ export function ConversationTimeline({
 
     let active = true;
     startRun(threadId, pendingMsg)
-      .then(() => {
-        // Modal completed the run. Clear running state now so the UI
-        // doesn't hang if Convex is mis-pointed (e.g. wrong deployment).
-        if (active) {
-          setIsRunning(false);
-          onArtifactsChange?.(threadId);
-        }
-      })
       .catch(() => {
         if (active) {
           setIsRunning(false);
@@ -351,10 +343,6 @@ export function ConversationTimeline({
 
     try {
       await startRun(workingThread.id, text);
-      // Modal completed the run. Clear running state now so the UI doesn't
-      // hang if Convex is slow or pointed at the wrong deployment.
-      setIsRunning(false);
-      onArtifactsChange?.(workingThread.id);
     } catch {
       // If the run failed to start, clear all optimistic state so the UI
       // doesn't get stuck in a pending/thinking state with no response.
