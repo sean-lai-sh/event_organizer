@@ -70,9 +70,9 @@ export function AgentShell({ activeThreadId }: AgentShellProps) {
     setArtifacts([]);
     if (!activeThreadId) return;
     let cancelled = false;
-    getThreadArtifacts(activeThreadId).then((arts) => {
-      if (!cancelled) setArtifacts(arts);
-    });
+    getThreadArtifacts(activeThreadId)
+      .then((arts) => { if (!cancelled) setArtifacts(arts); })
+      .catch(() => { /* thread may not be in Convex yet on first load */ });
     return () => { cancelled = true; };
   }, [activeThreadId]);
 
