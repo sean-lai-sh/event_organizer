@@ -97,6 +97,18 @@ export function EmailDraftCanvas({
     setSelectionText(text);
   }
 
+  async function handleCancel() {
+    if (loading) return;
+    await runDecision({
+      approvalId: approval.id,
+      decision: "rejected",
+      submit: submitApproval,
+      lock: lockRef,
+      setLoading,
+      onResolved,
+    });
+  }
+
   async function handleSend() {
     if (loading) return;
     await runDecision({
@@ -216,6 +228,16 @@ export function EmailDraftCanvas({
               )}
             </div>
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={loading}
+                aria-label="Cancel email"
+                title="Cancel"
+                className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#555555] transition-colors hover:bg-[#F1F1F1] hover:text-[#111111] disabled:opacity-40"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={handleCopy}
@@ -404,6 +426,15 @@ function PencilIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
     </svg>
   );
 }
