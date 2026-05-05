@@ -25,6 +25,7 @@ export function ComposerApprovalPrompt({
   onResolved,
   onRejectedWithMessage,
 }: ComposerApprovalPromptProps) {
+  console.log("[ApprovalPrompt] actionType =", approval.actionType, "| requestedAction =", approval.requestedAction);
   if (approval.actionType === "send_outreach_email") {
     return (
       <EmailDraftCanvas
@@ -53,7 +54,6 @@ function GenericApprovalPrompt({
   onRejectedWithMessage,
 }: ComposerApprovalPromptProps) {
   const [loading, setLoading] = useState(false);
-  const [longExpanded, setLongExpanded] = useState<Record<string, boolean>>({});
   const [inputMode, setInputMode] = useState(false);
   const [inputText, setInputText] = useState("");
   const lockRef = useRef(false);
@@ -62,10 +62,6 @@ function GenericApprovalPrompt({
   const summary = summarizeApproval(approval);
   const fields = extractApprovalFields(approval.proposedPayload);
   const olderPending = Math.max(0, pendingCount - 1);
-
-  function toggleLong(key: string) {
-    setLongExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
 
   async function handleCta(cta: ComposerCta) {
     if (cta === "tell_me_something_else") {
@@ -123,37 +119,18 @@ function GenericApprovalPrompt({
         )}
 
         {fields.length > 0 && (
-          <dl className="mt-1 divide-y divide-[#F1F1F1] rounded-[6px] border border-[#EBEBEB] bg-[#FAFAFA] px-3 py-1">
-            {fields.map((f) => {
-              const expanded = longExpanded[f.key] === true;
-              const clamped = f.isLong && f.displayValue.length > 200;
-              const shown =
-                clamped && !expanded
-                  ? f.displayValue.slice(0, 200).trimEnd() + "…"
-                  : f.displayValue;
-              return (
-                <div key={f.key} className="flex gap-3 py-1.5">
-                  <dt className="w-[110px] shrink-0 text-[11px] font-medium uppercase tracking-wide text-[#999999]">
-                    {f.label}
-                  </dt>
-                  <dd className="flex-1 text-[12px] leading-snug text-[#111111]">
-                    <span className={f.isLong ? "whitespace-pre-wrap break-words" : "break-words"}>
-                      {shown}
-                    </span>
-                    {clamped && (
-                      <button
-                        type="button"
-                        onClick={() => toggleLong(f.key)}
-                        className="ml-2 text-[11px] font-medium text-[#555555] underline-offset-2 hover:underline"
-                      >
-                        {expanded ? "Show less" : "Show more"}
-                      </button>
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
+          <div className="mt-1 flex flex-col gap-1.5 rounded-[6px] border border-[#EBEBEB] bg-[#FAFAFA] px-3 py-2">
+            {fields.map((f) => (
+              <div key={f.key} className="flex flex-col gap-0.5">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-[#AAAAAA]">
+                  {f.label}
+                </span>
+                <span className="whitespace-pre-wrap break-words text-[12.5px] leading-snug text-[#111111]">
+                  {f.displayValue}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
 
         {inputMode ? (
