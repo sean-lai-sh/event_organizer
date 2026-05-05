@@ -62,7 +62,7 @@ High-level view of every service and how they connect.
                 │                                                  │
     ┌───────────▼─────────────────┐          ┌────────────────────▼────┐
     │   Python Agent Backend      │          │   External Services      │
-    │   (backend/)                │          │                          │
+    │   (agent/)                  │          │                          │
     │   ┌────────────────────┐    │          │  ┌────────────────────┐  │
     │   │ Claude (Anthropic) │    │          │  │   Attio CRM        │  │
     │   │ via fastmcp tools  │    │          │  │   api.attio.com/v2 │  │
@@ -295,7 +295,7 @@ The Python agent backend: how Claude reasons and calls tools to manage speaker o
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                    PYTHON AGENT BACKEND                           │
-│                    (backend/ — runs on Modal)                     │
+│                    (agent/ — runs on Modal)                       │
 │                                                                   │
 │  ┌───────────────────────────────────────────────────────────┐   │
 │  │  Claude (claude-sonnet / claude-opus via Anthropic SDK)   │   │
@@ -307,18 +307,19 @@ The Python agent backend: how Claude reasons and calls tools to manage speaker o
 │  ┌──────────────────────────────────────────────────────────┐    │
 │  │  MCP Tool Layer (fastmcp)                                │    │
 │  │                                                          │    │
-│  │  Attio Tools                  Convex Tools               │    │
-│  │  ┌──────────────────┐        ┌──────────────────────┐    │    │
-│  │  │ search_contacts  │        │ insertOutreachRows    │    │    │
-│  │  │ get_contact      │        │ applyInboundUpdate   │    │    │
-│  │  │ update_contact   │        │ upsertOutreachLink   │    │    │
-│  │  │ create_note      │        │ recordInboundReceipt │    │    │
-│  │  └──────────────────┘        │ applyInboundMileston │    │    │
-│  │                               └──────────────────────┘    │    │
-│  │  AgentMail Tools                                           │    │
-│  │  ┌──────────────────────────────────────────────────┐     │    │
-│  │  │ send_outreach_email  read_thread  reply_to_thread│     │    │
-│  │  └──────────────────────────────────────────────────┘     │    │
+│  │  Attio Tools (people + speakers)  Convex Tools          │    │
+│  │  ┌───────────────────────────┐  ┌─────────────────────┐  │    │
+│  │  │ search_people             │  │ list_events         │  │    │
+│  │  │ get_person                │  │ get_event           │  │    │
+│  │  │ upsert_person             │  │ create_event        │  │    │
+│  │  │ append_person_note        │  │ update_event_safe   │  │    │
+│  │  │ search_speakers           │  └─────────────────────┘  │    │
+│  │  │ get_speaker               │                            │    │
+│  │  │ ensure_speaker_for_person │  OnceHub Tools             │    │
+│  │  │ update_speaker_workflow   │  ┌─────────────────────┐  │    │
+│  │  └───────────────────────────┘  │ find_oncehub_slots  │  │    │
+│  │                                  │ book_oncehub_room   │  │    │
+│  │                                  └─────────────────────┘  │    │
 │  └──────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
           │                    │                     │
@@ -339,43 +340,29 @@ The Python agent backend: how Claude reasons and calls tools to manage speaker o
    │
 3. Agent reads event details from Convex
    │
-4. Agent calls Attio search_contacts with filters:
-   │  - career_profile matches event target_profile
-   │  - contact_type = "speaker" or "mentor"
-   │  - relationship_stage, outreach_status filters
+4. Agent calls Attio search_speakers / search_people to find candidates
    │
 5. Agent ranks & selects candidates
    │
-6. Agent calls Convex insertOutreachRows({
-   │    event_id, attio_record_id, suggested: true,
-   │    approved: false, response: "pending"
-   │  })
+6. Agent calls Convex create_event / update_event_safe (approval-gated) as needed
+   │  and writes outreach rows for suggested speakers
    │
-7. Eboard reviews suggestions in dashboard
-   │  - approves/rejects via updateOutreach({ approved: true/false })
+7. Eboard reviews suggestions in dashboard via agent approval flow
    │
-8. For approved rows: agent sends email via AgentMail
-   │  - records agentmail_thread_id via upsertOutreachLink
-   │  - updates outreach_sent: true
+8. For approved rows: agent contacts speakers
+   │  - updates Attio speakers.status and active_event_id
+   │  - appends audit note to parent Attio people record
    │
-9. Convex status updated: "draft" → "matching" → "outreach"
+9. Convex event status progresses through agent run lifecycle
 ```
 
 **Key files:**
-- `backend/attio/client.py` — async httpx wrapper for Attio API v2
-- `backend/models/contact.py` — Pydantic models for `AttioContact` with club-specific fields
-- `backend/pyproject.toml` — dependencies: `fastmcp`, `anthropic`, `agentmail`, `modal`
-
-**Attio contact model fields used by agent:**
-```
-career_profile       — structured JSON (experience, education, skills, interests)
-relationship_stage   — cold | active | spoken | persistent
-contact_type         — prospect | alumni | speaker | mentor | partner
-outreach_status      — pending | agent_active | human_assigned | in_conversation | converted
-enrichment_status    — pending | enriched | stale | failed
-assigned_members     — list of eboard member emails
-last_agent_action_at — timestamp of last agent interaction
-```
+- `agent/core/clients/attio.py` — async httpx wrapper for Attio API v2 (people + speakers)
+- `agent/helper/attio.py` — higher-level Attio helpers used by MCP tools
+- `agent/helper/tools.py` — shared Attio and Convex tool helpers
+- `agent/apps/mcp/service.py` — FastMCP implementation with all registered tools
+- `agent/apps/mcp/server.py` — stdio launcher started by the Anthropic Agent SDK
+- `agent/pyproject.toml` — dependencies: `fastmcp`, `anthropic`, `modal`, `httpx`, `convex`
 
 ---
 
@@ -469,13 +456,13 @@ Speaker replies to outreach email
 
 | Variable | Where | Purpose |
 |---|---|---|
-| `NEXT_PUBLIC_CONVEX_URL` | fe+convex `.env.local` | Convex WebSocket endpoint for browser |
-| `CONVEX_DEPLOYMENT` | fe+convex `.env.local` | Deployment identifier |
-| `NEXT_PUBLIC_CONVEX_SITE_URL` | fe+convex `.env.local` | Convex HTTP endpoint |
-| `BETTER_AUTH_SECRET` | fe+convex (server) | Signs session tokens |
-| `CONVEX_URL` | backend `.env` | Convex HTTP API for agent write-back |
-| `CONVEX_DEPLOY_KEY` | backend `.env` | Auth key for server-side Convex calls |
-| `ATTIO_KEY` | backend `.env` | Attio CRM API token |
-| `ANTHROPIC_API_KEY` | backend `.env` | Claude API key |
-| `AGENTMAIL_API_KEY` | backend `.env` | AgentMail token |
-| `AGENTMAIL_INBOX_ID` | backend `.env` | Which inbox the agent uses |
+| `NEXT_PUBLIC_CONVEX_URL` | Doppler (`fe+convex`) | Convex WebSocket endpoint for browser |
+| `CONVEX_DEPLOYMENT` | Doppler (`fe+convex`) | Deployment identifier |
+| `NEXT_PUBLIC_CONVEX_SITE_URL` | Doppler (`fe+convex`) | Convex HTTP endpoint |
+| `BETTER_AUTH_SECRET` | Doppler (`fe+convex`) | Signs session tokens |
+| `CONVEX_URL` | Doppler (`agent/`) | Convex HTTP API for agent write-back |
+| `CONVEX_DEPLOY_KEY` | Doppler (`agent/`) | Auth key for server-side Convex calls |
+| `ATTIO_API_KEY` | Doppler (`agent/`) | Attio CRM API token |
+| `ANTHROPIC_API_KEY` | Doppler (`agent/`) | Claude API key |
+| `AGENTMAIL_API_KEY` | Doppler (`agent/`) | AgentMail token |
+| `AGENTMAIL_INBOX_ID` | Doppler (`agent/`) | Which inbox the agent uses |
