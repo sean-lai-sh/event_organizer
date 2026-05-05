@@ -87,7 +87,7 @@ export function EmailDraftCanvas({
       lock: lockRef,
       setLoading,
       onResolved,
-      overrideArgs: fields,
+      overrideArgs: fields as unknown as Record<string, unknown>,
     });
   }
 
