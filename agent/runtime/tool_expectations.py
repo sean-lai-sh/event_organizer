@@ -76,7 +76,23 @@ def infer_request_tool_expectation(text: str) -> RequestToolExpectation | None:
             no_data_message="I couldn't find any events in Convex to report on.",
         )
 
-    if "outreach" in lowered or "inbound" in lowered:
+    if _mentions_any(lowered, ("send", "draft", "write", "compose")) and _mentions_any(
+        lowered, ("email", "mail", "message")
+    ):
+        return RequestToolExpectation(
+            kind="send_email",
+            relevant_tools=("send_outreach_email",),
+            retry_instruction=(
+                "The user wants to send or draft an email. Call `send_outreach_email` with all "
+                "required fields. Fetch event details with `get_event` or `list_events` and "
+                "recipient info with `search_people` or `get_person` first if needed, then call "
+                "`send_outreach_email`. Do not just write the email as text."
+            ),
+        )
+
+    if ("outreach" in lowered or "inbound" in lowered) and not _mentions_any(
+        lowered, ("send", "draft", "write", "compose", "email", "mail")
+    ):
         return RequestToolExpectation(
             kind="event_outreach",
             relevant_tools=("get_event_outreach", "get_event_inbound_status", "list_events"),
