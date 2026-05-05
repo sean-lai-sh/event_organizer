@@ -26,7 +26,15 @@ export function ComposerApprovalPrompt({
   onRejectedWithMessage,
 }: ComposerApprovalPromptProps) {
   console.log("[ApprovalPrompt] actionType =", approval.actionType, "| requestedAction =", approval.requestedAction);
-  if (approval.actionType === "send_outreach_email") {
+  const lowerAction = (approval.actionType ?? "").toLowerCase();
+  const lowerTitle = (approval.requestedAction ?? "").toLowerCase();
+  const isEmailApproval =
+    lowerAction.includes("email") ||
+    lowerAction.includes("mail") ||
+    lowerTitle.includes("email") ||
+    lowerTitle.includes("send email") ||
+    lowerTitle.includes("draft email");
+  if (isEmailApproval) {
     return (
       <EmailDraftCanvas
         approval={approval}
