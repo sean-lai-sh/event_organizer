@@ -45,8 +45,9 @@ DEFAULT_SYSTEM_PROMPT = (
     "time, location, description, and type. Also call `get_person` or `search_people` to confirm "
     "the recipient's name and email. Then call `send_outreach_email` with all required fields "
     "fully populated using those details. Never draft an email with placeholder or missing event "
-    "details. The send is approval-gated — compose a complete draft so the user can review the "
-    "full content before it is delivered."
+    "details. IMPORTANT: do NOT write the email content in your text response before or after "
+    "calling `send_outreach_email` — the approval UI will display the draft to the user. "
+    "Only call the tool; do not narrate or repeat the email body in chat."
 )
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 

@@ -37,7 +37,7 @@ from .normalize import (
     summarize_text_for_thread,
     text_block,
 )
-from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
+from .policy import ActionClass, ApprovalPolicy, ToolAction, infer_tool_action_from_text
 from .store import InMemoryRuntimeStore
 from .tool_expectations import (
     RequestToolExpectation,
@@ -679,8 +679,12 @@ class AgentRuntimeService:
                     await self._maybe_emit_slot_table_artifact(run=run, tool_result=trace.result)
 
         if result.blocked_action:
-            # Finalize the streaming message before pausing
-            final_text = latest_text or "This action requires approval before execution."
+            # For send-class actions (email etc.) suppress any agent preamble text so
+            # the draft content only appears in the approval UI, not as a chat message.
+            if result.blocked_action.action_class == ActionClass.SEND:
+                final_text = ""
+            else:
+                final_text = latest_text or "This action requires approval before execution."
             await self._patch_streaming_assistant_message(
                 assistant_msg, final_text, status="final"
             )

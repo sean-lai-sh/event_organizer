@@ -177,7 +177,9 @@ export function ConversationTimeline({
 
   // Derive messages, approvals, and traces from the reactive query result.
   const messages: AgentMessage[] = threadState
-    ? (threadState.messages as unknown as ConvexMessage[]).map(mapConvexMessage)
+    ? (threadState.messages as unknown as ConvexMessage[])
+        .map(mapConvexMessage)
+        .filter((m) => m.content.some((b) => b.type === "text" && b.text.trim() !== ""))
     : [];
 
   const approvals: AgentApproval[] = threadState
