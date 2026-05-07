@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAdminMember } from "./eboard";
+import { requireAdminOrAgent } from "./eboard";
 
 export const getEvent = query({
   args: { event_id: v.id("events") },
@@ -22,12 +22,14 @@ export const createEvent = mutation({
     needs_outreach: v.boolean(),
     status: v.string(),
     created_by: v.optional(v.string()),
+    _agent_token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAdminMember(ctx);
+    const { _agent_token, ...eventArgs } = args;
+    await requireAdminOrAgent(ctx, _agent_token);
 
     return await ctx.db.insert("events", {
-      ...args,
+      ...eventArgs,
       speaker_confirmed: false,
       room_confirmed: false,
       created_at: Date.now(),
@@ -36,9 +38,13 @@ export const createEvent = mutation({
 });
 
 export const updateEventStatus = mutation({
-  args: { event_id: v.id("events"), status: v.string() },
-  handler: async (ctx, { event_id, status }) => {
-    await requireAdminMember(ctx);
+  args: {
+    event_id: v.id("events"),
+    status: v.string(),
+    _agent_token: v.optional(v.string()),
+  },
+  handler: async (ctx, { event_id, status, _agent_token }) => {
+    await requireAdminOrAgent(ctx, _agent_token);
 
     await ctx.db.patch(event_id, { status });
   },
@@ -59,6 +65,7 @@ export const updateEvent = mutation({
     needs_outreach: v.optional(v.boolean()),
     speaker_confirmed: v.optional(v.boolean()),
     room_confirmed: v.optional(v.boolean()),
+    _agent_token: v.optional(v.string()),
   },
   handler: async (
     ctx,
@@ -76,9 +83,10 @@ export const updateEvent = mutation({
       needs_outreach,
       speaker_confirmed,
       room_confirmed,
+      _agent_token,
     }
   ) => {
-    await requireAdminMember(ctx);
+    await requireAdminOrAgent(ctx, _agent_token);
 
     const event = await ctx.db.get(event_id);
     if (!event) {
@@ -126,9 +134,12 @@ export const listEvents = query({
 });
 
 export const deleteEvent = mutation({
-  args: { event_id: v.id("events") },
-  handler: async (ctx, { event_id }) => {
-    await requireAdminMember(ctx);
+  args: {
+    event_id: v.id("events"),
+    _agent_token: v.optional(v.string()),
+  },
+  handler: async (ctx, { event_id, _agent_token }) => {
+    await requireAdminOrAgent(ctx, _agent_token);
 
     const event = await ctx.db.get(event_id);
     if (!event) {
@@ -169,9 +180,13 @@ export const applyInboundMilestones = mutation({
     event_id: v.id("events"),
     speaker_confirmed: v.optional(v.boolean()),
     room_confirmed: v.optional(v.boolean()),
+    _agent_token: v.optional(v.string()),
   },
-  handler: async (ctx, { event_id, speaker_confirmed, room_confirmed }) => {
-    await requireAdminMember(ctx);
+  handler: async (
+    ctx,
+    { event_id, speaker_confirmed, room_confirmed, _agent_token }
+  ) => {
+    await requireAdminOrAgent(ctx, _agent_token);
 
     const event = await ctx.db.get(event_id);
     if (!event) throw new Error(`Event not found: ${event_id}`);

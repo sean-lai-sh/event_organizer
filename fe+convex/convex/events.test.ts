@@ -13,6 +13,14 @@ let requireAdminMemberImpl = async () => ({ authUser: { _id: "user:1" }, member:
 
 mock.module("./eboard", () => ({
   requireAdminMember: (...args: unknown[]) => requireAdminMemberImpl(...args),
+  requireAdminOrAgent: async (ctx: unknown, agentToken: string | undefined) => {
+    const expected = process.env.AGENT_SERVICE_TOKEN;
+    if (expected && agentToken && agentToken === expected) {
+      return { authUser: null, member: null, isAgent: true } as const;
+    }
+    const result = await requireAdminMemberImpl();
+    return { ...result, isAgent: false } as const;
+  },
 }));
 
 class FakeIndexRangeBuilder {

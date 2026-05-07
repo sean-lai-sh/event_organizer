@@ -13,6 +13,7 @@ class ConvexClient:
     def __init__(self) -> None:
         self._url = os.environ["CONVEX_URL"].rstrip("/")
         self._key = os.environ["CONVEX_DEPLOY_KEY"]
+        self._agent_token = os.environ.get("AGENT_SERVICE_TOKEN")
         self._http: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> "ConvexClient":
@@ -62,6 +63,19 @@ class ConvexClient:
     async def mutation(self, path: str, args: dict | None = None) -> Any:
         return await self._call("mutation", path, args or {})
 
+    async def _admin_mutation(self, path: str, args: dict | None = None) -> Any:
+        """Mutation against an admin-gated Convex function.
+
+        Only paths whose validator includes the optional `_agent_token` field
+        (currently the gated mutations in `convex/events.ts`) may be called
+        through this. General mutations must use `mutation()` to avoid
+        ArgumentValidationError on the extra field.
+        """
+        merged = dict(args or {})
+        if self._agent_token and "_agent_token" not in merged:
+            merged["_agent_token"] = self._agent_token
+        return await self._call("mutation", path, merged)
+
     # ── Events ──
 
     async def get_event(self, event_id: str) -> dict | None:
@@ -72,10 +86,12 @@ class ConvexClient:
         return rows if isinstance(rows, list) else []
 
     async def update_event_status(self, event_id: str, status: str) -> None:
-        await self.mutation("events:updateEventStatus", {"event_id": event_id, "status": status})
+        await self._admin_mutation(
+            "events:updateEventStatus", {"event_id": event_id, "status": status}
+        )
 
     async def create_event(self, event: dict) -> str:
-        return await self.mutation("events:createEvent", event)
+        return await self._admin_mutation("events:createEvent", event)
 
     async def apply_inbound_milestones(
         self,
@@ -84,7 +100,7 @@ class ConvexClient:
         speaker_confirmed: bool | None = None,
         room_confirmed: bool | None = None,
     ) -> None:
-        await self.mutation(
+        await self._admin_mutation(
             "events:applyInboundMilestones",
             {
                 "event_id": event_id,
@@ -109,7 +125,7 @@ class ConvexClient:
         speaker_confirmed: bool | None = None,
         room_confirmed: bool | None = None,
     ) -> dict | None:
-        return await self.mutation(
+        return await self._admin_mutation(
             "events:updateEvent",
             {
                 "event_id": event_id,
@@ -215,7 +231,7 @@ class ConvexClient:
         await self.mutation("outreach:releaseInboundReceipt", {"message_id": message_id})
 
     async def delete_event(self, event_id: str) -> None:
-        await self.mutation("events:deleteEvent", {"event_id": event_id})
+        await self._admin_mutation("events:deleteEvent", {"event_id": event_id})
 
     async def delete_outreach_for_event(self, event_id: str) -> None:
         await self.mutation("outreach:deleteOutreachForEvent", {"event_id": event_id})
