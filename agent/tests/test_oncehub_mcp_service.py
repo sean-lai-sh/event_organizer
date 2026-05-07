@@ -246,6 +246,59 @@ async def test_book_oncehub_room_uses_existing_event_when_provided(monkeypatch: 
 
 
 @pytest.mark.asyncio
+async def test_book_oncehub_room_fails_fast_when_existing_event_is_confirmed_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = _install_fakes(monkeypatch)
+    state["get_event_result"] = None
+    tz = ZoneInfo("America/New_York")
+    epoch = int(datetime(2026, 5, 16, 10, 0, tzinfo=tz).timestamp() * 1000)
+
+    with pytest.raises(ValueError, match="Event not found: evt_missing"):
+        await mcp_service.book_oncehub_room(
+            slot_start_epoch_ms=epoch,
+            duration_minutes=60,
+            title="Workshop",
+            num_attendees=20,
+            event_id="evt_missing",
+        )
+
+    assert state["booking_calls"] == []
+    assert state["upsert_booking_calls"] == []
+
+
+@pytest.mark.asyncio
+async def test_book_oncehub_room_does_not_block_on_convex_preflight_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = _install_fakes(monkeypatch)
+
+    class FlakyPreflightConvex(FakeConvexClient):
+        async def get_event(self, event_id: str) -> dict | None:
+            raise RuntimeError("Convex preflight unavailable")
+
+    monkeypatch.setattr(mcp_service, "ConvexClient", lambda: FlakyPreflightConvex(state))
+
+    tz = ZoneInfo("America/New_York")
+    epoch = int(datetime(2026, 5, 16, 10, 0, tzinfo=tz).timestamp() * 1000)
+
+    result = await mcp_service.book_oncehub_room(
+        slot_start_epoch_ms=epoch,
+        duration_minutes=60,
+        title="Workshop",
+        num_attendees=20,
+        event_id="evt_existing",
+    )
+
+    assert len(state["booking_calls"]) == 1
+    assert result["booking_reference"] == "bk_1"
+    assert result["event_id"] == "evt_existing"
+    assert result["convex_sync"] == "ok"
+    assert result["preflight_convex_error"] == "Convex preflight unavailable"
+    assert "Convex preflight unavailable" in (result["convex_error"] or "")
+
+
+@pytest.mark.asyncio
 async def test_book_oncehub_room_preserves_receipt_when_convex_upsert_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
