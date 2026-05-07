@@ -34,6 +34,7 @@ try:
         normalize_speaker_source,
         normalize_speaker_status,
     )
+    from helper.tools import get_agentmail_client
 except ModuleNotFoundError:  # pragma: no cover - package import fallback
     from agent.core.clients.attio import (  # type: ignore
         AttioClient,
@@ -46,6 +47,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import fallback
         normalize_speaker_source,
         normalize_speaker_status,
     )
+    from agent.helper.tools import get_agentmail_client  # type: ignore
 
 mcp = FastMCP("event-organizer")
 

@@ -60,6 +60,7 @@ type ConvexApproval = {
   status: string;
   risk_level: string;
   requested_at: number;
+  action_type?: string;
 };
 
 type ConvexTrace = {
@@ -116,6 +117,7 @@ function mapConvexApproval(a: ConvexApproval): AgentApproval {
     proposedPayload,
     status: a.status as AgentApproval["status"],
     createdAt: a.requested_at,
+    actionType: a.action_type,
   };
 }
 
@@ -175,7 +177,9 @@ export function ConversationTimeline({
 
   // Derive messages, approvals, and traces from the reactive query result.
   const messages: AgentMessage[] = threadState
-    ? (threadState.messages as unknown as ConvexMessage[]).map(mapConvexMessage)
+    ? (threadState.messages as unknown as ConvexMessage[])
+        .map(mapConvexMessage)
+        .filter((m) => m.content.some((b) => b.type === "text" && b.text.trim() !== ""))
     : [];
 
   const approvals: AgentApproval[] = threadState

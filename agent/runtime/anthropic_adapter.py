@@ -39,7 +39,15 @@ DEFAULT_SYSTEM_PROMPT = (
     "If no location is specified, default to '16 Washington Place'. "
     "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
     "to the user — use natural language equivalents instead. "
-    "When updating an event, confirm which fields will change before calling update_event_safe."
+    "When updating an event, confirm which fields will change before calling update_event_safe. "
+    "When the user asks to draft or send an outreach email: first call `get_event` (or "
+    "`list_events` if no event id is known) to retrieve the full event details — title, date, "
+    "time, location, description, and type. Also call `get_person` or `search_people` to confirm "
+    "the recipient's name and email. Then call `send_outreach_email` with all required fields "
+    "fully populated using those details. Never draft an email with placeholder or missing event "
+    "details. IMPORTANT: do NOT write the email content in your text response before or after "
+    "calling `send_outreach_email` — the approval UI will display the draft to the user. "
+    "Only call the tool; do not narrate or repeat the email body in chat."
 )
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
@@ -360,19 +368,20 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     {
         "name": "send_outreach_email",
         "description": (
-            "Send an outreach email to a recipient via AgentMail. "
-            "Approval-gated — the runtime will pause for explicit user approval before sending."
+            "Send a single outreach email via AgentMail. "
+            "Approval-gated: the user will review and can edit all fields before the email is sent. "
+            "Use this when the user asks to draft or send an email to a contact."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "recipient_name":  {"type": "string", "description": "Recipient's full name"},
-                "recipient_email": {"type": "string", "description": "Recipient's email address"},
+                "recipient_name":  {"type": "string", "description": "Full name of the recipient"},
+                "recipient_email": {"type": "string", "description": "Recipient email address"},
                 "subject":         {"type": "string", "description": "Email subject line"},
-                "message_body":    {"type": "string", "description": "Main body of the email"},
-                "sender_name":     {"type": "string", "description": "Sender's display name (optional)"},
-                "sender_email":    {"type": "string", "description": "Sender's email address (optional)"},
-                "signature":       {"type": "string", "description": "Optional signature to append"},
+                "message_body":    {"type": "string", "description": "Main body of the email (without signature)"},
+                "sender_name":     {"type": "string", "description": "Display name of the sender (optional)"},
+                "sender_email":    {"type": "string", "description": "Sender email address (optional)"},
+                "signature":       {"type": "string", "description": "Email sign-off / signature block (optional)"},
             },
             "required": ["recipient_name", "recipient_email", "subject", "message_body"],
         },
