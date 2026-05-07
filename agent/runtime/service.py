@@ -1285,14 +1285,14 @@ class AgentRuntimeService:
         context_links = state.context_links if state else []
         if thread is None:
             return ThreadExecutionContext(
-                system_prompt=DEFAULT_SYSTEM_PROMPT,
+                system_prompt=DEFAULT_SYSTEM_PROMPT(),
                 messages=[],
             )
         return assemble_thread_context(
             thread=thread,
             messages=messages,
             context_links=context_links,
-            base_system_prompt=DEFAULT_SYSTEM_PROMPT,
+            base_system_prompt=DEFAULT_SYSTEM_PROMPT(),
         )
 
     def _retry_system_prompt(self, base_system: str, expectation: RequestToolExpectation | None) -> str:

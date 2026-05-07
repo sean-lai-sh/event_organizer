@@ -719,8 +719,8 @@ class OnceHubClient:
             last_name=_profile_value(profile, "last_name"),
             email=_profile_value(profile, "email"),
             net_id=_profile_value(profile, "net_id"),
-            subject=title,  # Use the booking title as the subject
-            event_name=_profile_value(profile, "event_name", title),
+            subject=title,
+            event_name=title,
             organization=_profile_value(profile, "organization"),
             num_attendees=str(num_attendees),
             graduation_year=_profile_value(profile, "graduation_year"),

@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from "./types";
 import { MessageBubble } from "./MessageBubble";
 import { ResolvedApprovalCard } from "./ResolvedApprovalCard";
+import { ToolCallCard } from "./ToolCallCard";
 import { ComposerApprovalPrompt } from "./ComposerApprovalPrompt";
 import { AgentInput, type AgentInputHandle } from "./AgentInput";
 import {
@@ -365,11 +366,17 @@ export function ConversationTimeline({
   // NOT included here; they live in ComposerApprovalPrompt above the input.
   type TimelineItem =
     | { kind: "message"; id: string; createdAt: number; message: AgentMessage }
-    | { kind: "approval"; id: string; createdAt: number; approval: AgentApproval };
+    | { kind: "approval"; id: string; createdAt: number; approval: AgentApproval }
+    | { kind: "tool_call"; id: string; createdAt: number; trace: AgentTraceStep };
+
+  const toolCallTraces = traces.filter(
+    (t) => t.kind === "tool_completion" || t.kind === "tool_failure",
+  );
 
   const timeline: TimelineItem[] = [
     ...messages.map((m) => ({ kind: "message" as const, id: m.id, createdAt: m.createdAt, message: m })),
     ...resolvedApprovals.map((a) => ({ kind: "approval" as const, id: a.id, createdAt: a.createdAt, approval: a })),
+    ...toolCallTraces.map((t) => ({ kind: "tool_call" as const, id: t.id, createdAt: t.createdAt, trace: t })),
   ].sort((a, b) => a.createdAt - b.createdAt);
 
   // Only suppress ThinkingBubble once a streaming message has actual text to show.
@@ -423,8 +430,10 @@ export function ConversationTimeline({
             {timeline.map((item) =>
               item.kind === "message" ? (
                 <MessageBubble key={item.id} message={item.message} />
-              ) : (
+              ) : item.kind === "approval" ? (
                 <ResolvedApprovalCard key={item.id} approval={item.approval} />
+              ) : (
+                <ToolCallCard key={item.id} trace={item.trace} />
               )
             )}
 

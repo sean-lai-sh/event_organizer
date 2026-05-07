@@ -6,20 +6,18 @@ oncehub:
 
   booking_profile:
     # Shared club booking identity. All fields below are required except event_name and pronouns_id.
-    first_name: "FILL_IN"
-    last_name: "FILL_IN"
-    email: "FILL_IN@nyu.edu"
-    net_id: "FILL_IN"
-    subject: "FILL_IN"
-    event_name: "FILL_IN"
-    organization: "FILL_IN"
-    num_attendees: "10"
-    graduation_year: "2027"
+    first_name: "Sean"
+    last_name: "Hu"
+    email: "sh7285@nyu.edu"
+    net_id: "sh7285"
+    organization: "Tech@NYU"
+    num_attendees: "50"
+    graduation_year: "2028"
     location: "16 Washington Place"
 
     # OnceHub internal option IDs.
     affiliation_id: "457707" # Undergrad
-    school_id: "453247" # Tandon
+    school_id: "453232" # Tandon
     pronouns_id: "" # Blank skips pronouns.
 
   option_reference:

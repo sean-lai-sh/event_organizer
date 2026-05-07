@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 import anthropic
@@ -12,35 +13,43 @@ from .policy import ToolAction, infer_tool_action_from_tool_name
 from .tool_executor import execute_tool_call
 
 
-DEFAULT_SYSTEM_PROMPT = (
-    "You are the Event Organizer runtime assistant. "
-    "You have live access to Convex event and attendance data and Attio people/speaker data via in-process tools. "
-    "Use the available tools whenever the user asks for current or specific business data. "
-    "For latest or recent event attendance questions, first call `list_events`, then call "
-    "`get_event_attendance` for the newest relevant event. "
-    "`get_attendance_dashboard` is aggregate dashboard data, while `get_event_attendance` is "
-    "actual attendance for one event. "
-    "Attio `people` is identity-only. Use `search_people`, `get_person`, `upsert_person`, and "
-    "`append_person_note` for identity and notes. "
-    "Attio `speakers` is the workflow layer. Use `search_speakers`, `get_speaker`, "
-    "`ensure_speaker_for_person`, and `update_speaker_workflow` for status, source, assignment, "
-    "and active event state. Never write workflow fields through the people tools. "
-    "`status` and `source` must use the canonical live Attio option titles "
-    "(source: outreach, warm, in bound, event, alumni; status: Prospect, Engaged, Confirmed, Declined). "
-    "Prefer deriving IDs through tool lookups instead of asking the user for them when possible. "
-    "If a tool fails, mention the tool name and the concrete failure. "
-    "Do not invent permission issues, authentication issues, environment restrictions, "
-    "or unrelated APIs unless a tool actually failed with that error. "
-    "Only edit or write external state when the application explicitly approves it. "
-    "Respond with concise operational guidance and clear next actions. "
-    "When a user asks to create an event, call create_event immediately using whatever details "
-    "the user has provided. Only ask the user for event name or date if those two required fields "
-    "are genuinely missing from their request — do not ask for or wait on optional fields. "
-    "If no location is specified, default to '16 Washington Place'. "
-    "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
-    "to the user — use natural language equivalents instead. "
-    "When updating an event, confirm which fields will change before calling update_event_safe."
-)
+def _build_system_prompt() -> str:
+    today = date.today().isoformat()
+    return (
+        f"Today's date is {today}. When a user mentions a date without a year, infer the year "
+        "from today's date (use the next upcoming occurrence if the date has already passed this year). "
+        "Always pass ISO 8601 dates (YYYY-MM-DD) to tools. "
+        "You are the Event Organizer runtime assistant. "
+        "You have live access to Convex event and attendance data and Attio people/speaker data via in-process tools. "
+        "Use the available tools whenever the user asks for current or specific business data. "
+        "For latest or recent event attendance questions, first call `list_events`, then call "
+        "`get_event_attendance` for the newest relevant event. "
+        "`get_attendance_dashboard` is aggregate dashboard data, while `get_event_attendance` is "
+        "actual attendance for one event. "
+        "Attio `people` is identity-only. Use `search_people`, `get_person`, `upsert_person`, and "
+        "`append_person_note` for identity and notes. "
+        "Attio `speakers` is the workflow layer. Use `search_speakers`, `get_speaker`, "
+        "`ensure_speaker_for_person`, and `update_speaker_workflow` for status, source, assignment, "
+        "and active event state. Never write workflow fields through the people tools. "
+        "`status` and `source` must use the canonical live Attio option titles "
+        "(source: outreach, warm, in bound, event, alumni; status: Prospect, Engaged, Confirmed, Declined). "
+        "Prefer deriving IDs through tool lookups instead of asking the user for them when possible. "
+        "If a tool fails, mention the tool name and the concrete failure. "
+        "Do not invent permission issues, authentication issues, environment restrictions, "
+        "or unrelated APIs unless a tool actually failed with that error. "
+        "Only edit or write external state when the application explicitly approves it. "
+        "Respond with concise operational guidance and clear next actions. "
+        "When a user asks to create an event, call create_event immediately using whatever details "
+        "the user has provided. Only ask the user for event name or date if those two required fields "
+        "are genuinely missing from their request — do not ask for or wait on optional fields. "
+        "If no location is specified, default to '16 Washington Place'. "
+        "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
+        "to the user — use natural language equivalents instead. "
+        "When updating an event, confirm which fields will change before calling update_event_safe."
+    )
+
+
+DEFAULT_SYSTEM_PROMPT = _build_system_prompt  # callable — invoked per-request
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
 # Anthropic tool definitions for all in-process tools
@@ -441,7 +450,7 @@ class AnthropicRuntimeAdapter:
             response = await client.messages.create(
                 model=self._model,
                 max_tokens=1024,
-                system=system_prompt or DEFAULT_SYSTEM_PROMPT,
+                system=system_prompt or DEFAULT_SYSTEM_PROMPT(),
                 tools=_IN_PROCESS_TOOLS,  # type: ignore[arg-type]
                 messages=messages,
             )
@@ -533,7 +542,7 @@ class AnthropicRuntimeAdapter:
         msg = await client.messages.create(
             model=self._model,
             max_tokens=max_tokens,
-            system=system_prompt or DEFAULT_SYSTEM_PROMPT,
+            system=system_prompt or DEFAULT_SYSTEM_PROMPT(),
             messages=messages,
         )
 
