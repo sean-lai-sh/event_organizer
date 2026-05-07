@@ -20,7 +20,7 @@ def _build_system_prompt() -> str:
         "from today's date (use the next upcoming occurrence if the date has already passed this year). "
         "Always pass ISO 8601 dates (YYYY-MM-DD) to tools. "
         "You are the Event Organizer runtime assistant. "
-        "You have live access to Convex event and attendance data and Attio people/speaker data via in-process tools. "
+        "You have live access to event, attendance, contact, and speaker data via in-process tools. "
         "Use the available tools whenever the user asks for current or specific business data. "
         "For latest or recent event attendance questions, first call `list_events`, then call "
         "`get_event_attendance` for the newest relevant event. "
@@ -34,7 +34,7 @@ def _build_system_prompt() -> str:
         "`status` and `source` must use the canonical live Attio option titles "
         "(source: outreach, warm, in bound, event, alumni; status: Prospect, Engaged, Confirmed, Declined). "
         "Prefer deriving IDs through tool lookups instead of asking the user for them when possible. "
-        "If a tool fails, mention the tool name and the concrete failure. "
+        "If a tool fails, describe the user-visible effect in plain language. "
         "Do not invent permission issues, authentication issues, environment restrictions, "
         "or unrelated APIs unless a tool actually failed with that error. "
         "Only edit or write external state when the application explicitly approves it. "
@@ -45,7 +45,17 @@ def _build_system_prompt() -> str:
         "If no location is specified, default to '16 Washington Place'. "
         "Do not use internal field names (event_date, needs_outreach, event_time, etc.) when talking "
         "to the user — use natural language equivalents instead. "
-        "When updating an event, confirm which fields will change before calling update_event_safe."
+        "When updating an event, confirm which fields will change before calling update_event_safe. "
+        "Never name internal systems or storage when talking to the user. Do not say 'Convex', 'the "
+        "database', 'the backend', or quote internal helper names like 'requireAdminMember' — speak "
+        "about events, attendance, contacts, and bookings directly. When a tool fails, describe the "
+        "user-visible effect (e.g. 'I couldn't save the event due to a permissions issue') without "
+        "naming the storage system or quoting internal error helpers. "
+        "Never echo internal identifiers back to the user. Do not include event_id, record_id, "
+        "thread_id, attio_record_id, OnceHub booking references, or any other opaque token in your "
+        "reply text. Confirm created or updated entities by title, date, time, and other "
+        "human-readable details. Internal IDs may be passed between tools but must not appear in "
+        "what the user reads."
     )
 
 
@@ -208,7 +218,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "list_events",
-        "description": "List Convex events, typically to find the newest relevant event before a follow-up read.",
+        "description": "List events, typically to find the newest relevant event before a follow-up read.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -219,7 +229,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "get_event",
-        "description": "Fetch one Convex event when you already know the event ID.",
+        "description": "Fetch one event when you already know the event ID.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -240,7 +250,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "get_event_outreach",
-        "description": "Return per-event outreach rows and responses for a specific Convex event.",
+        "description": "Return per-event outreach rows and responses for a specific event.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -291,7 +301,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "update_event_safe",
-        "description": "Safely patch approved event fields and milestone booleans for a Convex event.",
+        "description": "Safely patch approved event fields and milestone booleans.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -336,9 +346,9 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
         "description": (
             "Book the Leslie eLab Lean/Launchpad room for a specific slot. "
             "Approval-gated. On approval, submits to OnceHub under the shared club "
-            "booking profile and persists the receipt to Convex event_room_bookings. "
+            "booking profile and persists the booking record. "
             "If event_id is provided, the event's room_confirmed flag is stickied true; "
-            "if event_id is omitted, a new Convex event is created from the booking."
+            "if event_id is omitted, a new event record is created from the booking."
         ),
         "input_schema": {
             "type": "object",
@@ -347,7 +357,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
                 "duration_minutes":    {"type": "integer"},
                 "title":               {"type": "string", "description": "Event/booking title"},
                 "num_attendees":       {"type": "integer"},
-                "event_id":            {"type": "string", "description": "Optional: existing Convex event id"},
+                "event_id":            {"type": "string", "description": "Optional: existing event id"},
                 "description":         {"type": "string"},
                 "event_type":          {"type": "string"},
                 "target_profile":      {"type": "string"},
@@ -357,7 +367,7 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "get_event_room_booking",
-        "description": "Return the latest OnceHub booking record for a Convex event, or null.",
+        "description": "Return the latest OnceHub booking record for an event, or null.",
         "input_schema": {
             "type": "object",
             "properties": {
