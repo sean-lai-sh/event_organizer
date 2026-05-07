@@ -20,6 +20,26 @@ export async function requireAdminMember(ctx: MutationCtx | QueryCtx) {
   return { authUser, member };
 }
 
+/**
+ * Admin gate that also accepts a service token for agent-side calls.
+ * The agent runtime authenticates with a Convex deploy key, which does not
+ * resolve to a Better Auth user, so user-bound `requireAdminMember` cannot
+ * succeed for it. When a caller passes `_agent_token` matching
+ * `AGENT_SERVICE_TOKEN`, treat the call as a trusted agent invocation and
+ * skip the user lookup.
+ */
+export async function requireAdminOrAgent(
+  ctx: MutationCtx | QueryCtx,
+  agentToken: string | undefined
+) {
+  const expected = process.env.AGENT_SERVICE_TOKEN;
+  if (expected && agentToken && agentToken === expected) {
+    return { authUser: null, member: null, isAgent: true } as const;
+  }
+  const result = await requireAdminMember(ctx);
+  return { ...result, isAgent: false } as const;
+}
+
 export const getCurrentMember = query({
   args: {},
   handler: async (ctx) => {

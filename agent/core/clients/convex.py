@@ -13,6 +13,7 @@ class ConvexClient:
     def __init__(self) -> None:
         self._url = os.environ["CONVEX_URL"].rstrip("/")
         self._key = os.environ["CONVEX_DEPLOY_KEY"]
+        self._agent_token = os.environ.get("AGENT_SERVICE_TOKEN")
         self._http: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> "ConvexClient":
@@ -60,7 +61,10 @@ class ConvexClient:
         return await self._call("query", path, args or {})
 
     async def mutation(self, path: str, args: dict | None = None) -> Any:
-        return await self._call("mutation", path, args or {})
+        merged = dict(args or {})
+        if self._agent_token and "_agent_token" not in merged:
+            merged["_agent_token"] = self._agent_token
+        return await self._call("mutation", path, merged)
 
     # ── Events ──
 
