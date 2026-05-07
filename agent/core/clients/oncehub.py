@@ -4,7 +4,7 @@ MVP scope (issue #52):
 - Room discovery is locked to the Leslie eLab "Lean/Launchpad" room.
 - Availability is always fetched live — no caching layer.
 - Booking submits under a single shared club booking profile loaded from
-  ``booking_profile.json`` (co-located with this module).
+  ``agent/config.yaml``.
 - Only first-time booking is supported; cancellation/rebooking is out of scope.
 
 The client wraps OnceHub's **internal browser API** (``go.oncehub.com/api/``).
@@ -26,6 +26,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
+import yaml
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,8 @@ DEFAULT_TIMEZONE = "America/New_York"
 TIMEZONE_ID = 270  # OnceHub internal ID for US/Eastern
 IANA_TZ = DEFAULT_TIMEZONE
 
-_PROFILE_PATH = Path(__file__).with_name("booking_profile.json")
+_DEFAULT_CONFIG_PATH = Path(__file__).parents[2] / "config.yaml"
+_LEGACY_PROFILE_PATH = Path(__file__).with_name("booking_profile.json")
 
 REQUIRED_BOOKING_PROFILE_FIELDS: tuple[str, ...] = (
     "first_name",
@@ -51,19 +53,10 @@ REQUIRED_BOOKING_PROFILE_FIELDS: tuple[str, ...] = (
     "school_id",
 )
 
-BOOKING_PROFILE_ENV_OVERRIDES: dict[str, str] = {
-    "first_name": "ONCEHUB_BOOKING_FIRST_NAME",
-    "last_name": "ONCEHUB_BOOKING_LAST_NAME",
-    "email": "ONCEHUB_BOOKING_EMAIL",
-    "net_id": "ONCEHUB_BOOKING_NET_ID",
-    "organization": "ONCEHUB_BOOKING_ORGANIZATION",
-    "event_name": "ONCEHUB_BOOKING_EVENT_NAME",
-    "graduation_year": "ONCEHUB_BOOKING_GRADUATION_YEAR",
-    "location": "ONCEHUB_BOOKING_LOCATION",
-    "affiliation_id": "ONCEHUB_BOOKING_AFFILIATION_ID",
-    "school_id": "ONCEHUB_BOOKING_SCHOOL_ID",
-    "pronouns_id": "ONCEHUB_BOOKING_PRONOUNS_ID",
-}
+CONFIG_PATH_ENV_VARS: tuple[str, ...] = (
+    "EVENT_ORGANIZER_CONFIG_PATH",
+    "ONCEHUB_CONFIG_PATH",
+)
 
 # ── Data classes ─────────────────────────────────────────────────────────────
 
@@ -137,22 +130,65 @@ def _is_blank_or_placeholder(value: Any) -> bool:
     }
 
 
-def _load_booking_profile() -> dict[str, Any]:
-    """Load the shared booking profile and apply runtime-safe env overrides.
+def _config_path() -> Path:
+    """Return the YAML config path, allowing one deployment-level override."""
+    for env_name in CONFIG_PATH_ENV_VARS:
+        configured = _env(env_name)
+        if configured:
+            return Path(configured).expanduser()
+    return _DEFAULT_CONFIG_PATH
 
-    Only active booking fields are returned; keys prefixed with ``_`` (option
-    reference tables, comments) are stripped. Environment overrides let Modal /
-    Doppler provide private identity details without committing names, emails,
-    or NetIDs into git.
+
+def _load_config() -> dict[str, Any]:
+    """Load agent-level YAML config.
+
+    The default path is ``agent/config.yaml``. ``EVENT_ORGANIZER_CONFIG_PATH``
+    or ``ONCEHUB_CONFIG_PATH`` may point Modal at a mounted config file without
+    requiring one environment variable per booking-profile field.
     """
-    with open(_PROFILE_PATH) as f:
-        raw = json.load(f)
-    profile = {k: v for k, v in raw.items() if not k.startswith("_")}
-    for field, env_name in BOOKING_PROFILE_ENV_OVERRIDES.items():
-        env_value = _env(env_name)
-        if env_value is not None:
-            profile[field] = env_value
-    return profile
+    path = _config_path()
+    if path.exists():
+        with open(path) as f:
+            raw = yaml.safe_load(f) or {}
+        if not isinstance(raw, dict):
+            raise RuntimeError(f"Config file {path} must contain a YAML mapping at the top level.")
+        return raw
+
+    if _LEGACY_PROFILE_PATH.exists():
+        with open(_LEGACY_PROFILE_PATH) as f:
+            legacy_profile = json.load(f)
+        return {"oncehub": {"booking_profile": legacy_profile}}
+
+    raise RuntimeError(
+        "OnceHub config is missing. Create agent/config.yaml or set "
+        "EVENT_ORGANIZER_CONFIG_PATH to a YAML config file."
+    )
+
+
+def _oncehub_config() -> dict[str, Any]:
+    raw_oncehub = _load_config().get("oncehub")
+    if not isinstance(raw_oncehub, dict):
+        raise RuntimeError(
+            "OnceHub config is missing. Add an 'oncehub:' section to agent/config.yaml."
+        )
+    return raw_oncehub
+
+
+def _config_value(section: dict[str, Any], field: str, default: str | None = None) -> str | None:
+    value = section.get(field)
+    if _is_blank_or_placeholder(value):
+        return default
+    return str(value)
+
+
+def _load_booking_profile() -> dict[str, Any]:
+    """Load the shared OnceHub booking identity from YAML config."""
+    raw_profile = _oncehub_config().get("booking_profile")
+    if not isinstance(raw_profile, dict):
+        raise RuntimeError(
+            "OnceHub booking profile is missing. Add oncehub.booking_profile to agent/config.yaml."
+        )
+    return {k: v for k, v in raw_profile.items() if not str(k).startswith("_")}
 
 
 def _validate_booking_profile(profile: dict[str, Any]) -> None:
@@ -163,18 +199,16 @@ def _validate_booking_profile(profile: dict[str, Any]) -> None:
         if _is_blank_or_placeholder(profile.get(field))
     ]
     if missing:
-        env_names = [BOOKING_PROFILE_ENV_OVERRIDES[field] for field in missing]
         raise RuntimeError(
             "OnceHub booking profile is incomplete. Fill "
-            f"{_PROFILE_PATH} or set env overrides for: {', '.join(missing)} "
-            f"({', '.join(env_names)})."
+            f"oncehub.booking_profile in {_config_path()} for: {', '.join(missing)}."
         )
 
     email = str(profile.get("email", "")).strip()
     if "@" not in email or email.startswith("@") or email.endswith("@"):
         raise RuntimeError(
             "OnceHub booking profile email must be a valid email address "
-            "(set ONCEHUB_BOOKING_EMAIL or edit booking_profile.json)."
+            f"in oncehub.booking_profile.email in {_config_path()}."
         )
 
 
@@ -373,11 +407,9 @@ class OnceHubClient:
     """Async client for OnceHub room lookup + booking.
 
     Uses the **internal browser API** at ``go.oncehub.com/api/``. No API key
-    is required. The booking profile (who "owns" the booking) is loaded from
-    ``booking_profile.json`` so it can be edited without code changes.
-
-    The page URL for the Leslie eLab comes from ``ONCEHUB_PAGE_URL`` (env)
-    so it can be rotated via Doppler without code changes.
+    is required. Page, room, and booking-profile settings are loaded from
+    ``agent/config.yaml`` so Modal does not need one environment variable per
+    identity field.
     """
 
     def __init__(self, *, timeout: float = 30.0, tz_name: str = DEFAULT_TIMEZONE) -> None:
@@ -415,9 +447,10 @@ class OnceHubClient:
 
     @property
     def page_url(self) -> str:
-        url = _env("ONCEHUB_PAGE_URL")
+        # Keep ONCEHUB_PAGE_URL as a small override for rotations, but prefer YAML.
+        url = _env("ONCEHUB_PAGE_URL") or _config_value(_oncehub_config(), "page_url")
         if not url:
-            raise RuntimeError("ONCEHUB_PAGE_URL must be set for the Leslie eLab booking page")
+            raise RuntimeError("oncehub.page_url must be set in agent/config.yaml")
         return url
 
     @property
@@ -427,7 +460,9 @@ class OnceHubClient:
 
     @property
     def room_label(self) -> str:
-        return _env("ONCEHUB_ROOM_LABEL", DEFAULT_ROOM_LABEL) or DEFAULT_ROOM_LABEL
+        return _env("ONCEHUB_ROOM_LABEL") or _config_value(
+            _oncehub_config(), "room_label", DEFAULT_ROOM_LABEL
+        ) or DEFAULT_ROOM_LABEL
 
     @property
     def booking_profile(self) -> dict[str, Any]:
@@ -665,7 +700,7 @@ class OnceHubClient:
     ) -> OnceHubBookingReceipt:
         """Submit a booking under the shared club booking profile.
 
-        The booking profile is loaded from ``booking_profile.json``. The
+        The booking profile is loaded from ``agent/config.yaml``. The
         ``title`` argument overrides the profile's ``subject`` field, and
         ``num_attendees`` overrides the profile's ``num_attendees``.
         """

@@ -573,6 +573,7 @@ dependencies = [
     { name = "modal" },
     { name = "pydantic", extra = ["email"] },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -592,6 +593,7 @@ requires-dist = [
     { name = "modal" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.0" },
     { name = "python-dotenv" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [package.metadata.requires-dev]
