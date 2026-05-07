@@ -21,14 +21,51 @@ from core.clients.oncehub import (
     DEFAULT_ROOM_LABEL,
     OnceHubClient,
     OnceHubSlot,
-    month_ranges,
+    _load_booking_profile,
     _parse_oncehub_date_key,
+    _validate_booking_profile,
+    month_ranges,
 )
 
 
 @pytest.fixture(autouse=True)
 def _oncehub_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ONCEHUB_PAGE_URL", "https://go.oncehub.com/NYULeslie")
+
+
+def test_booking_profile_env_overrides_complete_placeholder_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ONCEHUB_BOOKING_FIRST_NAME", "NYU")
+    monkeypatch.setenv("ONCEHUB_BOOKING_LAST_NAME", "Entrepreneurship")
+    monkeypatch.setenv("ONCEHUB_BOOKING_EMAIL", "club@nyu.edu")
+    monkeypatch.setenv("ONCEHUB_BOOKING_NET_ID", "club123")
+    monkeypatch.setenv("ONCEHUB_BOOKING_ORGANIZATION", "NYU Entrepreneurship Club")
+    monkeypatch.setenv("ONCEHUB_BOOKING_GRADUATION_YEAR", "2027")
+    monkeypatch.setenv("ONCEHUB_BOOKING_LOCATION", "16 Washington Place")
+    monkeypatch.setenv("ONCEHUB_BOOKING_AFFILIATION_ID", "457707")
+    monkeypatch.setenv("ONCEHUB_BOOKING_SCHOOL_ID", "453247")
+
+    profile = _load_booking_profile()
+
+    assert profile["email"] == "club@nyu.edu"
+    assert profile["organization"] == "NYU Entrepreneurship Club"
+    _validate_booking_profile(profile)
+
+
+def test_booking_profile_validation_rejects_placeholders() -> None:
+    with pytest.raises(RuntimeError, match="first_name, last_name, email, net_id, organization"):
+        _validate_booking_profile(
+            {
+                "first_name": "FILL_IN",
+                "last_name": "FILL_IN",
+                "email": "FILL_IN@nyu.edu",
+                "net_id": "FILL_IN",
+                "organization": "FILL_IN",
+                "graduation_year": "2027",
+                "location": "16 Washington Place",
+                "affiliation_id": "457707",
+                "school_id": "453247",
+            }
+        )
 
 
 def _make_client() -> OnceHubClient:
@@ -357,3 +394,34 @@ async def test_submit_booking_rejects_invalid_args(monkeypatch: pytest.MonkeyPat
             title="x",
             num_attendees=0,
         )
+
+
+@pytest.mark.asyncio
+async def test_submit_booking_rejects_incomplete_profile_before_api_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "core.clients.oncehub._load_booking_profile",
+        lambda: {
+            "first_name": "FILL_IN",
+            "last_name": "User",
+            "email": "FILL_IN@nyu.edu",
+            "net_id": "tu123",
+            "organization": "TestOrg",
+            "graduation_year": "2027",
+            "location": "16 Washington Place",
+            "affiliation_id": "457707",
+            "school_id": "453247",
+        },
+    )
+    client = _StubClient()
+
+    with pytest.raises(RuntimeError, match="OnceHub booking profile is incomplete"):
+        await client.submit_booking(
+            slot_start_epoch_ms=1,
+            duration_minutes=60,
+            title="Workshop",
+            num_attendees=10,
+        )
+
+    assert client.booking_calls == []

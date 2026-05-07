@@ -159,9 +159,28 @@ These live in Doppler.
 | `ONCEHUB_ROOM_LABEL` | `agent/` | Optional override for the pinned room label (defaults to `Lean/Launchpad`) |
 
 OnceHub uses the **internal browser API** (no API key required). The shared club
-booking profile is stored in `agent/core/clients/booking_profile.json` — edit
-that file to set the default booking identity (name, email, NetID, affiliation,
-school, etc.).
+booking profile is stored in `agent/core/clients/booking_profile.json`, and any
+private identity value can be provided through Modal/Doppler environment
+overrides instead of committing it to git. Before `book_oncehub_room` sends a
+real booking request, the runtime validates that required identity fields are no
+longer blank or `FILL_IN` placeholders.
+
+| Booking profile field | Env override | Required? | What to fill |
+|---|---|---:|---|
+| `first_name` | `ONCEHUB_BOOKING_FIRST_NAME` | Yes | First name for the shared club booking identity. |
+| `last_name` | `ONCEHUB_BOOKING_LAST_NAME` | Yes | Last name for the shared club booking identity. |
+| `email` | `ONCEHUB_BOOKING_EMAIL` | Yes | NYU email address that should receive or own booking correspondence. |
+| `net_id` | `ONCEHUB_BOOKING_NET_ID` | Yes | NetID associated with the booking identity. |
+| `organization` | `ONCEHUB_BOOKING_ORGANIZATION` | Yes | Club or organization name shown on the room request. |
+| `graduation_year` | `ONCEHUB_BOOKING_GRADUATION_YEAR` | Yes | Graduation year value expected by the OnceHub form. |
+| `location` | `ONCEHUB_BOOKING_LOCATION` | Yes | Event location value; current default is `16 Washington Place`. |
+| `affiliation_id` | `ONCEHUB_BOOKING_AFFILIATION_ID` | Yes | OnceHub dropdown id; current default `457707` means Undergrad. |
+| `school_id` | `ONCEHUB_BOOKING_SCHOOL_ID` | Yes | OnceHub dropdown id; current default `453247` means Tandon. |
+| `event_name` | `ONCEHUB_BOOKING_EVENT_NAME` | No | Optional default event-name field; if blank or placeholder, the runtime uses the requested event title. |
+| `pronouns_id` | `ONCEHUB_BOOKING_PRONOUNS_ID` | No | Optional pronouns dropdown id; leave blank to skip. |
+
+`subject` and `num_attendees` are supplied by the booking request at runtime, so
+those defaults are retained only for local/template readability.
 
 ## Testing
 

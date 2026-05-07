@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared club booking profile for OnceHub room reservations. Edit these fields to match your club's default booking identity. All fields except pronouns_id are required.",
+  "_comment": "Shared club booking profile for OnceHub room reservations. Prefer ONCEHUB_BOOKING_* env overrides for private identity details; all fields except event_name and pronouns_id are required.",
 
   "first_name": "FILL_IN",
   "last_name": "FILL_IN",

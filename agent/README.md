@@ -72,6 +72,12 @@ The runtime's current MCP tool surface is:
 
 The historical `create_contact` / `update_contact` workflow-authoritative tools have been retired because they wrote workflow fields onto Attio `people`. Read tools run immediately, while Convex writes and external effects such as OnceHub booking pause for explicit approval before execution.
 
+## OnceHub Booking Profile Config
+
+`book_oncehub_room` must have a real shared booking identity before it can submit an external OnceHub request. The runtime reads `core/clients/booking_profile.json`, then applies environment overrides such as `ONCEHUB_BOOKING_EMAIL`, `ONCEHUB_BOOKING_NET_ID`, and `ONCEHUB_BOOKING_ORGANIZATION`. Required fields are `first_name`, `last_name`, `email`, `net_id`, `organization`, `graduation_year`, `location`, `affiliation_id`, and `school_id`. If any required field is blank or still contains `FILL_IN`, the booking fails fast before the OnceHub API call is made.
+
+The preferred production setup is to keep sensitive personal fields in Modal/Doppler env vars and leave the committed JSON as a template. `event_name` is optional because the runtime falls back to the requested event title; `pronouns_id` is optional and blank means skip.
+
 ## Supporting Services (Root Files)
 
 These are additional root services used by workflow tooling:

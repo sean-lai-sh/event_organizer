@@ -39,6 +39,32 @@ IANA_TZ = DEFAULT_TIMEZONE
 
 _PROFILE_PATH = Path(__file__).with_name("booking_profile.json")
 
+REQUIRED_BOOKING_PROFILE_FIELDS: tuple[str, ...] = (
+    "first_name",
+    "last_name",
+    "email",
+    "net_id",
+    "organization",
+    "graduation_year",
+    "location",
+    "affiliation_id",
+    "school_id",
+)
+
+BOOKING_PROFILE_ENV_OVERRIDES: dict[str, str] = {
+    "first_name": "ONCEHUB_BOOKING_FIRST_NAME",
+    "last_name": "ONCEHUB_BOOKING_LAST_NAME",
+    "email": "ONCEHUB_BOOKING_EMAIL",
+    "net_id": "ONCEHUB_BOOKING_NET_ID",
+    "organization": "ONCEHUB_BOOKING_ORGANIZATION",
+    "event_name": "ONCEHUB_BOOKING_EVENT_NAME",
+    "graduation_year": "ONCEHUB_BOOKING_GRADUATION_YEAR",
+    "location": "ONCEHUB_BOOKING_LOCATION",
+    "affiliation_id": "ONCEHUB_BOOKING_AFFILIATION_ID",
+    "school_id": "ONCEHUB_BOOKING_SCHOOL_ID",
+    "pronouns_id": "ONCEHUB_BOOKING_PRONOUNS_ID",
+}
+
 # ── Data classes ─────────────────────────────────────────────────────────────
 
 
@@ -97,15 +123,66 @@ def _env(name: str, default: str | None = None) -> str | None:
     return value
 
 
-def _load_booking_profile() -> dict[str, Any]:
-    """Load the shared booking profile from the co-located JSON file.
+def _is_blank_or_placeholder(value: Any) -> bool:
+    """Return true when a profile value is missing or still a template marker."""
+    if value is None:
+        return True
+    if not isinstance(value, str):
+        return False
+    stripped = value.strip()
+    return stripped == "" or "FILL_IN" in stripped or stripped.lower() in {
+        "todo",
+        "tbd",
+        "changeme",
+    }
 
-    Only the active booking fields are returned; keys prefixed with ``_``
-    (option reference tables, comments) are stripped.
+
+def _load_booking_profile() -> dict[str, Any]:
+    """Load the shared booking profile and apply runtime-safe env overrides.
+
+    Only active booking fields are returned; keys prefixed with ``_`` (option
+    reference tables, comments) are stripped. Environment overrides let Modal /
+    Doppler provide private identity details without committing names, emails,
+    or NetIDs into git.
     """
     with open(_PROFILE_PATH) as f:
         raw = json.load(f)
-    return {k: v for k, v in raw.items() if not k.startswith("_")}
+    profile = {k: v for k, v in raw.items() if not k.startswith("_")}
+    for field, env_name in BOOKING_PROFILE_ENV_OVERRIDES.items():
+        env_value = _env(env_name)
+        if env_value is not None:
+            profile[field] = env_value
+    return profile
+
+
+def _validate_booking_profile(profile: dict[str, Any]) -> None:
+    """Fail fast if a real OnceHub booking would use placeholder identity data."""
+    missing = [
+        field
+        for field in REQUIRED_BOOKING_PROFILE_FIELDS
+        if _is_blank_or_placeholder(profile.get(field))
+    ]
+    if missing:
+        env_names = [BOOKING_PROFILE_ENV_OVERRIDES[field] for field in missing]
+        raise RuntimeError(
+            "OnceHub booking profile is incomplete. Fill "
+            f"{_PROFILE_PATH} or set env overrides for: {', '.join(missing)} "
+            f"({', '.join(env_names)})."
+        )
+
+    email = str(profile.get("email", "")).strip()
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise RuntimeError(
+            "OnceHub booking profile email must be a valid email address "
+            "(set ONCEHUB_BOOKING_EMAIL or edit booking_profile.json)."
+        )
+
+
+def _profile_value(profile: dict[str, Any], field: str, default: str = "") -> str:
+    value = profile.get(field)
+    if _is_blank_or_placeholder(value):
+        return default
+    return str(value)
 
 
 def _iter_months(start: date, end: date) -> list[tuple[int, int]]:
@@ -599,22 +676,23 @@ class OnceHubClient:
 
         ids = await self._discover_room_ids()
         profile = self.booking_profile
+        _validate_booking_profile(profile)
 
         # Build the encoded postData string
         post_data = _encode_postdata(
-            first_name=profile["first_name"],
-            last_name=profile["last_name"],
-            email=profile["email"],
-            net_id=profile["net_id"],
+            first_name=_profile_value(profile, "first_name"),
+            last_name=_profile_value(profile, "last_name"),
+            email=_profile_value(profile, "email"),
+            net_id=_profile_value(profile, "net_id"),
             subject=title,  # Use the booking title as the subject
-            event_name=profile.get("event_name", title),
-            organization=profile["organization"],
+            event_name=_profile_value(profile, "event_name", title),
+            organization=_profile_value(profile, "organization"),
             num_attendees=str(num_attendees),
-            graduation_year=profile.get("graduation_year", ""),
-            location=profile.get("location", "16 Washington Place"),
-            affiliation_id=profile["affiliation_id"],
-            school_id=profile["school_id"],
-            pronouns_id=profile.get("pronouns_id", ""),
+            graduation_year=_profile_value(profile, "graduation_year"),
+            location=_profile_value(profile, "location", "16 Washington Place"),
+            affiliation_id=_profile_value(profile, "affiliation_id"),
+            school_id=_profile_value(profile, "school_id"),
+            pronouns_id=_profile_value(profile, "pronouns_id"),
             start_epoch_ms=slot_start_epoch_ms,
             duration_minutes=duration_minutes,
         )
