@@ -27,9 +27,11 @@ def build_image(*, extra_pip: Iterable[str] = (), add_prompts: bool = False) -> 
             "fastmcp>=2.0",
             "fastapi[standard]",
             "agentmail",
+            "PyYAML>=6.0",
             *list(extra_pip),
         )
         .add_local_python_source("helper", "runtime", "apps", "core")
+        .add_local_file("config.yaml", "/root/config.yaml")
     )
     if add_prompts:
         return base.add_local_dir("helper/prompts", "/root/helper/prompts")

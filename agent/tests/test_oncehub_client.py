@@ -12,23 +12,98 @@ These cover:
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+import yaml
 
 from core.clients.oncehub import (
     DEFAULT_ROOM_LABEL,
     OnceHubClient,
     OnceHubSlot,
-    month_ranges,
+    _load_booking_profile,
     _parse_oncehub_date_key,
+    _validate_booking_profile,
+    month_ranges,
 )
 
 
+def _complete_booking_profile(**overrides: str) -> dict[str, str]:
+    profile = {
+        "first_name": "NYU",
+        "last_name": "Entrepreneurship",
+        "email": "club@nyu.edu",
+        "net_id": "club123",
+        "subject": "Default Subject",
+        "event_name": "Default Event",
+        "organization": "NYU Entrepreneurship Club",
+        "num_attendees": "10",
+        "graduation_year": "2027",
+        "location": "16 Washington Place",
+        "affiliation_id": "457707",
+        "school_id": "453247",
+        "pronouns_id": "",
+    }
+    profile.update(overrides)
+    return profile
+
+
+def _write_oncehub_config(
+    path: Path,
+    *,
+    profile: dict[str, str] | None = None,
+    page_url: str = "https://go.oncehub.com/NYULeslie",
+    room_label: str = DEFAULT_ROOM_LABEL,
+) -> None:
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "oncehub": {
+                    "page_url": page_url,
+                    "room_label": room_label,
+                    "booking_profile": profile or _complete_booking_profile(),
+                }
+            },
+            sort_keys=False,
+        )
+    )
+
+
 @pytest.fixture(autouse=True)
-def _oncehub_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ONCEHUB_PAGE_URL", "https://go.oncehub.com/NYULeslie")
+def _oncehub_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    for env_name in (
+        "EVENT_ORGANIZER_CONFIG_PATH",
+        "ONCEHUB_CONFIG_PATH",
+        "ONCEHUB_PAGE_URL",
+        "ONCEHUB_ROOM_LABEL",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    config_path = tmp_path / "config.yaml"
+    _write_oncehub_config(config_path)
+    monkeypatch.setenv("EVENT_ORGANIZER_CONFIG_PATH", str(config_path))
+
+
+def test_booking_profile_loads_from_yaml_config() -> None:
+    profile = _load_booking_profile()
+
+    assert profile["email"] == "club@nyu.edu"
+    assert profile["organization"] == "NYU Entrepreneurship Club"
+    _validate_booking_profile(profile)
+
+
+def test_booking_profile_validation_rejects_placeholders() -> None:
+    with pytest.raises(RuntimeError, match="first_name, last_name, email, net_id, organization"):
+        _validate_booking_profile(
+            _complete_booking_profile(
+                first_name="FILL_IN",
+                last_name="FILL_IN",
+                email="FILL_IN@nyu.edu",
+                net_id="FILL_IN",
+                organization="FILL_IN",
+            )
+        )
 
 
 def _make_client() -> OnceHubClient:
@@ -357,3 +432,34 @@ async def test_submit_booking_rejects_invalid_args(monkeypatch: pytest.MonkeyPat
             title="x",
             num_attendees=0,
         )
+
+
+@pytest.mark.asyncio
+async def test_submit_booking_rejects_incomplete_profile_before_api_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "core.clients.oncehub._load_booking_profile",
+        lambda: {
+            "first_name": "FILL_IN",
+            "last_name": "User",
+            "email": "FILL_IN@nyu.edu",
+            "net_id": "tu123",
+            "organization": "TestOrg",
+            "graduation_year": "2027",
+            "location": "16 Washington Place",
+            "affiliation_id": "457707",
+            "school_id": "453247",
+        },
+    )
+    client = _StubClient()
+
+    with pytest.raises(RuntimeError, match="OnceHub booking profile is incomplete"):
+        await client.submit_booking(
+            slot_start_epoch_ms=1,
+            duration_minutes=60,
+            title="Workshop",
+            num_attendees=10,
+        )
+
+    assert client.booking_calls == []

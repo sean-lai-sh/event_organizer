@@ -155,13 +155,36 @@ These live in Doppler.
 | `ANTHROPIC_API_KEY` | `agent/` | Anthropic API key for the Modal runtime |
 | `MODAL_TOKEN_ID` | `agent/` | Modal auth |
 | `MODAL_TOKEN_SECRET` | `agent/` | Modal auth |
-| `ONCEHUB_PAGE_URL` | `agent/` | OnceHub booking page URL (e.g. `https://go.oncehub.com/NYULeslie`) |
-| `ONCEHUB_ROOM_LABEL` | `agent/` | Optional override for the pinned room label (defaults to `Lean/Launchpad`) |
+| `EVENT_ORGANIZER_CONFIG_PATH` | `agent/` | Optional path to a mounted YAML config file; defaults to `agent/config.yaml` |
+| `ONCEHUB_PAGE_URL` | `agent/` | Optional emergency override for `oncehub.page_url` |
+| `ONCEHUB_ROOM_LABEL` | `agent/` | Optional emergency override for `oncehub.room_label` |
 
-OnceHub uses the **internal browser API** (no API key required). The shared club
-booking profile is stored in `agent/core/clients/booking_profile.json` — edit
-that file to set the default booking identity (name, email, NetID, affiliation,
-school, etc.).
+OnceHub uses the **internal browser API** (no API key required). The runtime reads
+page, room, and shared club booking-profile settings from `agent/config.yaml`, so
+Modal does not need one environment variable per identity field. `ONCEHUB_PAGE_URL`
+and `ONCEHUB_ROOM_LABEL` remain small emergency overrides for rotations, but the
+normal production path is to edit or mount the YAML file. Before
+`book_oncehub_room` sends a real booking request, the runtime validates that
+required identity fields are no longer blank or `FILL_IN` placeholders.
+
+| YAML path | Required? | What to fill |
+|---|---:|---|
+| `oncehub.page_url` | Yes | OnceHub booking page URL, e.g. `https://go.oncehub.com/NYULeslie`. |
+| `oncehub.room_label` | Yes | Pinned room label; current default is `Lean/Launchpad`. |
+| `oncehub.booking_profile.first_name` | Yes | First name for the shared club booking identity. |
+| `oncehub.booking_profile.last_name` | Yes | Last name for the shared club booking identity. |
+| `oncehub.booking_profile.email` | Yes | NYU email address that should receive or own booking correspondence. |
+| `oncehub.booking_profile.net_id` | Yes | NetID associated with the booking identity. |
+| `oncehub.booking_profile.organization` | Yes | Club or organization name shown on the room request. |
+| `oncehub.booking_profile.graduation_year` | Yes | Graduation year value expected by the OnceHub form. |
+| `oncehub.booking_profile.location` | Yes | Event location value; current default is `16 Washington Place`. |
+| `oncehub.booking_profile.affiliation_id` | Yes | OnceHub dropdown id; current default `457707` means Undergrad. |
+| `oncehub.booking_profile.school_id` | Yes | OnceHub dropdown id; current default `453247` means Tandon. |
+| `oncehub.booking_profile.event_name` | No | Optional default event-name field; if blank or placeholder, runtime uses the requested event title. |
+| `oncehub.booking_profile.pronouns_id` | No | Optional pronouns dropdown id; leave blank to skip. |
+
+`subject` and `num_attendees` are supplied by the booking request at runtime, so
+those defaults are retained only for local/template readability.
 
 ## Testing
 
