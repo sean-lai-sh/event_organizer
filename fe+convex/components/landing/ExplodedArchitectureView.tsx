@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion } from "motion/react";
+import { useRef } from "react";
+import { motion, useInView, useReducedMotion } from "motion/react";
 
 const layers = [
   {
@@ -37,18 +38,21 @@ const spring = {
 } as const;
 
 export default function ExplodedArchitectureView() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(containerRef, {
+    amount: 0.35,
+    margin: "-10% 0px -10% 0px",
+  });
   const reduceMotion = useReducedMotion();
 
   return (
     <motion.div
+      ref={containerRef}
       className="group relative flex h-[85vh] w-[30vw] min-w-[320px] max-w-[420px] items-center justify-center overflow-visible outline-none max-[1240px]:w-[40vw] max-[1024px]:h-[95vh] max-[1024px]:w-full max-[1024px]:max-w-[420px]"
       aria-label="Platform architecture layers"
       role="img"
-      tabIndex={0}
       initial="collapsed"
-      animate="collapsed"
-      whileHover={reduceMotion ? "collapsed" : "expanded"}
-      whileFocus={reduceMotion ? "collapsed" : "expanded"}
+      animate={isInView ? "expanded" : "collapsed"}
     >
       <motion.div
         className="relative h-[min(72vh,560px)] w-[min(92%,380px)]"
@@ -56,7 +60,11 @@ export default function ExplodedArchitectureView() {
           collapsed: { y: 0, scale: 1 },
           expanded: { y: -2, scale: 1.006 },
         }}
-        transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : { duration: 0.72, ease: [0.22, 1, 0.36, 1] }
+        }
         style={{
           transformStyle: "preserve-3d",
           perspective: 1200,
@@ -68,7 +76,11 @@ export default function ExplodedArchitectureView() {
             collapsed: { opacity: 0.14, scale: 0.82 },
             expanded: { opacity: 0.1, scale: 1.16 },
           }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          transition={
+            reduceMotion
+              ? { duration: 0 }
+              : { duration: 0.7, ease: [0.22, 1, 0.36, 1] }
+          }
         />
 
         {layers.map((layer, index) => {
