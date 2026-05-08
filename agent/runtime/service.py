@@ -38,6 +38,7 @@ from .normalize import (
     text_block,
 )
 from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
+from .run_context import use_run_context
 from .store import InMemoryRuntimeStore
 from .tool_expectations import (
     RequestToolExpectation,
@@ -376,7 +377,12 @@ class AgentRuntimeService:
                 detail_json=json.dumps({"tool": action_label, "input": tool_payload}),
             )
             try:
-                tool_result = await execute_tool_call(action_label, tool_payload)
+                with use_run_context(
+                    thread_external_id=run.thread_external_id,
+                    run_external_id=run.external_id,
+                    sync=self._sync,
+                ):
+                    tool_result = await execute_tool_call(action_label, tool_payload)
             except Exception as exc:
                 await self._emit_trace(
                     thread_id=run.thread_external_id,
@@ -567,10 +573,15 @@ class AgentRuntimeService:
     async def _execute_tool_aware_run(self, *, run: RunRecord, user_input: str, context: ThreadExecutionContext) -> None:
         expectation = infer_request_tool_expectation(user_input)
         try:
-            result = await self._adapter.run_agent(
-                messages=context.messages,
-                system_prompt=context.system_prompt,
-            )
+            with use_run_context(
+                thread_external_id=run.thread_external_id,
+                run_external_id=run.external_id,
+                sync=self._sync,
+            ):
+                result = await self._adapter.run_agent(
+                    messages=context.messages,
+                    system_prompt=context.system_prompt,
+                )
         except Exception as exc:
             await self._emit_trace(
                 thread_id=run.thread_external_id,
@@ -602,10 +613,15 @@ class AgentRuntimeService:
                 detail_json=json.dumps({"kind": expectation.kind if expectation else "unknown"}),
             )
             try:
-                result = await self._adapter.run_agent(
-                    messages=context.messages,
-                    system_prompt=self._retry_system_prompt(context.system_prompt, expectation),
-                )
+                with use_run_context(
+                    thread_external_id=run.thread_external_id,
+                    run_external_id=run.external_id,
+                    sync=self._sync,
+                ):
+                    result = await self._adapter.run_agent(
+                        messages=context.messages,
+                        system_prompt=self._retry_system_prompt(context.system_prompt, expectation),
+                    )
             except Exception as exc:
                 await self._mark_run_error(run=run, message=str(exc))
                 return

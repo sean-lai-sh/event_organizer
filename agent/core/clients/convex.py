@@ -272,6 +272,38 @@ class ConvexClient:
             {"event_id": event_id},
         )
 
+    # ── Email drafts ──
+
+    async def create_email_draft(
+        self,
+        *,
+        external_id: str,
+        thread_id: str,
+        run_id: str | None,
+        to_name: str,
+        to_email: str,
+        subject: str,
+        body: str,
+        from_name: str | None = None,
+        from_email: str | None = None,
+        signature: str | None = None,
+    ) -> str:
+        return await self._admin_mutation(
+            "emailDrafts:createDraft",
+            {
+                "external_id": external_id,
+                "thread_id": thread_id,
+                "run_id": run_id,
+                "to_name": to_name,
+                "to_email": to_email,
+                "subject": subject,
+                "body": body,
+                "from_name": from_name,
+                "from_email": from_email,
+                "signature": signature,
+            },
+        )
+
     async def upsert_event_room_booking(
         self,
         *,

@@ -11,6 +11,7 @@ from .contracts import (
     ApprovalRecord,
     ArtifactRecord,
     ContextLinkRecord,
+    EmailDraftRecord,
     MessageRecord,
     RunRecord,
     ThreadRecord,
@@ -256,6 +257,37 @@ class ConvexAgentStateSync:
                 return await sb.mutation("agentState:upsertContextLink", args)
         except Exception as exc:
             logger.warning("Convex context-link sync failed: %s", exc)
+            return None
+
+    async def upsert_email_draft(self, record: EmailDraftRecord) -> str | None:
+        if not self._enabled:
+            return None
+
+        thread_convex_id = await self._ensure_thread_convex_id(record.thread_external_id)
+        run_convex_id = (
+            await self._ensure_run_convex_id(record.run_external_id)
+            if record.run_external_id
+            else None
+        )
+        if not thread_convex_id:
+            return None
+
+        try:
+            async with ConvexClient() as sb:
+                return await sb.create_email_draft(
+                    external_id=record.external_id,
+                    thread_id=thread_convex_id,
+                    run_id=run_convex_id,
+                    to_name=record.to_name,
+                    to_email=record.to_email,
+                    subject=record.subject,
+                    body=record.body,
+                    from_name=record.from_name,
+                    from_email=record.from_email,
+                    signature=record.signature,
+                )
+        except Exception as exc:
+            logger.warning("Convex email draft sync failed: %s", exc)
             return None
 
     async def fetch_approval_thread_id(self, approval_external_id: str) -> str | None:

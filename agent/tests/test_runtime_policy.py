@@ -38,17 +38,19 @@ def test_infer_tool_action_detects_send() -> None:
     assert action.action_class == ActionClass.SEND
 
 
-def test_infer_tool_action_from_tool_name_send_outreach_email() -> None:
+def test_infer_tool_action_from_tool_name_send_outreach_email_is_now_analyze() -> None:
+    # send_outreach_email no longer triggers an approval pause: the in-conversation
+    # tool persists an editable draft and returns immediately. Sending happens
+    # via the Next.js /api/agent/email/send route, not the agent runtime.
     action = infer_tool_action_from_tool_name(
         "send_outreach_email",
         payload={"tool_input": {"recipient_email": "ada@example.com"}},
     )
-    assert action.action_class == ActionClass.SEND
+    assert action.action_class == ActionClass.ANALYZE
     assert action.name == "send_outreach_email"
 
 
-def test_send_outreach_email_requires_approval() -> None:
+def test_send_outreach_email_does_not_require_approval() -> None:
     action = infer_tool_action_from_tool_name("send_outreach_email")
     decision = ApprovalPolicy().evaluate(action)
-    assert decision.requires_approval
-    assert decision.risk_level == RiskLevel.MEDIUM
+    assert not decision.requires_approval
