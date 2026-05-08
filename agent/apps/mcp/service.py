@@ -102,21 +102,9 @@ async def search_people(
     """Search Attio people by identity fields such as email or free-text query."""
     conditions: list[dict] = []
     if email:
-        conditions.append(
-            {
-                "attribute": {"slug": "email_addresses"},
-                "condition": "equals",
-                "value": email,
-            }
-        )
+        conditions.append({"email_addresses": {"$eq": email}})
     if query:
-        conditions.append(
-            {
-                "attribute": {"slug": "name"},
-                "condition": "contains",
-                "value": query,
-            }
-        )
+        conditions.append({"name": {"$contains": query}})
     filter_: dict = {"$and": conditions} if conditions else {}
 
     async with AttioClient() as attio:
@@ -153,8 +141,15 @@ async def upsert_person(
     if not email:
         raise ValueError("email is required")
 
+    full_name = f"{firstname} {lastname}".strip()
     values: dict[str, Any] = {
-        "name": [{"first_name": firstname, "last_name": lastname}],
+        "name": [
+            {
+                "first_name": firstname,
+                "last_name": lastname,
+                "full_name": full_name,
+            }
+        ],
         "email_addresses": [{"email_address": email}],
     }
     if phone is not None:
@@ -239,31 +234,11 @@ async def search_speakers(
     """Search Attio speaker entries by workflow status, source, or active event."""
     conditions: list[dict] = []
     if status:
-        canonical_status = normalize_speaker_status(status)
-        conditions.append(
-            {
-                "attribute": {"slug": "status"},
-                "condition": "equals",
-                "value": canonical_status,
-            }
-        )
+        conditions.append({"status": {"$eq": normalize_speaker_status(status)}})
     if source:
-        canonical_source = normalize_speaker_source(source)
-        conditions.append(
-            {
-                "attribute": {"slug": "source"},
-                "condition": "equals",
-                "value": canonical_source,
-            }
-        )
+        conditions.append({"source": {"$eq": normalize_speaker_source(source)}})
     if active_event_id:
-        conditions.append(
-            {
-                "attribute": {"slug": "active_event_id"},
-                "condition": "equals",
-                "value": active_event_id,
-            }
-        )
+        conditions.append({"active_event_id": {"$eq": active_event_id}})
 
     filter_: dict = {"$and": conditions} if conditions else {}
 
@@ -295,15 +270,7 @@ async def ensure_speaker_for_person(
     """
     async with AttioClient() as attio:
         existing = await attio.search_speaker_entries(
-            {
-                "$and": [
-                    {
-                        "attribute": {"slug": "parent_record"},
-                        "condition": "equals",
-                        "value": person_record_id,
-                    }
-                ]
-            },
+            {"$and": [{"parent_record": {"$eq": person_record_id}}]},
             limit=1,
         )
         if existing:

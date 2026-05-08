@@ -211,13 +211,7 @@ async def test_search_people_by_email(monkeypatch: pytest.MonkeyPatch) -> None:
     call = state["search_calls"][0]
     assert call["limit"] == 5
     assert call["filter"] == {
-        "$and": [
-            {
-                "attribute": {"slug": "email_addresses"},
-                "condition": "equals",
-                "value": "ada@example.com",
-            }
-        ]
+        "$and": [{"email_addresses": {"$eq": "ada@example.com"}}]
     }
     assert rows[0]["id"] == "rec_1"
     assert rows[0]["email"] == "ada@example.com"
@@ -269,8 +263,11 @@ async def test_upsert_person_creates_when_not_found(monkeypatch: pytest.MonkeyPa
     assert len(state["search_calls"]) == 1
     assert len(state["create_calls"]) == 1
     values = state["create_calls"][0]
-    # Identity fields only.
-    assert values["name"] == [{"first_name": "Ada", "last_name": "Lovelace"}]
+    # Identity fields only. Attio's personal-name attribute requires full_name
+    # alongside first_name/last_name on PATCH and CREATE.
+    assert values["name"] == [
+        {"first_name": "Ada", "last_name": "Lovelace", "full_name": "Ada Lovelace"}
+    ]
     assert values["email_addresses"] == [{"email_address": "ada@example.com"}]
     assert values["phone_numbers"] == [{"phone_number": "+1-555-0100"}]
     assert values["company"] == [{"value": "Analytical Engines"}]
@@ -361,13 +358,7 @@ async def test_search_contacts_compat_alias_still_returns_person_data(
     call = state["search_calls"][0]
     # Compat alias should use the identity email filter, not workflow filters.
     assert call["filter"] == {
-        "$and": [
-            {
-                "attribute": {"slug": "email_addresses"},
-                "condition": "equals",
-                "value": "ada@example.com",
-            }
-        ]
+        "$and": [{"email_addresses": {"$eq": "ada@example.com"}}]
     }
 
 
@@ -411,21 +402,9 @@ async def test_search_speakers_normalizes_status_and_source(
     assert call["limit"] == 4
     assert call["filter"] == {
         "$and": [
-            {
-                "attribute": {"slug": "status"},
-                "condition": "equals",
-                "value": "Confirmed",
-            },
-            {
-                "attribute": {"slug": "source"},
-                "condition": "equals",
-                "value": "in bound",
-            },
-            {
-                "attribute": {"slug": "active_event_id"},
-                "condition": "equals",
-                "value": "evt_1",
-            },
+            {"status": {"$eq": "Confirmed"}},
+            {"source": {"$eq": "in bound"}},
+            {"active_event_id": {"$eq": "evt_1"}},
         ]
     }
     assert rows[0]["entry_id"] == "spk_1"
