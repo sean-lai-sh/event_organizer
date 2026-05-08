@@ -127,14 +127,28 @@ export function EmailDraftCard({ draft }: EmailDraftCardProps) {
 
   return (
     <div className="mx-auto w-full max-w-[640px] overflow-hidden rounded-[12px] border border-[#E0E0E0] bg-white shadow-sm">
-      <div className="flex items-center justify-between bg-[#0A0A0A] px-4 py-2.5">
+      <div
+        className={`flex items-center justify-between px-4 py-2.5 ${
+          draft.status === "sent"
+            ? "bg-[#0F7A3D]"
+            : draft.status === "discarded"
+              ? "bg-[#A8002C]"
+              : "bg-[#0A0A0A]"
+        }`}
+      >
         <div className="flex items-center gap-2">
           <Mail className="h-3.5 w-3.5 text-white" strokeWidth={2.2} />
           <span className="font-mono text-[11.5px] font-semibold tracking-wider text-white">
             {STATUS_LABEL[draft.status]}
           </span>
         </div>
-        <span className="font-mono text-[11px] text-[#9A9A9A]">
+        <span
+          className={`font-mono text-[11px] ${
+            draft.status === "sent" || draft.status === "discarded"
+              ? "text-white/70"
+              : "text-[#9A9A9A]"
+          }`}
+        >
           ID: {shortId(draft.id)}
         </span>
       </div>
