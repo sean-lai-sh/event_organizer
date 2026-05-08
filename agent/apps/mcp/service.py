@@ -15,6 +15,7 @@ have been retired because they wrote workflow state onto `people`.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -473,6 +474,22 @@ async def update_event_safe(
 
 # ── OnceHub Room Booking ────────────────────────────────────────────────
 
+# Substrings emitted by Convex when an argument fails validation (e.g. a
+# malformed `event_id` rejected by `v.id("events")`). Treat these as a
+# confirmed bad id rather than a transient outage.
+_CONVEX_ARG_VALIDATION_MARKERS: tuple[str, ...] = (
+    "ArgumentValidationError",
+    "Validator error",
+    "did not pass validator",
+    'v.id("events")',
+)
+
+
+def _is_convex_arg_validation_error(exc: BaseException) -> bool:
+    msg = str(exc)
+    return any(marker in msg for marker in _CONVEX_ARG_VALIDATION_MARKERS)
+
+
 def _slot_to_row(slot: OnceHubSlot) -> dict[str, Any]:
     return slot.to_dict()
 
@@ -549,7 +566,14 @@ async def book_oncehub_room(
                     raise ValueError(f"Event not found: {event_id}")
         except ValueError:
             raise
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
+            # Convex rejected the supplied event_id at argument validation
+            # (e.g. malformed id failing `v.id("events")`). This is a confirmed
+            # bad id, not a transient outage — fail fast before holding a room.
+            if _is_convex_arg_validation_error(exc):
+                raise ValueError(f"Event not found: {event_id}") from exc
             preflight_convex_error = str(exc)
 
     async with OnceHubClient() as oncehub:
@@ -572,7 +596,7 @@ async def book_oncehub_room(
     booked_end_time = local_end.strftime("%-I:%M %p")
 
     event_created = False
-    convex_sync = "ok"
+    convex_sync = "preflight_skipped" if preflight_convex_error else "ok"
     convex_error: str | None = preflight_convex_error
     effective_event_id = event_id
 
