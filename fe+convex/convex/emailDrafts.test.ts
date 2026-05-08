@@ -304,7 +304,61 @@ describe("emailDrafts", () => {
       getHandler<{ external_id: string }, string>(markSending)(ctx as never, {
         external_id: "draft_xyz",
       })
-    ).rejects.toThrow(/already finalized/);
+    ).rejects.toThrow(/cannot be sent/);
+  });
+
+  test("markSending refuses to re-lock a draft already in 'sending' (double-submit guard)", async () => {
+    const { createDraft, markSending } = await draftsModulePromise;
+    const { ctx } = createHarness();
+
+    await getHandler<typeof baseDraftArgs, string>(createDraft)(ctx as never, baseDraftArgs);
+    await getHandler<{ external_id: string }, string>(markSending)(ctx as never, {
+      external_id: "draft_xyz",
+    });
+
+    // A second concurrent send attempt sees status=sending and must bail
+    // before the API route can call AgentMail a second time.
+    await expect(
+      getHandler<{ external_id: string }, string>(markSending)(ctx as never, {
+        external_id: "draft_xyz",
+      })
+    ).rejects.toThrow(/cannot be sent.*sending/);
+  });
+
+  test("markSending leaves error_message untouched (no undefined patch)", async () => {
+    const { createDraft, markSending, markFailed } = await draftsModulePromise;
+    const { db, ctx } = createHarness();
+
+    await getHandler<typeof baseDraftArgs, string>(createDraft)(ctx as never, baseDraftArgs);
+    await getHandler<{ external_id: string }, string>(markSending)(ctx as never, {
+      external_id: "draft_xyz",
+    });
+    expect(db.rows("agent_email_drafts")[0]).not.toHaveProperty("error_message");
+    // Even after a failure → re-create cycle, markSending must not write
+    // `undefined` (which violates the project's definedPatch convention).
+    await getHandler<{ external_id: string; error_message: string }, string>(markFailed)(
+      ctx as never,
+      { external_id: "draft_xyz", error_message: "boom" }
+    );
+    expect(db.rows("agent_email_drafts")[0]).toMatchObject({
+      status: "failed",
+      error_message: "boom",
+    });
+  });
+
+  test("getDraftByExternalId rejects unauthenticated callers", async () => {
+    const { createDraft, getDraftByExternalId } = await draftsModulePromise;
+    const { ctx } = createHarness();
+    await getHandler<typeof baseDraftArgs, string>(createDraft)(ctx as never, baseDraftArgs);
+
+    requireAdminMemberImpl = async () => {
+      throw new Error("Admin access required");
+    };
+    await expect(
+      getHandler<{ external_id: string }, unknown>(getDraftByExternalId)(ctx as never, {
+        external_id: "draft_xyz",
+      })
+    ).rejects.toThrow("Admin access required");
   });
 
   test("markDiscarded refuses to discard a sent draft", async () => {
