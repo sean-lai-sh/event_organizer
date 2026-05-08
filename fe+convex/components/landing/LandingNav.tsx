@@ -4,7 +4,7 @@ export default function LandingNav() {
   return (
     <nav className="sticky top-0 z-50 flex items-center justify-between bg-[#fafafafd] px-[60px] py-[14px] backdrop-blur-[2px] max-[900px]:px-6 max-[560px]:px-5">
       <span className="text-[18px] font-bold tracking-[-0.04em] text-[#0a0a0a]">
-        eventclub
+        grace
       </span>
       <div className="flex items-center gap-7">
         <Link href="/login" className="landing-nav-signin text-[14px] no-underline">

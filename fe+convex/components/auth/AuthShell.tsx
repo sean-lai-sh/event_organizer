@@ -16,7 +16,7 @@ export function AuthShell({
       <div className="hidden flex-1 bg-gradient-to-b from-[#FAFAFA] to-[#F0F0F0] lg:flex">
         <div className="flex w-full flex-col justify-between p-[60px]">
           <span className="font-sans text-[18px] font-semibold tracking-[-0.04em] text-[#0A0A0A]">
-            eventclub
+            grace
           </span>
 
           <div className="max-w-[520px]">

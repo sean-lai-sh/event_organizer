@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "eventclub — Events your club actually deserves",
+  title: "grace — Events your club actually deserves",
   description: "Plan, organize, and execute your club events. Manage speakers, track RSVPs, and keep every thread in one place.",
 };
 

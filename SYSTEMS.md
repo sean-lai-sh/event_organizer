@@ -1,6 +1,6 @@
 # Systems Architecture
 
-High-level documentation of how the EventClub backend works — from frontend queries through Convex to the AI agent layer.
+High-level documentation of how the Grace backend works — from frontend queries through Convex to the AI agent layer.
 
 ---
 
