@@ -326,6 +326,10 @@ export async function getThreadState(threadId: string): Promise<AgentThreadState
     artifacts: state.artifacts.map(mapArtifact),
     approvals: state.approvals.map(mapApproval),
     traces: (state.traces ?? []).map(mapTrace),
+    // Email drafts live in Convex (not the Modal runtime); the live-query
+    // path in ConversationTimeline.tsx surfaces them. The HTTP adapter
+    // returns an empty list for now.
+    emailDrafts: [],
   };
 }
 

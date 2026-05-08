@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.10.13",
+    "agentmail": "^0.5.1",
     "better-auth": "1.4.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
