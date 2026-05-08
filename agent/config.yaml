@@ -17,7 +17,7 @@ oncehub:
 
     # OnceHub internal option IDs.
     affiliation_id: "457707" # Undergrad
-    school_id: "453232" # Tandon
+    school_id: "453232" # CAS
     pronouns_id: "" # Blank skips pronouns.
 
   option_reference:

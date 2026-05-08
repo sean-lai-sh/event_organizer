@@ -536,12 +536,21 @@ async def book_oncehub_room(
     omitted a new event is created from the booking details and the
     resulting event id is returned.
     """
-    # Validate the event exists before the irreversible OnceHub booking so a
-    # stale event_id fails fast rather than leaving a booking with no receipt.
+    # Validate the event exists before the irreversible OnceHub booking when
+    # Convex is reachable. If Convex itself is misconfigured or temporarily
+    # unavailable, do not block the OnceHub submission: the room hold is the
+    # user-visible action, and the post-booking sync block below already
+    # reports Convex failures without hiding the booking reference.
+    preflight_convex_error: str | None = None
     if event_id:
-        async with ConvexClient() as convex:
-            if not await convex.get_event(event_id):
-                raise ValueError(f"Event not found: {event_id}")
+        try:
+            async with ConvexClient() as convex:
+                if not await convex.get_event(event_id):
+                    raise ValueError(f"Event not found: {event_id}")
+        except ValueError:
+            raise
+        except Exception as exc:
+            preflight_convex_error = str(exc)
 
     async with OnceHubClient() as oncehub:
         room = await oncehub.resolve_room()
@@ -564,7 +573,7 @@ async def book_oncehub_room(
 
     event_created = False
     convex_sync = "ok"
-    convex_error: str | None = None
+    convex_error: str | None = preflight_convex_error
     effective_event_id = event_id
 
     # OnceHub booking has succeeded by this point. Any Convex write failure
@@ -617,7 +626,13 @@ async def book_oncehub_room(
             )
     except Exception as exc:
         convex_sync = "failed"
-        convex_error = str(exc)
+        if preflight_convex_error:
+            convex_error = (
+                "Preflight event validation failed: "
+                f"{preflight_convex_error}; post-booking sync failed: {exc}"
+            )
+        else:
+            convex_error = str(exc)
 
     return {
         "event_id": effective_event_id,
@@ -626,6 +641,7 @@ async def book_oncehub_room(
         "booking_status": receipt.status,
         "convex_sync": convex_sync,
         "convex_error": convex_error,
+        "preflight_convex_error": preflight_convex_error,
         "room_label": room.label,
         "page_url": room.page_url,
         "booked_date": booked_date,
