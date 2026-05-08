@@ -278,6 +278,105 @@ async def test_assemble_context_empty_links_no_malformed_section() -> None:
     assert "Context Links" not in ctx.system_prompt
 
 
+@pytest.mark.asyncio
+async def test_assemble_context_renders_active_email_drafts() -> None:
+    """Active email drafts surface in the system prompt so the model can
+    refine them on user request — including the body the user may have
+    edited in the timeline card."""
+    from runtime.contracts import ThreadRecord, Channel
+    from time import time
+    now = int(time() * 1000)
+    thread = ThreadRecord(
+        external_id="t1", channel=Channel.WEB, created_at=now, updated_at=now
+    )
+    drafts = [
+        {
+            "external_id": "draft_xyz",
+            "status": "draft",
+            "to_name": "Jane Doe",
+            "to_email": "jane@example.com",
+            "subject": "Speaking at NYU",
+            "body": "Hi Jane,\n\nUser-edited body goes here.",
+        }
+    ]
+    ctx = assemble_thread_context(
+        thread=thread,
+        messages=[],
+        context_links=[],
+        base_system_prompt="BASE",
+        email_drafts=drafts,
+    )
+    assert "Pending email drafts" in ctx.system_prompt
+    assert "draft_xyz" in ctx.system_prompt
+    assert "jane@example.com" in ctx.system_prompt
+    assert "Speaking at NYU" in ctx.system_prompt
+    assert "User-edited body goes here." in ctx.system_prompt
+
+
+@pytest.mark.asyncio
+async def test_assemble_context_filters_terminal_drafts_from_prompt() -> None:
+    """Sent / failed / discarded drafts must not appear; only status='draft'."""
+    from runtime.contracts import ThreadRecord, Channel
+    from time import time
+    now = int(time() * 1000)
+    thread = ThreadRecord(
+        external_id="t1", channel=Channel.WEB, created_at=now, updated_at=now
+    )
+    drafts = [
+        {
+            "external_id": "draft_old_sent",
+            "status": "sent",
+            "to_email": "shipped@example.com",
+            "subject": "Already gone",
+            "body": "—",
+        },
+        {
+            "external_id": "draft_discarded",
+            "status": "discarded",
+            "to_email": "noop@example.com",
+            "subject": "Discarded",
+            "body": "—",
+        },
+        {
+            "external_id": "draft_failed",
+            "status": "failed",
+            "to_email": "bounced@example.com",
+            "subject": "Failed",
+            "body": "—",
+        },
+    ]
+    ctx = assemble_thread_context(
+        thread=thread,
+        messages=[],
+        context_links=[],
+        base_system_prompt="BASE",
+        email_drafts=drafts,
+    )
+    assert "Pending email drafts" not in ctx.system_prompt
+    assert "shipped@example.com" not in ctx.system_prompt
+    assert "noop@example.com" not in ctx.system_prompt
+    assert "bounced@example.com" not in ctx.system_prompt
+
+
+@pytest.mark.asyncio
+async def test_assemble_context_no_drafts_section_when_empty() -> None:
+    """If no drafts are passed, the section is omitted entirely."""
+    from runtime.contracts import ThreadRecord, Channel
+    from time import time
+    now = int(time() * 1000)
+    thread = ThreadRecord(
+        external_id="t1", channel=Channel.WEB, created_at=now, updated_at=now
+    )
+    ctx = assemble_thread_context(
+        thread=thread,
+        messages=[],
+        context_links=[],
+        base_system_prompt="BASE",
+        email_drafts=[],
+    )
+    assert "Pending email drafts" not in ctx.system_prompt
+
+
 # ---------------------------------------------------------------------------
 # Thread-aware run integration tests
 # ---------------------------------------------------------------------------

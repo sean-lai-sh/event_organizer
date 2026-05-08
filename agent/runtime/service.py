@@ -1304,11 +1304,25 @@ class AgentRuntimeService:
                 system_prompt=DEFAULT_SYSTEM_PROMPT(),
                 messages=[],
             )
+
+        # Email drafts live only in Convex, not the in-memory runtime store.
+        # Fetch them so the model sees the current state of any unsent drafts
+        # — including edits the user made in the timeline card after the
+        # original draft was generated.
+        email_drafts: list[dict] = []
+        if self._sync.enabled:
+            convex_state = await self._sync.fetch_thread_state(thread_id)
+            if isinstance(convex_state, dict):
+                raw = convex_state.get("email_drafts") or []
+                if isinstance(raw, list):
+                    email_drafts = [d for d in raw if isinstance(d, dict)]
+
         return assemble_thread_context(
             thread=thread,
             messages=messages,
             context_links=context_links,
             base_system_prompt=DEFAULT_SYSTEM_PROMPT(),
+            email_drafts=email_drafts,
         )
 
     def _retry_system_prompt(self, base_system: str, expectation: RequestToolExpectation | None) -> str:
