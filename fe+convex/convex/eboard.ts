@@ -40,6 +40,30 @@ export async function requireAdminOrAgent(
   return { ...result, isAgent: false } as const;
 }
 
+/**
+ * Internal admin lookup for server-side Next.js routes that have already
+ * validated a Better Auth session and need to confirm the user is an active
+ * admin before invoking agent-token-bypassed mutations. Gated by
+ * AGENT_SERVICE_TOKEN so untrusted clients can't probe membership.
+ */
+export const isAdminByUserId = query({
+  args: {
+    userId: v.string(),
+    _agent_token: v.string(),
+  },
+  handler: async (ctx, { userId, _agent_token }) => {
+    const expected = process.env.AGENT_SERVICE_TOKEN;
+    if (!expected || _agent_token !== expected) {
+      throw new Error("Forbidden");
+    }
+    const member = await ctx.db
+      .query("eboard_members")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    return !!(member && member.active && member.role === "admin");
+  },
+});
+
 export const getCurrentMember = query({
   args: {},
   handler: async (ctx) => {

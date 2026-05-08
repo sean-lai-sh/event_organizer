@@ -4,10 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { AgentMessage, AgentApproval, AgentThread, AgentTraceStep } from "./types";
+import type {
+  AgentMessage,
+  AgentApproval,
+  AgentEmailDraft,
+  AgentThread,
+  AgentTraceStep,
+} from "./types";
 import { MessageBubble } from "./MessageBubble";
 import { ResolvedApprovalCard } from "./ResolvedApprovalCard";
 import { ToolCallCard } from "./ToolCallCard";
+import { EmailDraftCard } from "./EmailDraftCard";
 import { ComposerApprovalPrompt } from "./ComposerApprovalPrompt";
 import { AgentInput, type AgentInputHandle } from "./AgentInput";
 import {
@@ -74,6 +81,26 @@ type ConvexTrace = {
   created_at: number;
 };
 
+type ConvexEmailDraft = {
+  external_id: string;
+  thread_id: string;
+  run_id?: string | null;
+  status: string;
+  to_name: string;
+  to_email: string;
+  subject: string;
+  body: string;
+  from_name?: string | null;
+  from_email?: string | null;
+  signature?: string | null;
+  agentmail_message_id?: string | null;
+  error_message?: string | null;
+  sent_at?: number | null;
+  sent_by_user_id?: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
 function mapConvexMessage(msg: ConvexMessage): AgentMessage {
   const content = msg.content_blocks.map((block) => {
     if (block.kind === "text" || block.kind === "markdown") {
@@ -133,6 +160,28 @@ function mapConvexTrace(t: ConvexTrace): AgentTraceStep {
   };
 }
 
+function mapConvexEmailDraft(d: ConvexEmailDraft): AgentEmailDraft {
+  return {
+    id: d.external_id,
+    threadId: d.thread_id as string,
+    runId: (d.run_id as string | null) ?? undefined,
+    status: d.status as AgentEmailDraft["status"],
+    toName: d.to_name,
+    toEmail: d.to_email,
+    subject: d.subject,
+    body: d.body,
+    fromName: d.from_name ?? undefined,
+    fromEmail: d.from_email ?? undefined,
+    signature: d.signature ?? undefined,
+    agentmailMessageId: d.agentmail_message_id ?? undefined,
+    errorMessage: d.error_message ?? undefined,
+    sentAt: d.sent_at ?? undefined,
+    sentByUserId: d.sent_by_user_id ?? undefined,
+    createdAt: d.created_at,
+    updatedAt: d.updated_at,
+  };
+}
+
 function deriveTitle(text: string): string {
   const MAX = 60;
   const trimmed = text.trim();
@@ -185,6 +234,12 @@ export function ConversationTimeline({
 
   const traces: AgentTraceStep[] = threadState
     ? ((threadState.traces as unknown as ConvexTrace[]) ?? []).map(mapConvexTrace)
+    : [];
+
+  const emailDrafts: AgentEmailDraft[] = threadState
+    ? (
+        (threadState as { email_drafts?: ConvexEmailDraft[] }).email_drafts ?? []
+      ).map(mapConvexEmailDraft)
     : [];
 
   const loaded = thread ? threadState !== undefined : true;
@@ -367,16 +422,31 @@ export function ConversationTimeline({
   type TimelineItem =
     | { kind: "message"; id: string; createdAt: number; message: AgentMessage }
     | { kind: "approval"; id: string; createdAt: number; approval: AgentApproval }
-    | { kind: "tool_call"; id: string; createdAt: number; trace: AgentTraceStep };
+    | { kind: "tool_call"; id: string; createdAt: number; trace: AgentTraceStep }
+    | { kind: "email_draft"; id: string; createdAt: number; draft: AgentEmailDraft };
 
   const toolCallTraces = traces.filter(
     (t) => t.kind === "tool_completion" || t.kind === "tool_failure",
   );
 
+  // Filter the redundant tool-completion trace for `send_outreach_email`:
+  // the EmailDraftCard already renders the user-visible state for that tool,
+  // so the small "send_outreach_email" pill would be noise.
+  const filteredToolCallTraces = toolCallTraces.filter((t) => {
+    if (!t.detailJson) return true;
+    try {
+      const detail = JSON.parse(t.detailJson) as { tool?: string };
+      return detail.tool !== "send_outreach_email";
+    } catch {
+      return true;
+    }
+  });
+
   const timeline: TimelineItem[] = [
     ...messages.map((m) => ({ kind: "message" as const, id: m.id, createdAt: m.createdAt, message: m })),
     ...resolvedApprovals.map((a) => ({ kind: "approval" as const, id: a.id, createdAt: a.createdAt, approval: a })),
-    ...toolCallTraces.map((t) => ({ kind: "tool_call" as const, id: t.id, createdAt: t.createdAt, trace: t })),
+    ...filteredToolCallTraces.map((t) => ({ kind: "tool_call" as const, id: t.id, createdAt: t.createdAt, trace: t })),
+    ...emailDrafts.map((d) => ({ kind: "email_draft" as const, id: d.id, createdAt: d.createdAt, draft: d })),
   ].sort((a, b) => a.createdAt - b.createdAt);
 
   // Only suppress ThinkingBubble once a streaming message has actual text to show.
@@ -432,6 +502,8 @@ export function ConversationTimeline({
                 <MessageBubble key={item.id} message={item.message} />
               ) : item.kind === "approval" ? (
                 <ResolvedApprovalCard key={item.id} approval={item.approval} />
+              ) : item.kind === "email_draft" ? (
+                <EmailDraftCard key={item.id} draft={item.draft} />
               ) : (
                 <ToolCallCard key={item.id} trace={item.trace} />
               )

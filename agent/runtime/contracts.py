@@ -192,6 +192,21 @@ class ApprovalRecord(BaseModel):
     updated_at: int
 
 
+class EmailDraftRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_id: str
+    thread_external_id: str
+    run_external_id: str | None = None
+    to_name: str
+    to_email: str
+    subject: str
+    body: str
+    from_name: str | None = None
+    from_email: str | None = None
+    signature: str | None = None
+
+
 class StreamEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

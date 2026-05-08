@@ -379,8 +379,10 @@ _IN_PROCESS_TOOLS: list[dict[str, Any]] = [
     {
         "name": "send_outreach_email",
         "description": (
-            "Send an outreach email to a recipient via AgentMail. "
-            "Approval-gated — the runtime will pause for explicit user approval before sending."
+            "Draft an outreach email and show it to the user as an editable card "
+            "in the conversation timeline. The user reviews, edits if needed, and "
+            "sends it themselves. The email is NOT sent by this call — never tell "
+            "the user the email has been sent."
         ),
         "input_schema": {
             "type": "object",

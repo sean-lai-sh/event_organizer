@@ -199,32 +199,37 @@ export const getThreadState = query({
     const thread = await requireThread(ctx, args);
     if (!thread) return null;
 
-    const [runs, messages, artifacts, approvals, traces, context_links] = await Promise.all([
-      ctx.db
-        .query("agent_runs")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
-        .collect(),
-      ctx.db
-        .query("agent_messages")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
-        .collect(),
-      ctx.db
-        .query("agent_artifacts")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
-        .collect(),
-      ctx.db
-        .query("agent_approvals")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
-        .collect(),
-      ctx.db
-        .query("agent_traces")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
-        .collect(),
-      ctx.db
-        .query("agent_context_links")
-        .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
-        .collect(),
-    ]);
+    const [runs, messages, artifacts, approvals, traces, context_links, email_drafts] =
+      await Promise.all([
+        ctx.db
+          .query("agent_runs")
+          .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+          .collect(),
+        ctx.db
+          .query("agent_messages")
+          .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+          .collect(),
+        ctx.db
+          .query("agent_artifacts")
+          .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+          .collect(),
+        ctx.db
+          .query("agent_approvals")
+          .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+          .collect(),
+        ctx.db
+          .query("agent_traces")
+          .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+          .collect(),
+        ctx.db
+          .query("agent_context_links")
+          .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+          .collect(),
+        ctx.db
+          .query("agent_email_drafts")
+          .withIndex("by_thread_id", (q) => q.eq("thread_id", thread._id))
+          .collect(),
+      ]);
 
     return {
       thread,
@@ -234,6 +239,7 @@ export const getThreadState = query({
       approvals: sortByRequestedDesc(approvals),
       traces: sortBySequenceAsc(traces),
       context_links: sortByCreatedAsc(context_links),
+      email_drafts: sortByCreatedAsc(email_drafts),
     };
   },
 });

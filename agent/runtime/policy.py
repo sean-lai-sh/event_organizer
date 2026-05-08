@@ -89,9 +89,11 @@ WRITE_TOOL_NAMES = {
     "book_oncehub_room",
 }
 
-SEND_TOOL_NAMES = {
-    "send_outreach_email",
-}
+SEND_TOOL_NAMES: set[str] = set()
+# Note: `send_outreach_email` used to live here. The in-conversation tool
+# now writes an editable draft to Convex (via _draft_outreach_email in
+# tool_executor.py) and returns immediately; sending is initiated by the
+# user from /api/agent/email/send. No approval pause is needed.
 
 
 def infer_tool_action_from_tool_name(tool_name: str, payload: dict | None = None) -> ToolAction:

@@ -155,6 +155,33 @@ export interface AgentRun {
   finishedAt?: number;
 }
 
+export type EmailDraftStatus =
+  | "draft"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "discarded";
+
+export interface AgentEmailDraft {
+  id: string;
+  threadId: string;
+  runId?: string;
+  status: EmailDraftStatus;
+  toName: string;
+  toEmail: string;
+  subject: string;
+  body: string;
+  fromName?: string;
+  fromEmail?: string;
+  signature?: string;
+  agentmailMessageId?: string;
+  errorMessage?: string;
+  sentAt?: number;
+  sentByUserId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AgentThreadState {
   thread: AgentThread;
   runs: AgentRun[];
@@ -162,4 +189,5 @@ export interface AgentThreadState {
   artifacts: AgentArtifact[];
   approvals: AgentApproval[];
   traces: AgentTraceStep[];
+  emailDrafts: AgentEmailDraft[];
 }

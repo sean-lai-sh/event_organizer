@@ -38,6 +38,7 @@ from .normalize import (
     text_block,
 )
 from .policy import ApprovalPolicy, ToolAction, infer_tool_action_from_text
+from .run_context import use_run_context
 from .store import InMemoryRuntimeStore
 from .tool_expectations import (
     RequestToolExpectation,
@@ -376,7 +377,12 @@ class AgentRuntimeService:
                 detail_json=json.dumps({"tool": action_label, "input": tool_payload}),
             )
             try:
-                tool_result = await execute_tool_call(action_label, tool_payload)
+                with use_run_context(
+                    thread_external_id=run.thread_external_id,
+                    run_external_id=run.external_id,
+                    sync=self._sync,
+                ):
+                    tool_result = await execute_tool_call(action_label, tool_payload)
             except Exception as exc:
                 await self._emit_trace(
                     thread_id=run.thread_external_id,
@@ -567,10 +573,15 @@ class AgentRuntimeService:
     async def _execute_tool_aware_run(self, *, run: RunRecord, user_input: str, context: ThreadExecutionContext) -> None:
         expectation = infer_request_tool_expectation(user_input)
         try:
-            result = await self._adapter.run_agent(
-                messages=context.messages,
-                system_prompt=context.system_prompt,
-            )
+            with use_run_context(
+                thread_external_id=run.thread_external_id,
+                run_external_id=run.external_id,
+                sync=self._sync,
+            ):
+                result = await self._adapter.run_agent(
+                    messages=context.messages,
+                    system_prompt=context.system_prompt,
+                )
         except Exception as exc:
             await self._emit_trace(
                 thread_id=run.thread_external_id,
@@ -602,10 +613,15 @@ class AgentRuntimeService:
                 detail_json=json.dumps({"kind": expectation.kind if expectation else "unknown"}),
             )
             try:
-                result = await self._adapter.run_agent(
-                    messages=context.messages,
-                    system_prompt=self._retry_system_prompt(context.system_prompt, expectation),
-                )
+                with use_run_context(
+                    thread_external_id=run.thread_external_id,
+                    run_external_id=run.external_id,
+                    sync=self._sync,
+                ):
+                    result = await self._adapter.run_agent(
+                        messages=context.messages,
+                        system_prompt=self._retry_system_prompt(context.system_prompt, expectation),
+                    )
             except Exception as exc:
                 await self._mark_run_error(run=run, message=str(exc))
                 return
@@ -1288,11 +1304,25 @@ class AgentRuntimeService:
                 system_prompt=DEFAULT_SYSTEM_PROMPT(),
                 messages=[],
             )
+
+        # Email drafts live only in Convex, not the in-memory runtime store.
+        # Fetch them so the model sees the current state of any unsent drafts
+        # — including edits the user made in the timeline card after the
+        # original draft was generated.
+        email_drafts: list[dict] = []
+        if self._sync.enabled:
+            convex_state = await self._sync.fetch_thread_state(thread_id)
+            if isinstance(convex_state, dict):
+                raw = convex_state.get("email_drafts") or []
+                if isinstance(raw, list):
+                    email_drafts = [d for d in raw if isinstance(d, dict)]
+
         return assemble_thread_context(
             thread=thread,
             messages=messages,
             context_links=context_links,
             base_system_prompt=DEFAULT_SYSTEM_PROMPT(),
+            email_drafts=email_drafts,
         )
 
     def _retry_system_prompt(self, base_system: str, expectation: RequestToolExpectation | None) -> str:
