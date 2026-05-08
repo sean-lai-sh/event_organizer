@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.10.13",
+    "@x402/fetch": "^2.11.0",
     "agentmail": "^0.5.1",
     "better-auth": "1.4.9",
     "class-variance-authority": "^0.7.1",
