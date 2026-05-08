@@ -6,6 +6,7 @@ payload-shaping, event-creation, and booking-receipt persistence logic.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -293,9 +294,73 @@ async def test_book_oncehub_room_does_not_block_on_convex_preflight_failure(
     assert len(state["booking_calls"]) == 1
     assert result["booking_reference"] == "bk_1"
     assert result["event_id"] == "evt_existing"
-    assert result["convex_sync"] == "ok"
+    assert result["convex_sync"] == "preflight_skipped"
     assert result["preflight_convex_error"] == "Convex preflight unavailable"
     assert "Convex preflight unavailable" in (result["convex_error"] or "")
+
+
+@pytest.mark.asyncio
+async def test_book_oncehub_room_fails_fast_on_convex_arg_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed event_id makes Convex reject `events:getEvent` at argument
+    validation. That is a confirmed bad id, not a transient outage — the tool
+    must NOT submit the irreversible OnceHub booking.
+    """
+    state = _install_fakes(monkeypatch)
+
+    class ValidationConvex(FakeConvexClient):
+        async def get_event(self, event_id: str) -> dict | None:
+            raise RuntimeError(
+                'ArgumentValidationError: Value "not-a-real-id" does not match '
+                'validator v.id("events")'
+            )
+
+    monkeypatch.setattr(mcp_service, "ConvexClient", lambda: ValidationConvex(state))
+
+    tz = ZoneInfo("America/New_York")
+    epoch = int(datetime(2026, 5, 16, 10, 0, tzinfo=tz).timestamp() * 1000)
+
+    with pytest.raises(ValueError, match="Event not found: not-a-real-id"):
+        await mcp_service.book_oncehub_room(
+            slot_start_epoch_ms=epoch,
+            duration_minutes=60,
+            title="Workshop",
+            num_attendees=20,
+            event_id="not-a-real-id",
+        )
+
+    assert state["booking_calls"] == []
+    assert state["upsert_booking_calls"] == []
+
+
+@pytest.mark.asyncio
+async def test_book_oncehub_room_propagates_cancellation_during_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancellation must propagate so a cancelled task does not still hold a room."""
+    state = _install_fakes(monkeypatch)
+
+    class CancellingConvex(FakeConvexClient):
+        async def get_event(self, event_id: str) -> dict | None:
+            raise asyncio.CancelledError()
+
+    monkeypatch.setattr(mcp_service, "ConvexClient", lambda: CancellingConvex(state))
+
+    tz = ZoneInfo("America/New_York")
+    epoch = int(datetime(2026, 5, 16, 10, 0, tzinfo=tz).timestamp() * 1000)
+
+    with pytest.raises(asyncio.CancelledError):
+        await mcp_service.book_oncehub_room(
+            slot_start_epoch_ms=epoch,
+            duration_minutes=60,
+            title="Workshop",
+            num_attendees=20,
+            event_id="evt_existing",
+        )
+
+    assert state["booking_calls"] == []
+    assert state["upsert_booking_calls"] == []
 
 
 @pytest.mark.asyncio
