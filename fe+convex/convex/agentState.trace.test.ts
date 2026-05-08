@@ -38,7 +38,8 @@ type TableName =
   | "agent_artifacts"
   | "agent_approvals"
   | "agent_traces"
-  | "agent_context_links";
+  | "agent_context_links"
+  | "agent_email_drafts";
 
 type TableRow = { _id: string } & Record<string, unknown>;
 type Tables = Record<TableName, TableRow[]>;
@@ -90,6 +91,7 @@ class FakeDb {
     agent_approvals: 0,
     agent_traces: 0,
     agent_context_links: 0,
+    agent_email_drafts: 0,
   };
 
   readonly tables: Tables = {
@@ -100,6 +102,7 @@ class FakeDb {
     agent_approvals: [],
     agent_traces: [],
     agent_context_links: [],
+    agent_email_drafts: [],
   };
 
   query(table: TableName) {

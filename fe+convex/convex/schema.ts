@@ -201,6 +201,34 @@ export default defineSchema({
     .index("by_run_id", ["run_id"])
     .index("by_entity", ["entity_type", "entity_id"]),
 
+  // User-reviewable email drafts emitted by the in-conversation outreach tool.
+  // The agent writes the draft and returns immediately (no approval pause);
+  // the FE renders an editable card in the timeline; the user hits Send,
+  // which goes through /api/agent/email/send (not the agent runtime).
+  agent_email_drafts: defineTable({
+    external_id: v.string(),               // "draft_<uuid>"
+    thread_id: v.id("agent_threads"),
+    run_id: v.optional(v.id("agent_runs")),
+    status: v.string(),                    // draft | sending | sent | failed | discarded
+    to_name: v.string(),
+    to_email: v.string(),
+    subject: v.string(),
+    body: v.string(),
+    from_name: v.optional(v.string()),
+    from_email: v.optional(v.string()),
+    signature: v.optional(v.string()),
+    agentmail_message_id: v.optional(v.string()),
+    error_message: v.optional(v.string()),
+    sent_at: v.optional(v.number()),
+    sent_by_user_id: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_external_id", ["external_id"])
+    .index("by_thread_id", ["thread_id"])
+    .index("by_run_id", ["run_id"])
+    .index("by_status", ["status"]),
+
   eboard_members: defineTable({
     userId: v.string(),             // Better Auth user._id (opaque string)
     role: v.optional(v.string()),

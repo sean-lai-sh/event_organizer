@@ -15,6 +15,7 @@ import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as contactAssignments from "../contactAssignments.js";
 import type * as eboard from "../eboard.js";
+import type * as emailDrafts from "../emailDrafts.js";
 import type * as events from "../events.js";
 import type * as http from "../http.js";
 import type * as inboundDashboard from "../inboundDashboard.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   contactAssignments: typeof contactAssignments;
   eboard: typeof eboard;
+  emailDrafts: typeof emailDrafts;
   events: typeof events;
   http: typeof http;
   inboundDashboard: typeof inboundDashboard;
