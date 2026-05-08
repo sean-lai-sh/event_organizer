@@ -5,8 +5,12 @@ import { requireAdminOrAgent } from "./eboard";
 const TERMINAL_STATUSES = new Set(["sent", "failed", "discarded"]);
 
 export const getDraftByExternalId = query({
-  args: { external_id: v.string() },
-  handler: async (ctx, { external_id }) => {
+  args: {
+    external_id: v.string(),
+    _agent_token: v.optional(v.string()),
+  },
+  handler: async (ctx, { external_id, _agent_token }) => {
+    await requireAdminOrAgent(ctx, _agent_token);
     const draft = await ctx.db
       .query("agent_email_drafts")
       .withIndex("by_external_id", (q) => q.eq("external_id", external_id))
@@ -104,18 +108,22 @@ export const markSending = mutation({
       .withIndex("by_external_id", (q) => q.eq("external_id", external_id))
       .unique();
     if (!draft) throw new Error(`Email draft not found: ${external_id}`);
-    if (TERMINAL_STATUSES.has(draft.status)) {
+    // Only `draft` may transition to `sending`. This is the send lock — if two
+    // requests race, only the first sees status `draft` and proceeds; the
+    // second sees `sending`/`sent`/etc. and bails out before AgentMail is
+    // called twice for the same recipient.
+    if (draft.status !== "draft") {
       throw new Error(
-        `Email draft ${external_id} already finalized (status=${draft.status})`
+        `Email draft ${external_id} cannot be sent (status=${draft.status})`
       );
     }
 
-    await ctx.db.patch(draft._id, {
+    const patch: Record<string, unknown> = {
       status: "sending",
-      sent_by_user_id: sent_by_user_id ?? draft.sent_by_user_id,
-      error_message: undefined,
       updated_at: Date.now(),
-    });
+    };
+    if (sent_by_user_id !== undefined) patch.sent_by_user_id = sent_by_user_id;
+    await ctx.db.patch(draft._id, patch);
     return draft._id;
   },
 });
@@ -144,7 +152,6 @@ export const markSent = mutation({
       status: "sent",
       agentmail_message_id,
       sent_at: sent_at ?? now,
-      error_message: undefined,
       updated_at: now,
     });
     return draft._id;

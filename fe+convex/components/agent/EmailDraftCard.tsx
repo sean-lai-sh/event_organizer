@@ -73,6 +73,23 @@ export function EmailDraftCard({ draft }: EmailDraftCardProps) {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      // Flush local edits before kicking off the send so we don't race the
+      // unawaited blur-time mutation against `markSending`. The send route
+      // also persists these fields server-side as a second line of defense,
+      // but doing it here keeps the Convex live query consistent for any
+      // other tabs viewing this thread.
+      try {
+        await updateDraftFields({
+          external_id: draft.id,
+          to_name: toName,
+          to_email: toEmail,
+          subject,
+          body,
+        });
+      } catch {
+        /* ignore — server route will re-persist before locking */
+      }
+
       const res = await fetch("/api/agent/email/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
