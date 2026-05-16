@@ -24,8 +24,8 @@ const layers = [
   },
   {
     src: "/layer_4.png",
-    collapsed: { x: 0, y: -60, scale: 1.012, rotate: 0.18 },
-    expanded: { x: 0, y: -120, scale: 1.018, rotate: 0.18 },
+    collapsed: { x: 0, y: -60, scale: 1.002, rotate: 0.18 },
+    expanded: { x: 0, y: -120, scale: 1.004, rotate: 0.18 },
     shadow: "0 8px 18px rgba(0, 0, 0, 0.08)",
   },
 ] as const;
